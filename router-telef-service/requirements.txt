@@ -1,0 +1,6 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+paho-mqtt==2.1.0
+requests==2.32.3
+certifi>=2024.2.2
+

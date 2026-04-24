@@ -1,0 +1,232 @@
+﻿services:
+  mensagelo:
+    build:
+      context: .
+      dockerfile: mensagelo/Dockerfile
+    image: img-mensagelo:1.0.0
+    container_name: cont-mensagelo
+    hostname: mensagelo
+    env_file:
+      - .env
+    environment:
+      TZ: America/Argentina/Buenos_Aires
+      SERVICE_HOST: ${MENSAGELO_SERVICE_HOST}
+      SERVICE_PORT: ${MENSAGELO_SERVICE_PORT}
+      DATABASE_DIR: ${MENSAGELO_DATABASE_DIR}
+      DATABASE_NAME: ${MENSAGELO_DATABASE_NAME}
+      QUEUE_MAXSIZE: ${MENSAGELO_QUEUE_MAXSIZE}
+      API_KEY: ${MENSAGELO_API_KEY}
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_USE_TLS: ${SMTP_USE_TLS}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS}
+    volumes:
+      - ./volumes/mensagelo:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - backend
+
+  panelexemys:
+    build:
+      context: .
+      dockerfile: panelexemys/Dockerfile
+    image: img-panelexemys:1.0.0
+    container_name: cont-panelexemys
+    depends_on:
+      mensagelo:
+        condition: service_healthy
+      modbus-mw-service:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      TZ: America/Argentina/Buenos_Aires
+      MENSAGELO_BASE_URL: ${MENSAGELO_BASE_URL}
+      API_KEY: ${MENSAGELO_API_KEY}
+      PORT: ${PANELEXEMYS_PORT}
+      CHARITO_API_BASE: ${CHARITO_API_BASE}
+      PVE_API_BASE: ${PVE_API_BASE}
+      MODBUS_MW_API_BASE: ${MODBUS_MW_API_BASE}
+      MODBUS_MW_HTTP_TIMEOUT: ${MODBUS_MW_HTTP_TIMEOUT}
+      MODBUS_HTTP_POLL_SECONDS: ${MODBUS_HTTP_POLL_SECONDS}
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
+      MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
+      MQTT_BROKER_PASSWORD: ${MQTT_BROKER_PASSWORD}
+      MQTT_BROKER_KEEPALIVE: ${MQTT_BROKER_KEEPALIVE}
+      MQTT_CONNECT_TIMEOUT: ${MQTT_CONNECT_TIMEOUT}
+      MQTT_RECONNECT_DELAY_MIN: ${MQTT_RECONNECT_DELAY_MIN}
+      MQTT_RECONNECT_DELAY_MAX: ${MQTT_RECONNECT_DELAY_MAX}
+      MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
+    volumes:
+      - ./volumes/panelexemys:/app/data
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8052:8052"
+    networks:
+      - backend
+
+  charito-service:
+    build:
+      context: .
+      dockerfile: charito-service/Dockerfile
+    image: img-charito-service:1.0.0
+    container_name: cont-charito-service
+    env_file:
+      - .env
+    environment:
+      TZ: America/Argentina/Buenos_Aires
+      CHARITO_DATA_DIR: ${CHARITO_DATA_DIR}
+      CHARITO_STATE_FILE: ${CHARITO_STATE_FILE}
+      CHARITO_TARGETS_JSON: ${CHARITO_TARGETS_JSON}
+      CHARITO_POLL_INTERVAL_SECONDS: ${CHARITO_POLL_INTERVAL_SECONDS}
+      CHARITO_HTTP_TIMEOUT_SECONDS: ${CHARITO_HTTP_TIMEOUT_SECONDS}
+    volumes:
+      - ./volumes/charito-service:/app/data
+    restart: unless-stopped
+    networks:
+      - backend
+
+  pve-service:
+    build:
+      context: .
+      dockerfile: pve-service/Dockerfile
+    image: img-pve-service:1.0.0
+    container_name: cont-pve-service
+    env_file:
+      - .env
+    environment:
+      TZ: America/Argentina/Buenos_Aires
+      DATA_DIR: ${PVE_DATA_DIR}
+      PVE_BASE_URL: ${PVE_BASE_URL}
+      PVE_API_TOKEN: ${PVE_API_TOKEN}
+      PVE_NODE_NAME: ${PVE_NODE_NAME}
+      PVE_VHOST_IDS: ${PVE_VHOST_IDS}
+      PVE_HTTP_TIMEOUT_SECONDS: ${PVE_HTTP_TIMEOUT_SECONDS}
+      PVE_VERIFY_SSL: ${PVE_VERIFY_SSL}
+      PVE_POLL_INTERVAL_SECONDS: ${PVE_POLL_INTERVAL_SECONDS}
+      PVE_HISTORY_HOURS: ${PVE_HISTORY_HOURS}
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
+      MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
+      MQTT_BROKER_PASSWORD: ${MQTT_BROKER_PASSWORD}
+      MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
+      PVE_STATE_FILE: ${PVE_STATE_FILE}
+      PVE_HISTORY_FILE: ${PVE_HISTORY_FILE}
+    volumes:
+      - ./volumes/pve-service:/app/data
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8083:8083"
+    networks:
+      - backend
+
+  modbus-mw-service:
+    build:
+      context: .
+      dockerfile: modbus-mw-service/Dockerfile
+    image: img-modbus-mw-service:1.0.0
+    container_name: cont-modbus-mw-service
+    env_file:
+      - .env
+    environment:
+      TZ: America/Argentina/Buenos_Aires
+      MODBUS_MW_MB_HOST: ${MODBUS_MW_MB_HOST}
+      MODBUS_MW_MB_PORT: ${MODBUS_MW_MB_PORT}
+      MODBUS_MW_MB_ID: ${MODBUS_MW_MB_ID}
+      MODBUS_MW_MB_COUNT: ${MODBUS_MW_MB_COUNT}
+      MODBUS_MW_MB_INTERVAL_SECONDS: ${MODBUS_MW_MB_INTERVAL_SECONDS}
+      MODBUS_MW_DATA_DIR: ${MODBUS_MW_DATA_DIR}
+      MODBUS_MW_DATABASE_NAME: ${MODBUS_MW_DATABASE_NAME}
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
+      MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
+      MQTT_BROKER_PASSWORD: ${MQTT_BROKER_PASSWORD}
+      MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
+      MQTT_BROKER_KEEPALIVE: ${MQTT_BROKER_KEEPALIVE}
+    volumes:
+      - ./volumes/modbus-mw-service:/app/data
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8084:8084"
+    networks:
+      - backend
+
+  router-telef-service:
+    build:
+      context: .
+      dockerfile: router-telef-service/Dockerfile
+    image: img-router-telef-service:1.0.0
+    container_name: cont-router-telef-service
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8086:8086"
+    restart: unless-stopped
+    networks:
+      - backend
+
+  scada-citec-service:
+    build:
+      context: .
+      dockerfile: scada-citec-service/Dockerfile
+    image: img-scada-citec-service:1.0.0
+    container_name: cont-scada-citec-service
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8094:8094"
+    restart: unless-stopped
+    networks:
+      - backend
+
+  login-service:
+    build:
+      context: .
+      dockerfile: login-service/Dockerfile
+    image: img-login-service:1.0.0
+    container_name: cont-login-service
+    depends_on:
+      panelexemys:
+        condition: service_started
+    environment:
+      LOGIN_PROTECTED_USER: ${LOGIN_PROTECTED_USER}
+      LOGIN_PROTECTED_PASS: ${LOGIN_PROTECTED_PASS}
+      LOGIN_CHATCHETO_ATENDEDOR_HOST: ${LOGIN_CHATCHETO_ATENDEDOR_HOST}
+      LOGIN_CHATCHETO_ATENDEDOR_PORT: ${LOGIN_CHATCHETO_ATENDEDOR_PORT}
+      LOGIN_CHATCHETO_API_HOST: ${LOGIN_CHATCHETO_API_HOST}
+      LOGIN_CHATCHETO_API_PORT: ${LOGIN_CHATCHETO_API_PORT}
+      LOGIN_CHATCHETO_GEO_HOST: ${LOGIN_CHATCHETO_GEO_HOST}
+      LOGIN_CHATCHETO_GEO_PORT: ${LOGIN_CHATCHETO_GEO_PORT}
+      LOGIN_CHATCHETO_DASHBOARD_HOST: ${LOGIN_CHATCHETO_DASHBOARD_HOST}
+      LOGIN_CHATCHETO_DASHBOARD_PORT: ${LOGIN_CHATCHETO_DASHBOARD_PORT}
+    ports:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+

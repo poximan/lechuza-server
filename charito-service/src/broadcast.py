@@ -1,0 +1,121 @@
+import json
+import os
+import threading
+from typing import Iterable
+import ssl
+import certifi
+
+import paho.mqtt.client as mqtt
+
+from config import Target
+from identity import fetch_instance_id
+from timeauthority import get_time_authority
+
+_AUTH = get_time_authority()
+
+
+MQTT_TOPIC = None
+
+_lock = threading.RLock()
+_client: mqtt.Client | None = None
+_last_payload: str | None = None
+
+
+def broadcast_whitelist(targets: Iterable[Target], overrides: dict[str, str] | None = None) -> None:
+    items = []
+    for target in targets:
+        alias = target.alias
+        resolved = overrides.get(target.identity_url) if overrides else None
+        instance_id = resolved or target.instance_id
+        provisional = False
+        if not instance_id:
+            try:
+                instance_id = fetch_instance_id(target, _http_timeout())
+            except Exception:
+                instance_id = None
+        if not instance_id:
+            instance_id = alias
+            provisional = True
+        entry = {
+            "instanceId": instance_id.strip(),
+            "alias": alias,
+            "provisional": provisional,
+        }
+        items.append(entry)
+
+    if not items:
+        return
+
+    payload = {"ts": _AUTH.utc_iso(), "items": items}
+    body = json.dumps(payload, ensure_ascii=False)
+    global _last_payload
+    if _last_payload == body:
+        return
+    _publish_once(body)
+    _last_payload = body
+
+
+def _publish_once(body: str) -> None:
+    client = _get_client()
+    topic = _topic()
+    info = client.publish(topic, payload=body, qos=1, retain=True)
+    info.wait_for_publish()
+    client.loop_stop()
+    try:
+        client.disconnect()
+    finally:
+        global _client
+        with _lock:
+            _client = None
+
+
+def _get_client() -> mqtt.Client:
+    global _client
+    with _lock:
+        if _client is not None:
+            return _client
+        client = mqtt.Client(clean_session=True)
+        host = _require("MQTT_BROKER_HOST")
+        port = int(_require("MQTT_BROKER_PORT"))
+        username = _require("MQTT_BROKER_USERNAME")
+        password = _require("MQTT_BROKER_PASSWORD")
+        use_tls = _truthy(_require("MQTT_BROKER_USE_TLS"))
+        insecure = _truthy(_require("MQTT_TLS_INSECURE"))
+        keepalive = int(_require("MQTT_BROKER_KEEPALIVE"))
+        client.username_pw_set(username, password)
+        if use_tls:
+            context = ssl.create_default_context(cafile=certifi.where())
+            try:
+                context.minimum_version = ssl.TLSVersion.TLSv1_2
+            except AttributeError:
+                context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
+            if insecure:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            client.tls_set_context(context)
+        client.connect(host, port, keepalive=keepalive)
+        client.loop_start()
+        _client = client
+        return client
+
+
+def _topic() -> str:
+    global MQTT_TOPIC
+    if MQTT_TOPIC is None:
+        MQTT_TOPIC = _require("CHARITO_MQTT_TOPIC")
+    return MQTT_TOPIC
+
+
+def _http_timeout() -> float:
+    return float(_require("CHARITO_HTTP_TIMEOUT_SECONDS"))
+
+
+def _require(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise EnvironmentError(f"Falta variable obligatoria: {name}")
+    return value.strip()
+
+
+def _truthy(value: str) -> bool:
+    return value.lower() in {"1", "true", "yes", "on"}

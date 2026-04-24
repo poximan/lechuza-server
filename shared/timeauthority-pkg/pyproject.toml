@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "timeauthority-pkg"
+version = "0.1.0"
+description = "Autoridad centralizada de fechas para la suite lechuza-server"
+requires-python = ">=3.12"
+keywords = ["time", "utc", "timezone"]
+authors = [
+  {name = "lechuza-server"}
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://example.invalid/lechuza-server"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

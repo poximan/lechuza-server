@@ -1,0 +1,92 @@
+{
+  "telefonos": {
+    "fontana": [
+      {
+        "numero": "4453400",
+        "comentario": "entrada lineas rotativas"
+      },
+      {
+        "numero": "4453355"
+      },
+      {
+        "numero": "4453222"
+      },
+      {
+        "numero": "4453232"
+      },
+      {
+        "numero": "4471718"
+      },
+      {
+        "numero": "2804675614"
+      }
+    ],
+    "estivariz": [
+      {
+        "numero": "4454041",
+        "comentario": "(VoLTE) jefes"
+      },
+      {
+        "numero": "4471837",
+        "comentario": "VoLTE"
+      },
+      {
+        "numero": "4472066",
+        "comentario": "VoLTE"
+      },
+      {
+        "numero": "4472131",
+        "comentario": "VoLTE"
+      },
+      {
+        "numero": "4455768",
+        "comentario": "VoLTE"
+      },
+      {
+        "numero": "2804675553",
+        "comentario": "guardia estiv. telular"
+      },
+      {
+        "numero": "2804606530"
+      }
+    ],
+    "general": [
+      {
+        "numero": "0800-666-7378",
+        "comentario": "solo funciona desde linea fija"
+      }
+    ]
+  },
+  "port_mappings": [
+    {
+      "servicio": "panelexemys",
+      "interno": "cont-panelexemys:8052 (http)",
+      "externo_path": "/dash/",
+      "localhost": "http://localhost:8052"
+    },
+    {
+      "servicio": "pve-service",
+      "interno": "cont-pve-service:8083 (http)",
+      "externo_path": "/pve/api/pve/state",
+      "localhost": "http://localhost:8083/api/pve/state"
+    },
+    {
+      "servicio": "modbus-mw-service",
+      "interno": "cont-modbus-mw-service:8084 (http)",
+      "externo_path": "/api/",
+      "localhost": "http://localhost:8084"
+    },
+    {
+      "servicio": "router-telef-service",
+      "interno": "cont-router-telef-service:8086 (http)",
+      "externo_path": "/router/status",
+      "localhost": "http://localhost:8086/status"
+    },
+    {
+      "servicio": "scada-citec-service",
+      "interno": "cont-scada-citec-service:8094 (http)",
+      "externo_path": "/scada/",
+      "localhost": "http://localhost:8094"
+    }
+  ]
+}

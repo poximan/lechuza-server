@@ -1,0 +1,22 @@
+# entorno local
+.env
+.venv/
+venv/
+
+# artefactos python
+**/__pycache__/
+**/*.py[cod]
+**/__init__.py
+**/.pytest_cache/
+**/.mypy_cache/
+**/*.egg-info/
+
+# datos y temporales de runtime
+volumes/**/*
+*.db
+*.db-journal
+*.log
+*.pid
+
+# basura del sistema
+Thumbs.db

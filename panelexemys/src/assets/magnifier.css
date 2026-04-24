@@ -1,0 +1,42 @@
+/* Archivo: src/assets/magnifier.css */
+
+/* Estilos para el contenedor de la imagen */
+.magnifier-container {
+    position: relative;
+    /* Clave para posicionar la lupa de forma absoluta */
+    cursor: none;
+    /* Oculta el cursor del mouse dentro del contenedor */
+    border-radius: 8px;
+    /* Esquinas redondeadas */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    /* Sombra suave */
+}
+
+/* Estilos para la imagen, dentro del contenedor */
+.magnifier-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    /* Elimina el espacio extra debajo de la imagen */
+    border-radius: 8px;
+}
+
+/* Estilos para la lupa (el div que hará el zoom) */
+.magnifier-loupe {
+    position: absolute;
+    /* Posicionamiento absoluto relativo al contenedor */
+    width: 150px;
+    height: 150px;
+    border: 2px solid white;
+    /* Borde para la lupa */
+    border-radius: 50%;
+    /* Forma circular */
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+    /* Sombra para que parezca una lente */
+    background-repeat: no-repeat;
+    display: none;
+    /* Por defecto está oculta */
+    pointer-events: none;
+    /* Permite que los eventos del mouse pasen a la imagen de abajo */
+    z-index: 10;
+}

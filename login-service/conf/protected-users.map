@@ -1,0 +1,4 @@
+map $http_x_mode_user $protected_mode_expected_pass {
+    default "";
+    ${LOGIN_PROTECTED_USER} ${LOGIN_PROTECTED_PASS};
+}

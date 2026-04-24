@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>lechuza-server Login</title>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #07121f;
+            color: #f5f7fa;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-wrapper {
+            width: 100%;
+            max-width: 780px;
+            padding: 32px 24px;
+        }
+        h1 {
+            margin: 0 0 8px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .subtitle {
+            text-align: center;
+            margin: 0 0 32px;
+            color: #9db1c7;
+            font-size: 16px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #0f2135;
+            border: 1px solid #1f3853;
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+        .card p {
+            margin-bottom: 18px;
+            color: #c3d3e6;
+        }
+        .primary,
+        .secondary,
+        .ghost {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .primary {
+            background: #13967d;
+            color: #fff;
+        }
+        .secondary {
+            background: #ed9c2d;
+            color: #0f2135;
+        }
+        .ghost {
+            background: transparent;
+            border: 1px solid #476385;
+            color: #c3d3e6;
+            margin-top: 12px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        label {
+            font-size: 14px;
+            color: #9db1c7;
+        }
+        input {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #375069;
+            background: #07121f;
+            color: #f5f7fa;
+            font-size: 15px;
+        }
+        .error {
+            min-height: 20px;
+            color: #ff6b6b;
+            font-size: 14px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="login-wrapper">
+    <h1>lechuza-server</h1>
+    <p class="subtitle">Selecciona el modo de ingreso</p>
+    <div id="mode-choice" class="cards">
+        <div class="card">
+            <h2>Modo seguro</h2>
+            <p>Version estandar con pestanas Dashboard, Email, Proxmox y Charito.</p>
+            <button class="primary" type="button" onclick="enterSecure()">Entrar modo seguro</button>
+        </div>
+        <div class="card">
+            <h2>Modo protegido</h2>
+            <p>Requiere una cuenta con permisos elevados definida en la configuracion.</p>
+            <button class="secondary" type="button" onclick="showProtectedForm()">Continuar a autenticacion</button>
+        </div>
+        <div class="card">
+            <h2>Panel SCADA</h2>
+            <p>Mimico Citec accesible solo con credenciales protegidas.</p>
+            <button class="ghost" type="button" onclick="showScadaForm()">Entrar al panel</button>
+        </div>
+        <div class="card">
+            <h2>Chatcheto Atendedor</h2>
+            <p>Abre la bandeja de atencion WhatsApp publicada por prefijo dentro de este mismo sitio.</p>
+            <button class="primary" type="button" onclick="openChatcheto()">Abrir Chatcheto</button>
+        </div>
+    </div>
+    <div id="protected-login" class="card hidden">
+        <h2>Autenticacion protegida</h2>
+        <p>Las credenciales se encuentran en login-service/conf/protected-users.map.</p>
+        <form id="protected-form">
+            <label for="user">Usuario</label>
+            <input id="user" name="user" type="text" autocomplete="username" required>
+            <label for="pass">Contrasena</label>
+            <input id="pass" name="pass" type="password" autocomplete="current-password" required>
+            <div class="error" id="error-msg"></div>
+            <button class="secondary" type="submit">Entrar modo protegido</button>
+            <button class="ghost" type="button" onclick="backToChoice()">Volver al inicio</button>
+        </form>
+    </div>
+    <div id="scada-login" class="card hidden">
+        <h2>Acceso SCADA Citec</h2>
+        <p>Se requiere confirmar credenciales protegidas antes de abrir el mimico.</p>
+        <form id="scada-form">
+            <label for="scada-user">Usuario</label>
+            <input id="scada-user" name="user" type="text" autocomplete="username" required>
+            <label for="scada-pass">Contrasena</label>
+            <input id="scada-pass" name="pass" type="password" autocomplete="current-password" required>
+            <div class="error" id="scada-error"></div>
+            <button class="secondary" type="submit">Entrar al SCADA</button>
+            <button class="ghost" type="button" onclick="backToChoiceFromScada()">Volver al inicio</button>
+        </form>
+    </div>
+</div>
+<script>
+(function () {
+    const choiceSection = document.getElementById("mode-choice");
+    const protectedSection = document.getElementById("protected-login");
+    const protectedForm = document.getElementById("protected-form");
+    const errorBox = document.getElementById("error-msg");
+    const scadaSection = document.getElementById("scada-login");
+    const scadaForm = document.getElementById("scada-form");
+    const scadaError = document.getElementById("scada-error");
+
+    window.showProtectedForm = function () {
+        choiceSection.classList.add("hidden");
+        protectedSection.classList.remove("hidden");
+        errorBox.textContent = "";
+        protectedForm.reset();
+        document.getElementById("user").focus();
+    };
+
+    window.backToChoice = function () {
+        protectedSection.classList.add("hidden");
+        scadaSection.classList.add("hidden");
+        choiceSection.classList.remove("hidden");
+        errorBox.textContent = "";
+        scadaError.textContent = "";
+    };
+
+    window.showScadaForm = function () {
+        choiceSection.classList.add("hidden");
+        scadaSection.classList.remove("hidden");
+        scadaError.textContent = "";
+        scadaForm.reset();
+        document.getElementById("scada-user").focus();
+    };
+
+    window.backToChoiceFromScada = function () {
+        scadaSection.classList.add("hidden");
+        choiceSection.classList.remove("hidden");
+        scadaError.textContent = "";
+    };
+
+    window.enterSecure = async function () {
+        errorBox.textContent = "";
+        try {
+            const response = await fetch("/mode/secure", {
+                method: "POST",
+                credentials: "same-origin"
+            });
+            if (response.ok) {
+                window.location.href = "/dash/";
+            } else {
+                alert("No se pudo establecer el modo seguro.");
+            }
+        } catch (err) {
+            alert("Error al contactar el proxy.");
+        }
+    };
+
+    window.openChatcheto = function () {
+        window.location.href = "/chatcheto/";
+    };
+
+    protectedForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        errorBox.textContent = "";
+        const user = (document.getElementById("user").value || "").trim();
+        const pass = document.getElementById("pass").value || "";
+        if (!user || !pass) {
+            errorBox.textContent = "Usuario y contrasena son requeridos.";
+            return;
+        }
+        try {
+            const response = await fetch("/mode/protected", {
+                method: "POST",
+                headers: {
+                    "X-Mode-User": user,
+                    "X-Mode-Pass": pass
+                },
+                credentials: "same-origin"
+            });
+            if (response.status === 204) {
+                window.location.href = "/dash/";
+                return;
+            }
+            if (response.status === 403) {
+                errorBox.textContent = "Credenciales invalidas.";
+                return;
+            }
+            errorBox.textContent = "No se pudo validar el modo protegido.";
+        } catch (err) {
+            errorBox.textContent = "Error al contactar el proxy.";
+        }
+    });
+
+    scadaForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        scadaError.textContent = "";
+        const user = (document.getElementById("scada-user").value || "").trim();
+        const pass = document.getElementById("scada-pass").value || "";
+        if (!user || !pass) {
+            scadaError.textContent = "Usuario y contrasena son requeridos.";
+            return;
+        }
+        try {
+            const response = await fetch("/mode/protected", {
+                method: "POST",
+                headers: {
+                    "X-Mode-User": user,
+                    "X-Mode-Pass": pass
+                },
+                credentials: "same-origin"
+            });
+            if (response.status === 204) {
+                window.location.href = "/scada/";
+                return;
+            }
+            if (response.status === 403) {
+                scadaError.textContent = "Credenciales invalidas.";
+                return;
+            }
+            scadaError.textContent = "No se pudo validar el acceso.";
+        } catch (err) {
+            scadaError.textContent = "Error al contactar el proxy.";
+        }
+    });
+})();
+</script>
+</body>
+</html>
