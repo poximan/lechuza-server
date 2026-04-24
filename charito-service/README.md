@@ -26,7 +26,7 @@ Variables obligatorias:
 - `CHARITO_POLL_INTERVAL_SECONDS`
 - `CHARITO_HTTP_TIMEOUT_SECONDS`
 
-`CHARITO_TARGETS_JSON` debe contener un objeto JSON con `instances`, `pollIntervalSeconds` y `httpTimeoutSeconds`. Cada entrada debe declarar al menos `alias` y `baseUrl`.
+`CHARITO_TARGETS_JSON` debe contener un unico formato valido: un objeto JSON con `instances`, `pollIntervalSeconds` y `httpTimeoutSeconds`. Cada entrada de `instances` debe declarar al menos `alias` y `baseUrl`.
 
 ## Integracion en el mono-repo
 

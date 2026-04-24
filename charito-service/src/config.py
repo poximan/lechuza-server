@@ -44,10 +44,7 @@ class ServiceConfig:
     instances: List[Target]
 
 
-def _build_service_config(data: dict) -> ServiceConfig:
-    poll_interval = int(data.get("pollIntervalSeconds") or 20)
-    http_timeout = float(data.get("httpTimeoutSeconds") or 4.0)
-    items = data.get("instances")
+def _build_service_config(items: list, poll_interval: int = 20, http_timeout: float = 4.0) -> ServiceConfig:
     if not isinstance(items, list) or not items:
         raise ValueError("El archivo de targets debe contener una lista 'instances'")
     targets = []
@@ -71,4 +68,7 @@ def load_service_config_from_json(raw: str) -> ServiceConfig:
         raise ValueError(f"CHARITO_TARGETS_JSON no contiene JSON valido: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("CHARITO_TARGETS_JSON debe contener un objeto JSON")
-    return _build_service_config(data)
+    poll_interval = int(data.get("pollIntervalSeconds") or 20)
+    http_timeout = float(data.get("httpTimeoutSeconds") or 4.0)
+    items = data.get("instances")
+    return _build_service_config(items, poll_interval=poll_interval, http_timeout=http_timeout)

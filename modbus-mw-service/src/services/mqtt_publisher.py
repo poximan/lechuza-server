@@ -63,9 +63,20 @@ class ModbusMqttPublisher:
         else:
             self.log.log(f"MQTT no pudo conectar (rc={reason_code}).", origin="MW/MQTT")
 
-    def _on_disconnect(self, _client, _userdata, _disconnect_flags, reason_code, _properties=None):
+    def _on_disconnect(self, _client, _userdata, *args):
+        reason_code = self._extract_disconnect_reason_code(args)
         self._connected = False
         self.log.log(f"MQTT desconectado (rc={reason_code}).", origin="MW/MQTT")
+
+    @staticmethod
+    def _extract_disconnect_reason_code(args: tuple) -> Any:
+        # paho-mqtt VERSION1 invoca on_disconnect(client, userdata, rc)
+        # y VERSION2 usa on_disconnect(client, userdata, disconnect_flags, reason_code, properties).
+        if not args:
+            return "desconocido"
+        if len(args) == 1:
+            return args[0]
+        return args[1]
 
     def _publish(self, topic: str, payload: Any, qos: int, retain: bool) -> None:
         body = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)

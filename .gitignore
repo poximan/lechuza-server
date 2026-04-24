@@ -7,6 +7,9 @@ venv/
 **/__pycache__/
 **/*.py[cod]
 **/__init__.py
+!panelexemys/src/dao/__init__.py
+!scada-citec-service/backend/__init__.py
+!shared/timeauthority-pkg/src/timeauthority/__init__.py
 **/.pytest_cache/
 **/.mypy_cache/
 **/*.egg-info/
