@@ -19,13 +19,14 @@ class StateStore:
     def _load(self) -> None:
         if not self._data_path.exists():
             return
-        try:
-            raw = json.loads(self._data_path.read_text(encoding="utf-8"))
-            for entry in raw.get("items", []):
-                if isinstance(entry, dict) and entry.get("instanceId"):
-                    self._items[str(entry["instanceId"])] = entry
-        except Exception:
-            self._items.clear()
+        raw = json.loads(self._data_path.read_text(encoding="utf-8"))
+        items = raw.get("items")
+        if not isinstance(items, list):
+            raise ValueError(f"Estado charito invalido en {self._data_path}: falta lista 'items'")
+        for entry in items:
+            if not isinstance(entry, dict) or not entry.get("instanceId"):
+                raise ValueError(f"Estado charito invalido en {self._data_path}: item sin instanceId")
+            self._items[str(entry["instanceId"])] = entry
 
     def _persist(self) -> None:
         snapshot = {"ts": _AUTH.utc_iso(), "items": list(self._items.values())}
@@ -34,7 +35,7 @@ class StateStore:
             encoding="utf-8"
         )
 
-    def upsert_online(self, payload: Dict, key_hint: Optional[str] = None, alias: Optional[str] = None) -> None:
+    def upsert_observation(self, payload: Dict, key_hint: Optional[str] = None, alias: Optional[str] = None) -> None:
         instance_id = str(payload.get("instanceId") or "").strip()
         key_candidate = str(key_hint or instance_id or "").strip()
         if not key_candidate:
@@ -42,7 +43,8 @@ class StateStore:
         key = instance_id or key_candidate
         payload = dict(payload)
         payload["instanceId"] = key
-        payload["status"] = "online"
+        if not str(payload.get("status") or "").strip():
+            raise ValueError("El payload de estado charito debe definir 'status'")
         payload["receivedAt"] = _AUTH.utc_iso()
         if alias:
             payload.setdefault("alias", alias)
@@ -63,6 +65,8 @@ class StateStore:
         with self._lock:
             entry = self._items.get(iid, {"instanceId": iid})
             entry["status"] = "offline"
+            entry["hostReachable"] = False
+            entry["dataStatus"] = "unreachable"
             entry["receivedAt"] = _AUTH.utc_iso()
             entry.setdefault("samples", 0)
             entry.setdefault("windowSeconds", 0)
@@ -84,7 +88,9 @@ class StateStore:
             if not entry:
                 entry = {
                     "instanceId": key,
-                    "status": "offline",
+                    "status": "desconocido",
+                    "hostReachable": False,
+                    "dataStatus": "not_observed",
                     "samples": 0,
                     "windowSeconds": 0,
                     "timeoutSeconds": 0,

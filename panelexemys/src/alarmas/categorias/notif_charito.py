@@ -8,7 +8,7 @@ import config
 
 class NotifCharitoDaemon:
     """
-    Supervisa el estado online/offline de los demonios administrados por charito-service.
+    Supervisa el estado de los demonios administrados por charito-service.
     """
 
     def __init__(self, logger: Logosaurio):
@@ -48,6 +48,7 @@ class NotifCharitoDaemon:
             status_raw = str(item.get("status") or "unknown").lower()
             is_online = status_raw == "online"
             received_at = item.get("receivedAt")
+            data_error = str(item.get("dataError") or "").strip()
 
             state = self.daemon_states.setdefault(
                 instance_id,
@@ -62,6 +63,7 @@ class NotifCharitoDaemon:
             state["alias"] = alias or instance_id
             state["status"] = status_raw
             state["received_at"] = received_at
+            state["data_error"] = data_error
 
             if not is_online:
                 if state["start_time"] is None:
@@ -80,6 +82,7 @@ class NotifCharitoDaemon:
                             "status": status_raw,
                             "status_display": status_raw.upper(),
                             "received_at": received_at,
+                            "data_error": data_error,
                         }
                     )
             else:

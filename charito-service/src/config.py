@@ -1,40 +1,27 @@
 import json
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 
 @dataclass(frozen=True)
 class Target:
     alias: str
-    instance_id: Optional[str]
+    instance_id: str
     metrics_url: str
-    identity_url: str
 
     @property
     def tracking_key(self) -> str:
-        return self.instance_id or self.alias
+        return self.instance_id
 
     @staticmethod
     def from_dict(entry: dict) -> "Target":
-        alias_raw = entry.get("alias")
-        if not alias_raw or not str(alias_raw).strip():
-            raise ValueError("Cada instancia debe definir 'alias'")
-        alias = str(alias_raw).strip()
-        instance_id_raw = entry.get("id")
-        instance_id = str(instance_id_raw).strip() if instance_id_raw else None
-        base_url = str(entry.get("baseUrl") or entry.get("url") or "").strip()
-        if not base_url:
-            raise ValueError("Cada instancia debe definir 'baseUrl'")
-        metrics_path = str(entry.get("metricsPath") or "/metrics").strip()
-        if not metrics_path.startswith("/"):
-            metrics_path = f"/{metrics_path}"
-        identity_path = str(entry.get("identityPath") or "/identity").strip()
-        if not identity_path.startswith("/"):
-            identity_path = f"/{identity_path}"
+        instance_id = _required_text(entry, "id")
+        alias = _required_text(entry, "alias")
+        base_url = _required_text(entry, "baseUrl").rstrip("/")
+        metrics_path = "/metrics"
         base_url = base_url.rstrip("/")
         metrics_url = f"{base_url}{metrics_path}"
-        identity_url = f"{base_url}{identity_path}"
-        return Target(alias=alias, instance_id=instance_id, metrics_url=metrics_url, identity_url=identity_url)
+        return Target(alias=alias, instance_id=instance_id, metrics_url=metrics_url)
 
 
 @dataclass(frozen=True)
@@ -44,13 +31,20 @@ class ServiceConfig:
     instances: List[Target]
 
 
-def _build_service_config(items: list, poll_interval: int = 20, http_timeout: float = 4.0) -> ServiceConfig:
+def _required_text(entry: dict, key: str) -> str:
+    value = entry.get(key)
+    if value is None or not str(value).strip():
+        raise ValueError(f"Cada instancia debe definir '{key}'")
+    return str(value).strip()
+
+
+def _build_service_config(items: list, poll_interval: int, http_timeout: float) -> ServiceConfig:
     if not isinstance(items, list) or not items:
         raise ValueError("El archivo de targets debe contener una lista 'instances'")
     targets = []
     for entry in items:
         if not isinstance(entry, dict):
-            continue
+            raise ValueError("Cada elemento de 'instances' debe ser un objeto JSON")
         targets.append(Target.from_dict(entry))
     if not targets:
         raise ValueError("La lista de instancias esta vacia")
@@ -68,7 +62,15 @@ def load_service_config_from_json(raw: str) -> ServiceConfig:
         raise ValueError(f"CHARITO_TARGETS_JSON no contiene JSON valido: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("CHARITO_TARGETS_JSON debe contener un objeto JSON")
-    poll_interval = int(data.get("pollIntervalSeconds") or 20)
-    http_timeout = float(data.get("httpTimeoutSeconds") or 4.0)
+    if "pollIntervalSeconds" not in data:
+        raise ValueError("CHARITO_TARGETS_JSON debe definir 'pollIntervalSeconds'")
+    if "httpTimeoutSeconds" not in data:
+        raise ValueError("CHARITO_TARGETS_JSON debe definir 'httpTimeoutSeconds'")
+    poll_interval = int(data["pollIntervalSeconds"])
+    http_timeout = float(data["httpTimeoutSeconds"])
+    if poll_interval <= 0:
+        raise ValueError("'pollIntervalSeconds' debe ser mayor que cero")
+    if http_timeout <= 0:
+        raise ValueError("'httpTimeoutSeconds' debe ser mayor que cero")
     items = data.get("instances")
     return _build_service_config(items, poll_interval=poll_interval, http_timeout=http_timeout)

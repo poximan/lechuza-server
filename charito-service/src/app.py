@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 
 from config import load_service_config_from_json
-from broadcast import broadcast_whitelist
+from broadcast import broadcast_state, close_mqtt
 from poller import CharitoPoller
 from state import StateStore
 
@@ -17,20 +17,12 @@ def _req(name: str) -> str:
     return value.strip()
 
 
-def _req_int(name: str) -> int:
-    return int(_req(name))
-
-
-def _req_float(name: str) -> float:
-    return float(_req(name))
-
-
 DATA_DIR = Path(_req("CHARITO_DATA_DIR"))
 STATE_FILE = Path(_req("CHARITO_STATE_FILE"))
 TARGETS_JSON = _req("CHARITO_TARGETS_JSON")
 service_cfg = load_service_config_from_json(TARGETS_JSON)
-POLL_INTERVAL = _req_int("CHARITO_POLL_INTERVAL_SECONDS")
-HTTP_TIMEOUT = _req_float("CHARITO_HTTP_TIMEOUT_SECONDS")
+POLL_INTERVAL = service_cfg.poll_interval_seconds
+HTTP_TIMEOUT = service_cfg.http_timeout_seconds
 
 app = FastAPI(title="charito-service", version="2.0.0")
 
@@ -48,16 +40,14 @@ poller = CharitoPoller(
 
 @app.on_event("startup")
 def startup_event() -> None:
-    try:
-        broadcast_whitelist(targets)
-    except Exception:
-        pass
+    broadcast_state(state_store.build_state())
     poller.start()
 
 
 @app.on_event("shutdown")
 def shutdown_event() -> None:
     poller.stop()
+    close_mqtt()
 
 
 @app.get("/health")

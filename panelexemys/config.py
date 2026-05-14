@@ -145,22 +145,14 @@ EMAIL_HEALTH_PING_LOCAL_HOST = _req("EMAIL_HEALTH_PING_LOCAL_HOST")
 EMAIL_HEALTH_PING_REMOTE_HOST = _req("EMAIL_HEALTH_PING_REMOTE_HOST")
 
 # ---------------- RPC sobre MQTT (request/response) ----------------------
-# El cliente publica requests en este arbol. El servidor responde SIEMPRE
-# usando alguno de los topicos ya suscritos por el movil (reply_to).
-MQTT_RPC_REQ_ROOT = "app/req"        # nos suscribimos a "app/req/#"
+# Requests y respuestas usan arboles separados de los topicos de estado.
+MQTT_RPC_REQ_ROOT = _req("MQTT_RPC_REQ_ROOT")
+MQTT_RPC_RES_ROOT = _req("MQTT_RPC_RES_ROOT")
 # Acciones soportadas (para validacion/evolucion)
 MQTT_RPC_ALLOWED_ACTIONS = {
     "get_global_status",   # responde en estado/exemys con resumen + ultimos estados por GRD
     "get_modem_status",    # responde en estado/sensor con estado del modem
     "send_email_test",     # dispara un correo de prueba via mensagelo
-}
-
-# TOPICOS VALIDOS PARA reply_to
-MQTT_RPC_ALLOWED_REPLY_TO = {
-    MQTT_TOPIC_MODEM_CONEXION,
-    MQTT_TOPIC_GRADO,
-    MQTT_TOPIC_GRDS,
-    MQTT_TOPIC_EMAIL_EVENT,
 }
 
 # ---------------------------------------------------------

@@ -1,10 +1,9 @@
 """
 
-RPC minimalista sobre MQTT.
+RPC sobre MQTT.
 
-- El cliente publica en "app/req/<accion>" con reply_to y corr.
-
-- El servidor responde publicando en reply_to uno de los topicos del movil.
+- El cliente publica en el arbol configurado `MQTT_RPC_REQ_ROOT`.
+- El servidor responde solo en `MQTT_RPC_RES_ROOT/{clientId}/{corr}`.
 
 """
 
@@ -104,31 +103,31 @@ class MqttRequestRouter:
 
             except Exception:
 
-                self._emit_error(None, config.MQTT_TOPIC_GRDS, action, "payload JSON invalido")
+                self.log.log("RPC descartado: payload JSON invalido", origin=self._origen)
 
                 continue
 
 
 
-            reply_to = req.get("reply_to")
+            reply_to = str(req.get("reply_to") or "").strip()
 
-            corr = req.get("corr", "")
+            corr = str(req.get("corr") or "").strip()
 
             params = req.get("params", {})
+
+
+
+            if not self._valid_reply_to(reply_to, corr):
+
+                self.log.log(f"RPC descartado: reply_to invalido para accion {action}", origin=self._origen)
+
+                continue
 
 
 
             if action not in config.MQTT_RPC_ALLOWED_ACTIONS:
 
                 self._emit_error(corr, reply_to, action, f"accion no soportada: {action}")
-
-                continue
-
-
-
-            if reply_to not in config.MQTT_RPC_ALLOWED_REPLY_TO:
-
-                self._emit_error(corr, config.MQTT_TOPIC_GRDS, action, "reply_to invalido")
 
                 continue
 
@@ -153,6 +152,24 @@ class MqttRequestRouter:
 
 
     # ----------------- handlers -----------------
+
+
+
+    def _valid_reply_to(self, reply_to: str, corr: str) -> bool:
+
+        if not corr:
+
+            return False
+
+        prefix = f"{config.MQTT_RPC_RES_ROOT}/"
+
+        if not reply_to.startswith(prefix):
+
+            return False
+
+        parts = reply_to[len(prefix):].split("/")
+
+        return len(parts) == 2 and bool(parts[0]) and parts[1] == corr
 
 
 
@@ -348,13 +365,9 @@ class MqttRequestRouter:
 
         """
 
-        publica respuesta de error en reply_to valido o en GRDS como fallback
+        publica respuesta de error en reply_to
 
         """
-
-        if reply_to not in config.MQTT_RPC_ALLOWED_REPLY_TO:
-
-            reply_to = config.MQTT_TOPIC_GRDS
 
         msg = {"type": "rpc", "action": action, "corr": corr, "ok": False, "error": error}
 

@@ -30,7 +30,7 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 | `modbus-mw-service` | Estado GRD/MiCOM y observacion Modbus | HTTP interno, MQTT |
 | `pve-service` | Estado e historial de Proxmox | HTTP interno, MQTT |
 | `router-telef-service` | Sondeo del enlace de modem/router | HTTP interno, MQTT |
-| `charito-service` | Relevamiento de instancias remotas | HTTP interno |
+| `charito-service` | Relevamiento de instancias remotas | HTTP interno, MQTT |
 | `scada-citec-service` | Adaptador mimic sobre daemon SCADA externo | HTTP interno |
 | `shared` | Codigo compartido | Importado por servicios Python |
 | `volumes` | Datos persistidos en runtime | Volumenes Docker |
@@ -42,7 +42,7 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 - `login-service` expone la entrada publica y enruta a `panelexemys`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `scada-citec-service`.
 - `panelexemys` consume por HTTP a `mensagelo`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `charito-service`.
 - `modbus-mw-service`, `pve-service` y `router-telef-service` publican estados operativos en MQTT.
-- `charito-service` consulta endpoints remotos `/metrics` y `/identity` declarados en `CHARITO_TARGETS_JSON`.
+- `charito-service` consulta endpoints remotos `/metrics` declarados en `CHARITO_TARGETS_JSON` y publica el estado consolidado en MQTT como fuente de verdad para `panelito`; la identidad estable de cada daemon se declara explicitamente como `id`.
 - `scada-citec-service` consulta un daemon externo definido por `SCADA_DAEMON_BASE_URL`.
 
 La persistencia operativa vive en `volumes/`. Los consumidores deben usar los contratos HTTP/MQTT declarados por cada servicio y no acceder en forma directa a las bases o archivos internos de otro modulo.

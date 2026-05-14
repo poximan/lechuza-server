@@ -1,78 +1,57 @@
 import json
 import os
 import threading
-from typing import Iterable
 import ssl
 import certifi
 
 import paho.mqtt.client as mqtt
 
-from config import Target
-from identity import fetch_instance_id
-from timeauthority import get_time_authority
-
-_AUTH = get_time_authority()
-
-
-MQTT_TOPIC = None
+MQTT_STATE_TOPIC = None
 
 _lock = threading.RLock()
 _client: mqtt.Client | None = None
-_last_payload: str | None = None
+_last_state_payload: str | None = None
 
 
-def broadcast_whitelist(targets: Iterable[Target], overrides: dict[str, str] | None = None) -> None:
-    items = []
-    for target in targets:
-        alias = target.alias
-        resolved = overrides.get(target.identity_url) if overrides else None
-        instance_id = resolved or target.instance_id
-        provisional = False
-        if not instance_id:
-            try:
-                instance_id = fetch_instance_id(target, _http_timeout())
-            except Exception:
-                instance_id = None
-        if not instance_id:
-            instance_id = alias
-            provisional = True
-        entry = {
-            "instanceId": instance_id.strip(),
-            "alias": alias,
-            "provisional": provisional,
-        }
-        items.append(entry)
-
+def broadcast_state(snapshot: dict) -> None:
+    if not isinstance(snapshot, dict):
+        raise TypeError("El snapshot charito debe ser un objeto JSON")
+    items = snapshot.get("items")
+    if not isinstance(items, list):
+        raise ValueError("El snapshot charito debe contener una lista 'items'")
     if not items:
         return
 
-    payload = {"ts": _AUTH.utc_iso(), "items": items}
-    body = json.dumps(payload, ensure_ascii=False)
-    global _last_payload
-    if _last_payload == body:
+    body = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    global _last_state_payload
+    if _last_state_payload == body:
         return
     _publish_once(body)
-    _last_payload = body
+    _last_state_payload = body
 
 
 def _publish_once(body: str) -> None:
     client = _get_client()
-    topic = _topic()
+    topic = _state_topic()
     info = client.publish(topic, payload=body, qos=1, retain=True)
     info.wait_for_publish()
+
+
+def close_mqtt() -> None:
+    global _client
+    with _lock:
+        client = _client
+        _client = None
+    if client is None:
+        return
     client.loop_stop()
-    try:
-        client.disconnect()
-    finally:
-        global _client
-        with _lock:
-            _client = None
+    client.disconnect()
 
 
 def _get_client() -> mqtt.Client:
     global _client
     with _lock:
-        if _client is not None:
+        if _client is not None and _client.is_connected():
             return _client
         client = mqtt.Client(clean_session=True)
         host = _require("MQTT_BROKER_HOST")
@@ -99,15 +78,11 @@ def _get_client() -> mqtt.Client:
         return client
 
 
-def _topic() -> str:
-    global MQTT_TOPIC
-    if MQTT_TOPIC is None:
-        MQTT_TOPIC = _require("CHARITO_MQTT_TOPIC")
-    return MQTT_TOPIC
-
-
-def _http_timeout() -> float:
-    return float(_require("CHARITO_HTTP_TIMEOUT_SECONDS"))
+def _state_topic() -> str:
+    global MQTT_STATE_TOPIC
+    if MQTT_STATE_TOPIC is None:
+        MQTT_STATE_TOPIC = _require("CHARITO_MQTT_STATE_TOPIC")
+    return MQTT_STATE_TOPIC
 
 
 def _require(name: str) -> str:

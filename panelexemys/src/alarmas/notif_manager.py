@@ -152,11 +152,22 @@ class NotifManager:
             instance_id = daemon.get("instance_id") or alias
             status_display = daemon.get("status_display", "OFFLINE")
             received_at = daemon.get("received_at")
-            subject = f"charo-daemon {alias} offline"
-            body_lines = [
-                f"El demonio {alias} (ID {instance_id}) presenta estado '{status_display}' "
-                f"desde hace al menos {config.ALARM_MIN_SUSTAINED_DURATION_MINUTES} minutos."
-            ]
+            data_error = daemon.get("data_error")
+            if daemon.get("status") == "offline":
+                subject = f"charo-daemon {alias} offline"
+                first_line = (
+                    f"El demonio {alias} (ID {instance_id}) no responde desde hace al menos "
+                    f"{config.ALARM_MIN_SUSTAINED_DURATION_MINUTES} minutos."
+                )
+            else:
+                subject = f"charo-daemon {alias} en error"
+                first_line = (
+                    f"El demonio {alias} (ID {instance_id}) responde pero presenta estado "
+                    f"'{status_display}' desde hace al menos {config.ALARM_MIN_SUSTAINED_DURATION_MINUTES} minutos."
+                )
+            body_lines = [first_line]
+            if data_error:
+                body_lines.append(f"Detalle detectado: {data_error}")
             if received_at:
                 body_lines.append(f"Ultima actualizacion registrada: {received_at}")
             self._send_notification_and_log(subject, "\n".join(body_lines), config.ALARM_EMAIL_RECIPIENT)

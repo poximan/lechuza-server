@@ -1,14 +1,12 @@
 import threading
-import time
 from typing import Any, Iterable
 
 import requests
 
 from config import Target
-from identity import fetch_instance_id
 from timeauthority import get_time_authority
 from state import StateStore
-from broadcast import broadcast_whitelist
+from broadcast import broadcast_state
 from logger import logger
 
 _AUTH = get_time_authority()
@@ -24,25 +22,20 @@ class CharitoPoller:
     ) -> None:
         self._targets = list(targets)
         self._state = state
-        self._interval = max(5, poll_interval)
-        self._timeout = max(1.0, request_timeout)
+        self._interval = poll_interval
+        self._timeout = request_timeout
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._registry: dict[str, dict] = {}
         for target in self._targets:
             key = target.tracking_key
-            self._registry[target.identity_url] = {
+            self._registry[target.metrics_url] = {
                 "target": target,
                 "key": key,
                 "alias": target.alias,
-                "resolved": bool(target.instance_id),
             }
             self._state.ensure_placeholder(key, target.alias)
-        self._identities: dict[str, str] = {
-            target.identity_url: target.instance_id
-            for target in self._targets
-            if target.instance_id
-        }
+        self._state.prune([target.instance_id for target in self._targets])
         self._log = logger
 
     def start(self) -> None:
@@ -72,17 +65,17 @@ class CharitoPoller:
                 self._stop.wait(min(self._interval, 5))
 
     def _poll_target(self, target: Target) -> None:
-        registry = self._registry.get(target.identity_url) or {}
+        registry = self._registry.get(target.metrics_url) or {}
         key_hint = registry.get("key") or target.tracking_key
         alias = registry.get("alias") or target.alias
-        instance_id = self._ensure_identity(target)
-        effective_id = instance_id or key_hint
+        effective_id = target.instance_id
         try:
             response = requests.get(target.metrics_url, timeout=self._timeout)
         except requests.RequestException as exc:
             self._log.warning("Fallo consultando %s (%s): %s", target.alias, target.metrics_url, exc, origin="CHARITO/POLLER")
             try:
                 self._state.mark_offline(effective_id, alias=alias)
+                self._broadcast_state()
             except Exception:
                 self._log.exception("No se pudo persistir estado offline para %s", effective_id, origin="CHARITO/POLLER")
             return
@@ -118,18 +111,15 @@ class CharitoPoller:
                 reason,
                 origin="CHARITO/POLLER",
             )
-            payload = self._build_reachable_payload(
+            payload = self._build_error_payload(
                 instance_id=effective_id,
                 alias=alias,
                 http_status=response.status_code,
                 reason=reason,
             )
 
-        self._state.upsert_online(payload, key_hint=key_hint, alias=alias)
-        if instance_id and not registry.get("resolved"):
-            registry["resolved"] = True
-            registry["key"] = instance_id
-            broadcast_whitelist(self._targets, overrides=self._current_keys())
+        self._state.upsert_observation(payload, key_hint=key_hint, alias=alias)
+        self._broadcast_state()
 
     def _build_payload(self, instance_id: str, metrics: dict, alias: str) -> dict:
         network_info = metrics.get("networkInterfaces")
@@ -152,6 +142,8 @@ class CharitoPoller:
             "instanceId": instance_id,
             "alias": alias,
             "status": "online",
+            "hostReachable": True,
+            "dataStatus": "ok",
             "generatedAt": metrics.get("generatedAt") or metrics.get("timestamp") or _AUTH.utc_iso(),
             "receivedAt": _AUTH.utc_iso(),
             "samples": samples,
@@ -180,38 +172,11 @@ class CharitoPoller:
         sample["networkInterfaces"] = network_info if network_info is not None else self._extract_interfaces(metrics)
         return sample
 
-    def _ensure_identity(self, target: Target) -> str | None:
-        registry = self._registry.get(target.identity_url) or {}
-        if registry.get("resolved"):
-            return registry.get("key")
-        cached = self._identities.get(target.identity_url)
-        if cached:
-            registry["resolved"] = True
-            registry["key"] = cached
-            return cached
+    def _broadcast_state(self) -> None:
         try:
-            instance_id = fetch_instance_id(target, self._timeout)
-        except Exception as exc:
-            self._log.warning("No se pudo resolver instanceId para %s: %s", target.identity_url, exc, origin="CHARITO/POLLER")
-            return None
-        if not instance_id:
-            self._log.warning("Endpoint de identidad no devolvio instanceId en %s", target.identity_url, origin="CHARITO/POLLER")
-            return None
-        self._identities[target.identity_url] = instance_id
-        registry["resolved"] = True
-        registry["key"] = instance_id
-        broadcast_whitelist(self._targets, overrides=self._current_keys())
-        self._prune_known_instances()
-        return instance_id
-
-    def _prune_known_instances(self) -> None:
-        allowed = [entry["key"] for entry in self._registry.values() if entry.get("key")]
-        if not allowed:
-            return
-        self._state.prune(allowed)
-
-    def _current_keys(self) -> dict[str, str]:
-        return {identity_url: entry["key"] for identity_url, entry in self._registry.items() if entry.get("key")}
+            broadcast_state(self._state.build_state())
+        except Exception:
+            self._log.exception("No se pudo publicar estado charito por MQTT", origin="CHARITO/MQTT")
 
     def _extract_interfaces(self, metrics: dict) -> list:
         interfaces = metrics.get("networkInterfaces") or []
@@ -244,7 +209,7 @@ class CharitoPoller:
             )
         return cleaned
 
-    def _build_reachable_payload(self, instance_id: str, alias: str, http_status: int, reason: str) -> dict:
+    def _build_error_payload(self, instance_id: str, alias: str, http_status: int, reason: str) -> dict:
         now_iso = _AUTH.utc_iso()
         latest = {
             "timestamp": now_iso,
@@ -258,7 +223,8 @@ class CharitoPoller:
         return {
             "instanceId": instance_id,
             "alias": alias,
-            "status": "online",
+            "status": "error",
+            "hostReachable": True,
             "generatedAt": now_iso,
             "receivedAt": now_iso,
             "samples": 0,
@@ -273,6 +239,6 @@ class CharitoPoller:
             "watchedProcesses": [],
             "latestSample": latest,
             "httpStatus": int(http_status),
-            "dataStatus": "no_useful_metrics",
+            "dataStatus": "metrics_unavailable",
             "dataError": reason,
         }

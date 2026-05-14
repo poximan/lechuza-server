@@ -74,13 +74,17 @@ def _build_card(item: Dict[str, Any]) -> html.Div:
     status_raw = (item.get("status") or "unknown").lower()
     data_status = str(item.get("dataStatus") or "").strip().lower()
     data_error = str(item.get("dataError") or "").strip()
-    status_label = {"online": "Online", "offline": "Offline"}.get(status_raw, "Desconocido")
-    if status_raw == "online" and data_status == "no_useful_metrics":
-        status_label = "Online sin metricas"
+    status_label = {
+        "online": "Online",
+        "offline": "Offline",
+        "error": "Error de metricas",
+        "desconocido": "Desconocido",
+        "unknown": "Desconocido",
+    }.get(status_raw, "Desconocido")
 
     card_cls = ["charito-card"]
     status_cls = "charito-status-pill"
-    if status_raw == "offline":
+    if status_raw in {"offline", "error"}:
         card_cls.append("charito-card-stale")
         status_cls += " charito-status-pill--offline"
 
@@ -102,8 +106,8 @@ def _build_card(item: Dict[str, Any]) -> html.Div:
     if alias and alias != instance_id:
         title_children.append(html.Div(alias, className="charito-card-alias"))
     title_children.append(html.Div(f"{samples} | {window_label}", className="charito-card-subtitle"))
-    if status_raw == "online" and data_status == "no_useful_metrics":
-        issue_label = "Metricas no disponibles"
+    if data_status and data_status != "ok":
+        issue_label = data_status
         if data_error:
             issue_label = f"{issue_label}: {data_error}"
         title_children.append(html.Div(issue_label, className="charito-card-subtitle"))
