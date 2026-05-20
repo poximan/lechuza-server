@@ -11,8 +11,10 @@ from src.web.dashboard.middleware_kpi import register_kpi_panel_callbacks
 from src.web.dashboard.middleware_histograma import register_controls_and_graph_callbacks
 from src.web.dashboard.middleware_tabla import register_main_data_table_callbacks
 from src.web.reles_panel import get_reles_micom_layout, register_reles_micom_callbacks
-from src.web.mantenimiento import get_mantenimiento_layout, register_mantenimiento_callbacks
+from src.web.mantenimiento import get_mantenimiento_layout
+from src.web.generadores import get_generadores_layout, register_generadores_callbacks
 from src.web.email import get_email_layout, register_email_callbacks
+from src.web.mensagelo import get_mensagelo_layout, register_mensagelo_callbacks
 from src.web.broker.broker_view import (
     get_broker_layout,
     register_broker_callbacks,
@@ -21,25 +23,21 @@ from src.web.broker.broker_view import (
 from src.web.proxmox import get_proxmox_layout, register_proxmox_callbacks
 from src.web.charito import get_charito_layout, register_charito_callbacks
 
-import config
-
 api_key = config.MENSAGELO_API_KEY
 BASE = "/dash"
 COOKIE_NAME = "panelexemys_mode"
 MODE_SECURE = "secure"
 MODE_PROTECTED = "protected"
 
-BASE_TABS = (
-    ("Dashboard", BASE),
-    ("Email", f"{BASE}/email"),
-    ("Proxmox", f"{BASE}/proxmox"),
-    ("Charito", f"{BASE}/charito"),
-)
-
-PROTECTED_TABS = (
-    ("Reles MiCOM", f"{BASE}/reles"),
-    ("Mantenimiento", f"{BASE}/mantenimiento"),
-    ("Broker", f"{BASE}/broker"),
+NAV_TABS = (
+    ("dash exemys", BASE, False),
+    ("charito", f"{BASE}/charito", False),
+    ("Generadores", f"{BASE}/generadores", False),
+    ("proxmox", f"{BASE}/proxmox", False),
+    ("reles MiCOM", f"{BASE}/reles", True),
+    ("mantenimiento", f"{BASE}/mantenimiento", True),
+    ("mensagelo", f"{BASE}/mensagelo", True),
+    ("broker", f"{BASE}/broker", True),
 )
 
 
@@ -54,9 +52,12 @@ def _current_mode() -> str:
 
 def _build_nav_links(mode: str) -> list:
     """Construye la barra de navegacion segun el modo actual."""
-    links = [dcc.Link(label, href=href, className="nav-link") for label, href in BASE_TABS]
-    if mode == MODE_PROTECTED:
-        links.extend(dcc.Link(label, href=href, className="nav-link") for label, href in PROTECTED_TABS)
+    links = []
+    for label, href, protected in NAV_TABS:
+        if protected and mode != MODE_PROTECTED:
+            continue
+        class_name = "nav-link nav-link-protected" if protected else "nav-link"
+        links.append(dcc.Link(label, href=href, className=class_name))
     links.append(html.A("Salir", href="/", className="nav-link nav-link-logout"))
     return links
 
@@ -77,10 +78,8 @@ def configure_dash_app(
     initialize_broker_components(mqtt_client_manager, message_queue, auto_start=auto_start_mqtt)
 
     dashboard_layout = get_dashboard(db_grd_descriptions, initial_grd_value)
-    reles_micom_layout = get_reles_micom_layout()
-    mantenimiento_layout = get_mantenimiento_layout()
+    generadores_layout = get_generadores_layout()
     email_layout = get_email_layout()
-    broker_layout = get_broker_layout()
     charito_layout = get_charito_layout()
 
     def serve_layout():
@@ -116,12 +115,14 @@ def configure_dash_app(
     app.layout = serve_layout
 
     protected_views = {
-        f"{BASE}/reles": reles_micom_layout,
-        f"{BASE}/mantenimiento": mantenimiento_layout,
-        f"{BASE}/broker": broker_layout,
+        f"{BASE}/reles": get_reles_micom_layout,
+        f"{BASE}/mantenimiento": get_mantenimiento_layout,
+        f"{BASE}/mensagelo": get_mensagelo_layout,
+        f"{BASE}/broker": get_broker_layout,
     }
 
     public_views = {
+        f"{BASE}/generadores": generadores_layout,
         f"{BASE}/email": email_layout,
         f"{BASE}/proxmox": get_proxmox_layout,
         f"{BASE}/charito": charito_layout,
@@ -156,8 +157,9 @@ def configure_dash_app(
     register_controls_and_graph_callbacks(app)
     register_main_data_table_callbacks(app)
     register_reles_micom_callbacks(app)
-    register_mantenimiento_callbacks(app)
+    register_generadores_callbacks(app)
     register_email_callbacks(app, api_key)
+    register_mensagelo_callbacks(app)
     register_broker_callbacks(app)
     register_proxmox_callbacks(app)
     register_charito_callbacks(app)

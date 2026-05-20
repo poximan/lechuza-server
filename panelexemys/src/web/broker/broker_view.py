@@ -149,18 +149,6 @@ def initialize_broker_components(manager, queue, auto_start=True):
             mqtt_client_manager.set_message_queue(message_queue)
         elif hasattr(mqtt_client_manager, 'msg_queue'):
             mqtt_client_manager.msg_queue = message_queue
-
-        if not _auto_start_enabled:
-            return
-
-        desired = bool(load_observar_key("broker_conectar", True))
-        if desired:
-            threading.Thread(target=mqtt_client_manager.start, daemon=True).start()
-        else:
-            try:
-                mqtt_client_manager.stop()
-            except Exception:
-                pass
     except Exception:
         pass
 

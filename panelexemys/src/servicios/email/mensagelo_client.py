@@ -1,8 +1,10 @@
 import json
 import time
 from typing import List, Tuple, Optional
-import requests
-
+import requests
+
+from src.servicios.email.mensagelo_attempt_log import record_mensagelo_attempt
+
 class MensageloError(Exception):
     pass
 
@@ -45,7 +47,18 @@ class MensageloClient:
             "message_type": message_type,
         }
 
-        attempt = 0
+        def finish(ok: bool, msg: str) -> Tuple[bool, str]:
+            record_mensagelo_attempt(
+                ok=ok,
+                recipients=recipients,
+                subject=subject,
+                body=body,
+                message_type=message_type,
+                detail=msg,
+            )
+            return ok, msg
+
+        attempt = 0
         backoff = self.backoff_initial
 
         while True:
@@ -63,7 +76,7 @@ class MensageloClient:
                     time.sleep(min(backoff, self.backoff_max))
                     backoff = min(backoff * 2.0, self.backoff_max)
                     continue
-                return False, f"error de red o timeout tras {attempt} intentos: {e}"
+                return finish(False, f"error de red o timeout tras {attempt} intentos: {e}")
 
             # HTTP recibido
             if resp.status_code == 202:
@@ -71,12 +84,12 @@ class MensageloClient:
                 try:
                     data = resp.json()
                 except ValueError:
-                    return False, "respuesta 202 sin JSON valido"
+                    return finish(False, "respuesta 202 sin JSON valido")
                 ok = bool(data.get("ok")) and bool(data.get("queued"))
                 msg = str(data.get("message", ""))
-                return ok, msg or "pedido aceptado"
+                return finish(ok, msg or "pedido aceptado")
             elif resp.status_code in (401, 403):
-                return False, "no autorizado: ver API key"
+                return finish(False, "no autorizado: ver API key")
             elif resp.status_code in (429, 503):
                 # sobrecarga/cola llena: reintentar con backoff
                 if attempt <= self.max_retries:
@@ -87,12 +100,12 @@ class MensageloClient:
                     err = resp.json().get("detail", "")
                 except Exception:
                     err = resp.text
-                return False, f"servicio saturado: {err}"
+                return finish(False, f"servicio saturado: {err}")
             else:
                 # otros codigos: no reintentar salvo que quieras ser mas agresivo
                 try:
                     err = resp.json()
                 except Exception:
                     err = resp.text
-                return False, f"error http {resp.status_code}: {err}"
+                return finish(False, f"error http {resp.status_code}: {err}")
 

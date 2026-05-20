@@ -129,9 +129,7 @@ def _compute_range(window: str, page: int):
         start = ref.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         end = (start + relativedelta(months=1)) - timedelta(microseconds=1)
         return start, end
-    start = now - timedelta(days=30)
-    end = now
-    return start, end
+    raise ValueError(f"Ventana de historico invalida: {window}")
 
 
 def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
@@ -140,7 +138,9 @@ def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="GRD no encontrado")
 
     today_str = timebox.utc_now().strftime("%Y-%m-%d")
-    window_norm = window if window in {"1sem", "1mes", "todo"} else "1sem"
+    if window not in {"1sem", "1mes", "todo"}:
+        raise HTTPException(status_code=400, detail="window debe ser 1sem, 1mes o todo")
+    window_norm = window
     plot_start = plot_end = None
 
     if window_norm == "1sem":
@@ -151,7 +151,7 @@ def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
         df = historicos_dao.get_monthly_data_for_grd(grd_id, today_str, page)
         total_periods = max(1, historicos_dao.get_total_months_for_grd(grd_id, today_str))
         plot_start, plot_end = _compute_range(window_norm, page)
-    else:
+    elif window_norm == "todo":
         df = historicos_dao.get_all_data_for_grd(grd_id)
         total_periods = 1
         if df is not None and not df.empty:
@@ -165,7 +165,7 @@ def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
                 last_ts.to_pydatetime() if hasattr(last_ts, "to_pydatetime") else last_ts
             )
         else:
-            plot_start, plot_end = _compute_range(window_norm, page)
+            plot_start, plot_end = _compute_range("1mes", 0)
 
     connected_before = historicos_dao.get_connected_state_before_timestamp(grd_id, plot_start)
     if connected_before is None:

@@ -59,6 +59,8 @@ class CharitoPoller:
                         self._poll_target(target)
                     except Exception:
                         self._log.exception("Error no controlado en ciclo de polling para %s", target.metrics_url, origin="CHARITO/POLLER")
+                if not self._stop.is_set():
+                    self._broadcast_state()
                 self._stop.wait(self._interval)
             except Exception:
                 self._log.exception("Fallo inesperado del loop de polling; se reintentara", origin="CHARITO/POLLER")
@@ -75,7 +77,6 @@ class CharitoPoller:
             self._log.warning("Fallo consultando %s (%s): %s", target.alias, target.metrics_url, exc, origin="CHARITO/POLLER")
             try:
                 self._state.mark_offline(effective_id, alias=alias)
-                self._broadcast_state()
             except Exception:
                 self._log.exception("No se pudo persistir estado offline para %s", effective_id, origin="CHARITO/POLLER")
             return
@@ -119,7 +120,6 @@ class CharitoPoller:
             )
 
         self._state.upsert_observation(payload, key_hint=key_hint, alias=alias)
-        self._broadcast_state()
 
     def _build_payload(self, instance_id: str, metrics: dict, alias: str) -> dict:
         network_info = metrics.get("networkInterfaces")

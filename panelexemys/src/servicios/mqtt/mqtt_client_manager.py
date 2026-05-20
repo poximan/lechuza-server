@@ -1,5 +1,6 @@
 import json
 import queue
+import threading
 from typing import Callable, List, Tuple, Optional
 
 import config
@@ -42,19 +43,29 @@ class MqttClientManager:
 
         # Estado interno
         self._started = False
+        self._starting = False
+        self._start_lock = threading.Lock()
 
     # ----------------- Ciclo de vida
     def start(self) -> bool:
-        if self._started:
-            return True
+        with self._start_lock:
+            if self._started:
+                return True
+            if self._starting:
+                return False
+            self._starting = True
 
-        ok = self.driver.connect()
-        if not ok:
-            self.log.log("MQTT Client Manager: No se pudo establecer conexion inicial.", origin=self._origen)
-            return False
-        self._started = True
-        self.log.log("MQTT Client Manager: Conexion establecida correctamente.", origin=self._origen)
-        return True
+        try:
+            ok = self.driver.connect()
+            if not ok:
+                self.log.log("MQTT Client Manager: No se pudo establecer conexion inicial.", origin=self._origen)
+                return False
+            self._started = True
+            self.log.log("MQTT Client Manager: Conexion establecida correctamente.", origin=self._origen)
+            return True
+        finally:
+            with self._start_lock:
+                self._starting = False
 
     def stop(self):
         self._publish_status(False, "shutdown")

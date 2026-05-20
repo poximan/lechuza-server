@@ -5,15 +5,11 @@ from pathlib import Path
 
 
 def _pick_db_path() -> Path:
-    explicit = os.getenv("PANELEXEMYS_DB_PATH")
-    if explicit and explicit.strip():
-        return Path(explicit)
-
     data_dir = os.getenv("PANELEXEMYS_DATA_DIR")
     if data_dir and data_dir.strip():
         return Path(data_dir) / "panelexemys.db"
 
-    raise EnvironmentError("Falta variable de entorno obligatoria: PANELEXEMYS_DB_PATH o PANELEXEMYS_DATA_DIR")
+    raise EnvironmentError("Falta variable de entorno obligatoria: PANELEXEMYS_DATA_DIR")
 
 
 def _safe_path(path: Path) -> Path:

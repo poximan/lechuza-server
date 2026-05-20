@@ -3,7 +3,6 @@ from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import plotly.graph_objects as go
 import pandas as pd
-from datetime import timedelta
 from src.utils import timebox
 from src.web.clients.modbus_client import modbus_client
 
@@ -69,6 +68,9 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
 
         new_state = current_state_data.copy()
+        if new_state.get('time_window') not in {'1sem', '1mes', 'todo'}:
+            new_state['time_window'] = '1sem'
+            new_state['page_number'] = 0
 
         if not triggered_id or triggered_id == 'grd-id-dropdown':
             new_state['page_number'] = 0
@@ -98,10 +100,12 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         Output('time-window-state', 'data', allow_duplicate=True),
         [Input('prev-btn', 'n_clicks'),
          Input('next-btn', 'n_clicks')],
-        [State('time-window-state', 'data')],
+        [State('time-window-state', 'data'),
+         State('prev-btn', 'disabled'),
+         State('next-btn', 'disabled')],
         prevent_initial_call=True
     )
-    def navigate_pages(n_prev, n_next, current_state_data):
+    def navigate_pages(n_prev, n_next, current_state_data, prev_disabled, next_disabled):
         ctx = dash.callback_context
         if not ctx.triggered:
             raise dash.exceptions.PreventUpdate
@@ -113,63 +117,35 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         page_number = new_state['page_number']
         grd_id = new_state['current_grd_id']
 
-        if grd_id is None or time_window == 'todo':
-            raise dash.exceptions.PreventUpdate
-
-        try:
-            history_meta = modbus_client.get_history(grd_id, time_window, page_number)
-            total_segments = int(history_meta.get("total_periods", 0))
-        except Exception:
-            total_segments = 0
-
-        if total_segments <= 0:
+        if grd_id is None or time_window not in {'1sem', '1mes'}:
             raise dash.exceptions.PreventUpdate
 
         if button_id == 'prev-btn':
-            if page_number < total_segments - 1:
-                new_state['page_number'] = page_number + 1
-            else:
+            if prev_disabled:
                 raise dash.exceptions.PreventUpdate
+            new_state['page_number'] = page_number + 1
         elif button_id == 'next-btn':
-            if page_number > 0:
-                new_state['page_number'] = page_number - 1
-            else:
+            if next_disabled or page_number <= 0:
                 raise dash.exceptions.PreventUpdate
+            new_state['page_number'] = page_number - 1
 
         return new_state
 
-    @app.callback(
-        Output('pagination-controls', 'style'),
-        Output('prev-btn', 'disabled'),
-        Output('next-btn', 'disabled'),
-        [Input('time-window-state', 'data')]
-    )
-    def update_pagination_controls(time_window_state_data):
-        time_window = time_window_state_data['time_window']
-        page_number = time_window_state_data['page_number']
-        grd_id = time_window_state_data['current_grd_id']
-
-        if time_window == 'todo' or grd_id is None:
+    def _pagination_controls_state(grd_id, time_window, page_number, total_segments):
+        if grd_id is None or time_window == 'todo':
             return {'display': 'none'}, True, True
-
-        try:
-            history_meta = modbus_client.get_history(grd_id, time_window, page_number)
-            total_segments = int(history_meta.get("total_periods", 0))
-        except Exception:
-            total_segments = 0
-
         if total_segments <= 1:
             return {'display': 'flex', 'justifyContent': 'center', 'gap': '1rem'}, True, True
-
-        prev_disabled = (page_number == total_segments - 1)
-        next_disabled = (page_number == 0)
-
+        prev_disabled = page_number >= total_segments - 1
+        next_disabled = page_number <= 0
         return {'display': 'flex', 'justifyContent': 'center', 'gap': '1rem'}, prev_disabled, next_disabled
-
 
     @app.callback(
         Output('connected-wave-graph', 'figure'),
         Output('no-grd-warning', 'children'), # Actualizamos el mensaje de advertencia del grafico
+        Output('pagination-controls', 'style'),
+        Output('prev-btn', 'disabled'),
+        Output('next-btn', 'disabled'),
         [Input('time-window-state', 'data'),
          Input('interval-component', 'n_intervals'), # Se sigue actualizando con el intervalo
          Input('connected-wave-graph', 'relayoutData')]
@@ -189,7 +165,8 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
                 xaxis={'visible': False}, yaxis={'visible': False}, height=400,
                 font=dict(family="Inter", size=14, color="#333")
             ))
-            return fig, no_grd_message # Retornamos el mensaje para el Div de advertencia
+            pagination_state = _pagination_controls_state(None, '1sem', 0, 0)
+            return fig, no_grd_message, *pagination_state
 
         if selected_grd_id is None:
             default_message = "Por favor, seleccione un equipo GRD del menu desplegable."
@@ -198,24 +175,29 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
                 xaxis={'visible': False}, yaxis={'visible': False}, height=400,
                 font=dict(family="Inter", size=14, color="#333")
             ))
-            return fig, default_message # Retornamos el mensaje para el Div de advertencia
+            pagination_state = _pagination_controls_state(None, '1sem', 0, 0)
+            return fig, default_message, *pagination_state
 
 
         time_window = time_window_state_data['time_window']
         page_number = time_window_state_data['page_number']
+        if time_window not in {'1sem', '1mes', 'todo'}:
+            time_window = '1sem'
+            page_number = 0
 
-        xaxis_tickformat = "%d/%m/%y %H:%M"
-        xaxis_dtick = None
-        xaxis_tickangle = 0
         try:
             history_payload = modbus_client.get_history(selected_grd_id, time_window, page_number)
         except Exception:
-            history_payload = {
-                "data": [],
-                "connected_before": 0,
-                "range_start": timebox.utc_iso(),
-                "range_end": timebox.utc_iso(),
-            }
+            error_message = "No se pudo obtener el historico de conexion."
+            fig = go.Figure(data=[], layout=go.Layout(
+                title={'text': error_message, 'font': dict(family="Inter", size=20, color="#333")},
+                xaxis={'visible': False}, yaxis={'visible': False}, height=400,
+                font=dict(family="Inter", size=14, color="#333")
+            ))
+            pagination_state = _pagination_controls_state(selected_grd_id, time_window, page_number, 0)
+            return fig, error_message, *pagination_state
+        total_segments = int(history_payload.get("total_periods", 0))
+        pagination_state = _pagination_controls_state(selected_grd_id, time_window, page_number, total_segments)
         df = pd.DataFrame(history_payload.get('data', []))
         if not df.empty:
             df = df.sort_values(by='timestamp').reset_index(drop=True)
@@ -225,12 +207,8 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
             grd_title_period = f"Semana {page_number + 1}"
         elif time_window == '1mes':
             grd_title_period = f"Mes {page_number + 1}"
-            xaxis_tickformat = "%d/%m/%y"
-        else:
+        elif time_window == 'todo':
             grd_title_period = "Todos los Datos"
-            xaxis_tickformat = "%m/%y"
-            xaxis_dtick = "M1"
-            xaxis_tickangle = 0
 
         grd_description_for_title = current_db_grd_descriptions.get(selected_grd_id)
         grd_title_text = f"Historico de Conexion - {grd_title_period}" if grd_description_for_title else f"Historico de Conexion - GRD {selected_grd_id} - {grd_title_period}"
@@ -243,12 +221,15 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
 
         try:
             plot_start_time = timebox.parse(history_payload.get("range_start"), legacy=True)
-        except Exception:
-            plot_start_time = timebox.utc_now() - timedelta(days=30)
-        try:
             plot_end_time = timebox.parse(history_payload.get("range_end"), legacy=True)
         except Exception:
-            plot_end_time = timebox.utc_now()
+            error_message = "El historico recibido no tiene un rango valido."
+            fig = go.Figure(data=[], layout=go.Layout(
+                title={'text': error_message, 'font': dict(family="Inter", size=20, color="#333")},
+                xaxis={'visible': False}, yaxis={'visible': False}, height=400,
+                font=dict(family="Inter", size=14, color="#333")
+            ))
+            return fig, error_message, *pagination_state
 
         def _format_local(dt_value):
             try:
@@ -365,4 +346,4 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         # Solo necesitamos el mensaje si no hay GRDs en la DB al inicio.
         warning_children = "ADVERTENCIA: No se han encontrado equipos GRD en la base de datos para consulta." if not current_db_grd_descriptions else ""
 
-        return fig, warning_children
+        return fig, warning_children, *pagination_state

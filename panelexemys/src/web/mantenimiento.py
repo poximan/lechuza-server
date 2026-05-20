@@ -4,13 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-import dash
-from dash import html, dcc
-from dash.dependencies import Input, Output
+from dash import html
 
 import config
 from src.logger import logger
-from src.web.clients.modbus_client import modbus_client
 
 PUBLIC_BASE_URL = config.PUBLIC_BASE_URL
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -76,28 +73,13 @@ def _render_phone_item(item: dict[str, str]) -> html.Li:
 
 
 def get_mantenimiento_layout() -> html.Div:
-    """
-    Layout de la pestaña de mantenimiento con estado del GE, topología, mapeos de puertos e iframe del repositorio.
-    """
     return html.Div(
         children=[
             html.H1("Mantenimiento", className="main-title"),
             html.Div(
+                className="mantenimiento-section",
                 children=[
-                    html.H2("Grupo Electrogeno", className="sub-title"),
-                    html.Div(
-                        className="ge-status-card",
-                        children=[
-                            html.Div(id="ge-emar-led", className="status-circle ge-led-unknown"),
-                            html.Div(id="ge-emar-text", className="ge-status-text", children="GE sin datos"),
-                        ],
-                    ),
-                ],
-                style={"marginBottom": "32px"},
-            ),
-            html.Div(
-                children=[
-                    html.H2("Topologia de red", className="sub-title"),
+                    html.H2("Topologia de red", className="mantenimiento-section-title"),
                     html.Div(
                         className="magnifier-container",
                         children=[
@@ -111,11 +93,11 @@ def get_mantenimiento_layout() -> html.Div:
                         style={"width": "100%", "margin": "0 auto", "position": "relative"},
                     ),
                 ],
-                style={"textAlign": "center", "marginBottom": "32px"},
             ),
             html.Div(
+                className="mantenimiento-section",
                 children=[
-                    html.H2("Lineas telefonicas", className="sub-title"),
+                    html.H2("Lineas telefonicas", className="mantenimiento-section-title"),
                     html.Div(
                         className="telefonos-grid",
                         children=[
@@ -152,11 +134,14 @@ def get_mantenimiento_layout() -> html.Div:
                         ],
                     ),
                 ],
-                style={"marginBottom": "32px"},
             ),
             html.Div(
+                className="mantenimiento-section",
                 children=[
-                    html.H2("Mapeo de puertos (docker <-> localhost <-> https)", className="sub-title"),
+                    html.H2(
+                        "Mapeo de puertos (docker <-> localhost <-> https)",
+                        className="mantenimiento-section-title",
+                    ),
                     html.Table(
                         className="port-mapping-table",
                         children=[
@@ -186,38 +171,6 @@ def get_mantenimiento_layout() -> html.Div:
                         ],
                     ),
                 ],
-                style={"marginBottom": "32px"},
-            ),
-            dcc.Interval(
-                id="ge-emar-interval",
-                interval=config.DASH_REFRESH_SECONDS,
-                n_intervals=0,
             ),
         ]
     )
-
-
-def register_mantenimiento_callbacks(app: dash.Dash) -> None:
-    @app.callback(
-        Output("ge-emar-text", "children"),
-        Output("ge-emar-led", "className"),
-        Input("ge-emar-interval", "n_intervals"),
-    )
-    def _refresh_ge_status(_tick: int):
-        try:
-            data = modbus_client.get_ge_status()
-            estado = str(data.get("estado", "desconocido")).strip().lower()
-        except Exception:
-            estado = "desconocido"
-
-        estado_map = {
-            "marcha": "GE en marcha",
-            "parado": "GE parado",
-            "desconocido": "GE sin datos",
-        }
-        led_map = {
-            "marcha": "status-circle ge-led-marcha",
-            "parado": "status-circle ge-led-parado",
-            "desconocido": "status-circle ge-led-unknown",
-        }
-        return estado_map.get(estado, estado_map["desconocido"]), led_map.get(estado, led_map["desconocido"])

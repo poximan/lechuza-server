@@ -2,9 +2,10 @@
 
 Mono-repo de la plataforma Lechuza orientada a microservicios. Este arbol concentra el backend operativo, la capa web interna, los adaptadores de integracion y los recursos compartidos que se despliegan juntos desde `docker-compose.yml`.
 
+La puerta publica HTTP/HTTPS ya no vive en este repo. Esa responsabilidad fue migrada a `router-atrevido`, que publica `comunicaciones.servicoop.com.ar`, aplica TLS, muestra el menu de bienvenida y enruta hacia los servicios internos por la red Docker externa `servicoop-edge-net`.
+
 La arquitectura sigue una separacion estricta de incumbencias:
 
-- `login-service` es la puerta de entrada HTTP/HTTPS y protege el acceso a los servicios internos.
 - `panelexemys` es la interfaz operativa y el orquestador de visualizacion, alarmas y mensajeria.
 - `mensagelo` encapsula el envio de correo y su persistencia operacional.
 - `modbus-mw-service` consulta el dominio Modbus/GRD y expone estado por HTTP y MQTT.
@@ -17,6 +18,7 @@ La arquitectura sigue una separacion estricta de incumbencias:
 
 Quedan explicitamente fuera de alcance de este mono-repo:
 
+- La publicacion HTTP/HTTPS, que corresponde a `router-atrevido`.
 - `panelito`, que actua como consumidor externo de contratos MQTT/HTTP.
 - `charo-daemon`, que sigue siendo una dependencia externa relevada por `charito-service` y `scada-citec-service`.
 
@@ -24,7 +26,6 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 
 | Directorio | Rol principal | Interfaces |
 | --- | --- | --- |
-| `login-service` | Proxy inverso y login | HTTP/HTTPS publico |
 | `panelexemys` | Dashboard, alarmas y coordinacion | HTTP interno, MQTT |
 | `mensagelo` | API de email y cola de envio | HTTP interno |
 | `modbus-mw-service` | Estado GRD/MiCOM y observacion Modbus | HTTP interno, MQTT |
@@ -39,11 +40,19 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 
 `docker-compose.yml` define el despliegue conjunto y deja clara la frontera entre servicios:
 
-- `login-service` expone la entrada publica y enruta a `panelexemys`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `scada-citec-service`.
+- `panelexemys`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `scada-citec-service` se conectan tambien a `servicoop-edge-net` para ser alcanzados exclusivamente por el edge router.
 - `panelexemys` consume por HTTP a `mensagelo`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `charito-service`.
 - `modbus-mw-service`, `pve-service` y `router-telef-service` publican estados operativos en MQTT.
 - `charito-service` consulta endpoints remotos `/metrics` declarados en `CHARITO_TARGETS_JSON` y publica el estado consolidado en MQTT como fuente de verdad para `panelito`; la identidad estable de cada daemon se declara explicitamente como `id`.
 - `scada-citec-service` consulta un daemon externo definido por `SCADA_DAEMON_BASE_URL`.
+
+La red externa no la crea este compose. Debe existir antes del despliegue porque esta declarada como `external: true`:
+
+```powershell
+docker network create servicoop-edge-net
+```
+
+Ese comando se ejecuta una sola vez en el host Docker. Si la red ya existe, no hay que repetirlo.
 
 La persistencia operativa vive en `volumes/`. Los consumidores deben usar los contratos HTTP/MQTT declarados por cada servicio y no acceder en forma directa a las bases o archivos internos de otro modulo.
 
@@ -55,7 +64,6 @@ lechuza-server/
 |- .env
 |- .env.example
 |- .gitignore
-|- login-service/
 |- panelexemys/
 |- mensagelo/
 |- modbus-mw-service/
