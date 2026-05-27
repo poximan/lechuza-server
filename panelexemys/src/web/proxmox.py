@@ -749,7 +749,7 @@ def get_proxmox_layout() -> html.Div:
     return html.Div(
         children=[
             dcc.Store(id="proxmox-zoom-state", data={"locked": False}),
-            html.H1("Proxmox", className="main-title"),
+            html.H1("proxmox", className="main-title"),
             html.Div(
                 id="proxmox-last-update",
                 className="info-message",

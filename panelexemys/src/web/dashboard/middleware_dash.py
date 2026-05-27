@@ -12,7 +12,7 @@ def get_dashboard(db_grd_descriptions, initial_grd_value):
     define layout del dashboard principal
     """
     return html.Div(children=[
-        html.H1("Middleware Exemys", className='main-title', style={'fontFamily': 'Inter, sans-serif'}),
+        html.H1("middleware exemys", className='main-title', style={'fontFamily': 'Inter, sans-serif'}),
 
         html.Div(
             className='kpi-panel-container',

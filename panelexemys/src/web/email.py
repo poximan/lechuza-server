@@ -18,7 +18,7 @@ def get_email_layout() -> html.Div:
     """
     return html.Div(
         children=[
-            html.H1("Estado de Correo", className="main-title"),
+            html.H1("estado de correo", className="main-title"),
             html.Div(
                 className="kpi-item",
                 children=[

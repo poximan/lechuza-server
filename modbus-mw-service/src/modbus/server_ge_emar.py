@@ -11,9 +11,12 @@ from src.utils import timebox
 
 class GeEmarClient:
     """
-    Monitorea el estado de marcha del grupo electrÃ³geno (GE) leyendo un Ãºnico registro
-    Modbus y publicando cambios tanto por MQTT como vÃ­a cache para HTTP.
+    Monitorea los interruptores asociados al grupo electrogeno leyendo un unico
+    registro Modbus y exponiendo el estado por cache HTTP y MQTT.
     """
+
+    LINE_BREAKER_BIT = 0
+    GENERATOR_BREAKER_BIT = 1
 
     def __init__(
         self,
@@ -30,40 +33,47 @@ class GeEmarClient:
         self.logger = logger
         self.publisher = mqtt_publisher
         self.state_cache = state_cache
-        self._last_state: Optional[str] = None
+        self._last_line_bit: Optional[int] = None
 
         ge_cfg = config.GE_EMAR
         self._grd_id = int(ge_cfg["grd_id"])
         self._register_offset = int(ge_cfg["register_offset"])
-        self._bit_index = int(ge_cfg["bit_index"])
         self._topic = ge_cfg["topic"]
 
         self._address_offset = self._compute_address_offset()
 
     def _compute_address_offset(self) -> int:
         """
-        Convierte la formula 3xxx = 30000 + (GRD_ID â€“ 1) * 16 + register_offset
+        Convierte la formula 3xxx = 30000 + (GRD_ID - 1) * 16 + register_offset
         a desplazamiento zero-based para pymodbus.
         """
         zero_based_offset = max(0, self._register_offset - 1)
         return max(0, (self._grd_id - 1) * config.MB_COUNT + zero_based_offset)
 
-    def _evaluate_state(self, raw_value: int) -> str:
-        """
-        Bit 0: 1 -> parado, 0 -> en marcha.
-        """
-        bit = (raw_value >> self._bit_index) & 1
-        return "parado" if bit == 1 else "marcha"
-
-    def _build_payload(self, state: str) -> dict:
+    def _decode_breaker(self, raw_value: int, bit_index: int) -> dict:
+        bit = (raw_value >> bit_index) & 1
         return {
-            "estado": state,
+            "bit": bit,
+            "estado": "cerrado" if bit == 1 else "abierto",
+        }
+
+    def _build_payload(self, raw_value: int) -> dict:
+        return {
+            "interruptor_linea": self._decode_breaker(raw_value, self.LINE_BREAKER_BIT),
+            "interruptor_grupo": self._decode_breaker(raw_value, self.GENERATOR_BREAKER_BIT),
+            "raw_value": raw_value,
             "ts": timebox.utc_iso(),
+        }
+
+    def _build_line_payload(self, payload: dict) -> dict:
+        return {
+            "interruptor_linea": dict(payload["interruptor_linea"]),
+            "ts": payload["ts"],
         }
 
     def start_monitoring_loop(self) -> None:
         self.logger.log(
-            f"Iniciando monitor GE_EMAR (GRD {self._grd_id}, offset {self._address_offset}, bit {self._bit_index})...",
+            f"Iniciando monitor GE_EMAR (GRD {self._grd_id}, offset {self._address_offset}, bits linea/grupo 0/1)...",
             origin="OBS/GE",
         )
 
@@ -78,13 +88,19 @@ class GeEmarClient:
                     self.logger.log("Lectura GE_EMAR sin registros.", origin="OBS/GE")
                 else:
                     raw_value = int(registers[0])
-                    state = self._evaluate_state(raw_value)
-                    payload = self._build_payload(state)
+                    payload = self._build_payload(raw_value)
                     self.state_cache.update(payload)
-                    if state != self._last_state:
-                        self.publisher.publish_ge_emar(payload)
-                        self._last_state = state
-                        self.logger.log(f"GE_EMAR actual: {state} (valor {raw_value})", origin="OBS/GE")
+                    line_bit = int(payload["interruptor_linea"]["bit"])
+                    if line_bit != self._last_line_bit:
+                        self.publisher.publish_ge_emar(self._build_line_payload(payload))
+                        self._last_line_bit = line_bit
+                        self.logger.log(
+                            "GE_EMAR linea: "
+                            f"{payload['interruptor_linea']['estado']} "
+                            f"/ grupo: {payload['interruptor_grupo']['estado']} "
+                            f"(valor {raw_value})",
+                            origin="OBS/GE",
+                        )
             except Exception as exc:
                 self.logger.log(f"Error en monitoreo GE_EMAR: {exc}", origin="OBS/GE")
 

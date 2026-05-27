@@ -12,11 +12,11 @@ def set_manager(manager) -> None:
     _manager = manager
 
 
-def _safe_publish(topic: str, payload: Any, qos: int, retain: bool) -> None:
+def _safe_publish(topic: str, payload: Any, qos: int, retain: bool, source: str) -> None:
     if _manager is None:
         return
     try:
-        _manager.publish(topic, payload, qos=qos, retain=retain)
+        _manager.publish(topic, payload, qos=qos, retain=retain, source=source)
     except Exception:
         pass
 
@@ -31,6 +31,7 @@ def publish_email_state(payload: dict) -> None:
         json.dumps(payload, ensure_ascii=False),
         qos=config.MQTT_PUBLISH_QOS_STATE,
         retain=config.MQTT_PUBLISH_RETAIN_STATE,
+        source="email_state",
     )
 
 
@@ -44,6 +45,7 @@ def publish_proxmox_state(payload: dict) -> None:
         json.dumps(payload, ensure_ascii=False),
         qos=config.MQTT_PUBLISH_QOS_STATE,
         retain=config.MQTT_PUBLISH_RETAIN_STATE,
+        source="proxmox_state",
     )
 
 
@@ -63,4 +65,5 @@ def publish_email_event(subject: str, ok: bool) -> None:
         json.dumps(obj, ensure_ascii=False),
         qos=config.MQTT_PUBLISH_QOS_EVENT,
         retain=config.MQTT_PUBLISH_RETAIN_EVENT,
+        source="email_event",
     )

@@ -16,7 +16,7 @@ def get_reles_micom_layout():
         initial_on = False
 
     return html.Div(children=[
-        html.H1("Estado Reles MiCOM", className='main-title'),
+        html.H1("estado reles MiCOM", className='main-title'),
 
         html.Div([
             daq.BooleanSwitch(

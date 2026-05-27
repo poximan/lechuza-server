@@ -71,7 +71,7 @@ class MqttRequestRouter:
 
         """
 
-        self.manager.subscribe(f"{REQ_PREFIX}/#", qos=1)
+        self.manager.subscribe(f"{REQ_PREFIX}/#", qos=1, source=self._origen)
 
         if self._listener is None:
 
@@ -81,7 +81,7 @@ class MqttRequestRouter:
 
             self._listener = _enqueue
 
-            self.manager.register_prefix_listener(f"{REQ_PREFIX}/", self._listener)
+            self.manager.register_prefix_listener(f"{REQ_PREFIX}/", self._listener, source=self._origen)
 
         self.log.log(f"RPC MQTT: suscripto a {REQ_PREFIX}/#", origin=self._origen)
 
@@ -140,6 +140,10 @@ class MqttRequestRouter:
             elif action == "get_modem_status":
 
                 self._handle_get_modem_status(corr, reply_to)
+
+            elif action == "get_ge_status":
+
+                self._handle_get_ge_status(corr, reply_to)
 
             elif action == "send_email_test":
 
@@ -207,6 +211,18 @@ class MqttRequestRouter:
             self.log.log(f"RPC modem status fallo: {exc}", origin=self._origen)
         data = {"ts": timebox.utc_iso(), "estado": estado}
         self._emit_ok(corr, reply_to, "get_modem_status", data)
+
+
+    def _handle_get_ge_status(self, corr: str, reply_to: str):
+        """
+        devuelve el estado vigente de interruptores GE desde modbus-mw-service
+        """
+        try:
+            data = modbus_client.get_ge_status()
+        except Exception as exc:
+            self._emit_error(corr, reply_to, "get_ge_status", str(exc))
+            return
+        self._emit_ok(corr, reply_to, "get_ge_status", data)
 
 
     def _handle_send_email_test(self, corr: str, reply_to: str, params: dict):
@@ -357,6 +373,8 @@ class MqttRequestRouter:
 
             retain=False,
 
+            source=self._origen,
+
         )
 
 
@@ -380,6 +398,8 @@ class MqttRequestRouter:
             qos=config.MQTT_PUBLISH_QOS_STATE,
 
             retain=False,
+
+            source=self._origen,
 
         )
 

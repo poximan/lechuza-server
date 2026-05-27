@@ -2,7 +2,7 @@
 import os
 import threading
 import time
-from flask import request
+from flask import jsonify, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 import dash
 from .web import dash_config
@@ -31,6 +31,7 @@ USE_RELOADER = False
 AUTO_START_MQTT = True
 _services_lock = threading.Lock()
 _services_started = False
+_rejected_dash_callbacks_logged: set[str] = set()
 
 # servidor dash
 app = dash.Dash(
@@ -54,6 +55,18 @@ def log_user_ip():
             f"Solicitud HTTP de la IP: {ip_addr} para la ruta: {request.path}",
             origin="APP/HTTP",
         )
+
+    if request.path.endswith("/_dash-update-component") and request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        output = payload.get("output")
+        if isinstance(output, str) and output not in app.callback_map:
+            if output not in _rejected_dash_callbacks_logged:
+                _rejected_dash_callbacks_logged.add(output)
+                logger_app.log(
+                    f"Callback Dash rechazado por contrato invalido: {output}",
+                    origin="APP/DASH",
+                )
+            return jsonify({"error": "callback_contract_invalid"}), 409
 
 
 # cola de mensajes y cliente mqtt

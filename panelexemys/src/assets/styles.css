@@ -1,4 +1,4 @@
-/* assets/styles.css */
+﻿/* assets/styles.css */
 
 /* --- Estilos Globales y Contenedor Principal de la SPA --- */
 .main-app-container {
@@ -131,7 +131,7 @@ body.nav-locked {
 .kpi-panel-container {
     display: flex;
     justify-content: space-around;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 16px;
     margin-bottom: 24px;
     flex-wrap: wrap;
@@ -150,11 +150,25 @@ body.nav-locked {
     box-sizing: border-box;
 }
 
+.kpi-panel-container > .kpi-item {
+    padding-bottom: 10px;
+}
+
 /* Ajuste de distribucion para KPI Panel: 30% | 10% (15% original -> 10% para cuadrar a 100) | 60% (55% original -> 60%) */
 /* Nota: Se ajusta a flex: 3 | 1 | 6 para que sumen 10, y asi tener 30%, 10%, 60% */
 .gauge-graph-container {
     flex: 3;
     /* ~30% */
+}
+
+.gauge-graph {
+    height: 200px;
+}
+
+.gauge-graph .js-plotly-plot,
+.gauge-graph .plot-container,
+.gauge-graph .svg-container {
+    height: 200px !important;
 }
 
 .traffic-light-container {
@@ -183,7 +197,7 @@ body.nav-locked {
     gap: 15px;
     margin-top: 8px;
     flex-direction: column;
-    /* Ya esta en columna, ¡perfecto! */
+    /* Ya esta en columna, Â¡perfecto! */
     align-items: center;
 }
 
@@ -208,6 +222,12 @@ body.nav-locked {
     border: 1px solid #e0e0e0;
     /* Un borde sutil para el wrapper de la tabla */
     border-radius: 5px;
+}
+
+.mensagelo-attempts-table-wrapper {
+    height: calc(100vh - 260px);
+    max-height: none;
+    min-height: 360px;
 }
 
 .disconnected-table {
@@ -378,7 +398,7 @@ body.nav-locked {
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s, color 0.3s, border-color 0.3s;
-    /* Añadir border-color a la transicion */
+    /* AÃ±adir border-color a la transicion */
     flex-grow: 1;
     /* Para que los botones se distribuyan uniformemente */
 }
@@ -532,7 +552,33 @@ body.nav-locked {
     padding: 12px 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+}
+
+.reles-controls-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.reles-faults-grid-container {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.reles-fault-card {
+    min-width: 0;
+    background-color: #ffffff;
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 8px 18px rgba(44, 62, 80, 0.08);
+}
+
+.reles-fault-card .dash-table-container {
+    width: 100%;
 }
 
 .email-health-label {
@@ -556,148 +602,6 @@ body.nav-locked {
 
 /* ============================================================ */
 /* ============================================================ */
-/* ============================================================ */
-/* --- Estilos para la Pestaña de Reles MiCOM ----------------- */
-/* ============================================================ */
-/* ============================================================ */
-
-.reles-controls-container {
-    display: flex;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.hidden-element {
-    display: none;
-}
-
-.reles-faults-grid-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    /* Dos columnas de igual ancho */
-    gap: 20px;
-    /* Espacio entre las columnas y filas */
-    padding: 20px;
-    border: 1px dashed #ccc;
-    margin-top: 20px;
-}
-
-.reles-fault-card {
-    background-color: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    padding: 16px;
-    /* Equivalente a p-4 */
-}
-
-.reles-fault-title {
-    font-size: 1.25rem;
-    /* Equivalente a text-xl */
-    font-weight: 600;
-    /* Equivalente a font-semibold */
-    margin-top: 16px;
-    /* Equivalente a mt-4 */
-    margin-bottom: 8px;
-    /* Equivalente a mb-2 */
-}
-
-/* Estilos especificos para Dash DataTable dentro de reles_panel */
-.reles-fault-table-container {
-    overflow-x: auto;
-    margin-bottom: 20px;
-}
-
-.reles-fault-table-cell {
-    text-align: left;
-    font-family: 'Inter', sans-serif;
-    padding: 8px 12px;
-}
-
-.reles-fault-table-header {
-    background-color: #66A5AD;
-    color: white;
-    font-weight: bold;
-}
-
-/* Estilo condicional para filas impares en tablas de falla */
-.reles-fault-table-odd-row {
-    background-color: #C4DFE6;
-}
-
-/* ============================================================ */
-/* ============================================================ */
-/* ============================================================ */
-/* --- Estilos para la Pestaña Broker ------------------------- */
-/* ============================================================ */
-/* ============================================================ */
-
-.broker-toggle-container {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-
-.broker-grid-container {
-    display: flex;
-    flex-wrap: wrap;
-    /* Permite que los elementos se envuelvan en pantallas pequeñas */
-    gap: 20px;
-    margin-top: 24px;
-}
-
-.broker-panel {
-    flex: 1 1 45%;
-    /* Cada panel ocupa al menos el 45% del ancho, permitiendo el espaciado y el ajuste en pantallas más pequeñas */
-    background-color: #ffffff;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-/* Estilos para el contenedor del indicador */
-.status-indicator-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 8px; /* Espacio entre el texto y el círculo */
-    margin-bottom: 10px;
-}
-
-/* Estilo base para el círculo del indicador */
-.status-circle {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 1px solid #ccc; /* Un borde sutil */
-}
-
-/* Estilos para cada estado de la conexión */
-.status-disconnected {
-    background-color: #dc3545; /* Rojo para desconectado */
-}
-
-.status-connecting {
-    background-color: #ffc107; /* Amarillo para conectando */
-    animation: pulse 1.5s infinite; /* Animación para el estado de conexión */
-}
-
-.status-connected {
-    background-color: #28a745; /* Verde para conectado */
-}
-
-/* Animación de pulso para el estado 'connecting' */
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
-    }
-}
-
 /* ============================================================ */
 /* --- Proxmox Dashboard -------------------------------------- */
 /* ============================================================ */
@@ -1340,19 +1244,9 @@ body.nav-locked {
     color: #fff;
 }
 
-.ge-status-card {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    background-color: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    padding: 16px 24px;
-}
-
 .generadores-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 18px;
     margin-bottom: 32px;
 }
@@ -1377,21 +1271,74 @@ body.nav-locked {
 }
 
 .ge-status-text {
-    font-size: 1.1em;
+    margin-top: 14px;
+    font-size: 1rem;
     font-weight: 600;
     color: #2c3e50;
 }
 
-.ge-led-marcha {
-    background-color: #28a745;
+.generadores-title-alarm {
+    display: block;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 8px 18px;
+    border: 3px solid #c62828;
+    border-radius: 8px;
+    animation: ge-title-alert 0.85s infinite;
 }
 
-.ge-led-parado {
-    background-color: #007bff;
+@keyframes ge-title-alert {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(198, 40, 40, 0.15);
+        background-color: #fff;
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(198, 40, 40, 0.28);
+        background-color: #ffe5e5;
+    }
 }
 
-.ge-led-unknown {
-    background-color: #6c757d;
+.ge-mimic-card {
+    min-width: 0;
+}
+
+.ge-single-line-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
+    background-color: #f8fafc;
+    padding: 10px;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+.ge-state-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.ge-state-chip {
+    border: 1px solid #cbd5e1;
+    border-left: 5px solid #94a3b8;
+    border-radius: 6px;
+    padding: 9px 10px;
+    background-color: #ffffff;
+    color: #334155;
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.ge-state-chip-cerrado {
+    border-left-color: #166534;
+}
+
+.ge-state-chip-abierto {
+    border-left-color: #475569;
 }
 
 .sub-title,
@@ -1634,3 +1581,194 @@ body.nav-locked {
         gap: 14px;
     }
 }
+
+/* ============================================================ */
+/* --- broker mqtt -------------------------------------------- */
+/* ============================================================ */
+
+.broker-command-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px rgba(44, 62, 80, 0.08);
+}
+
+.broker-command-main {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.broker-command-note {
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.broker-status-pill {
+    min-width: 116px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.broker-status-online {
+    color: #14532d;
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+.broker-status-waiting {
+    color: #713f12;
+    background: #fef3c7;
+    border-color: #fde68a;
+}
+
+.broker-status-offline,
+.broker-status-unknown {
+    color: #7f1d1d;
+    background: #fee2e2;
+    border-color: #fecaca;
+}
+
+.broker-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 18px;
+}
+
+.broker-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+}
+
+.broker-kpi {
+    background: #ffffff;
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
+    padding: 14px;
+    box-shadow: 0 8px 18px rgba(44, 62, 80, 0.07);
+}
+
+.broker-kpi-label {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.broker-kpi-value {
+    margin-top: 8px;
+    color: #0f172a;
+    font-size: 1.28rem;
+    font-weight: 600;
+}
+
+.broker-main-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.broker-panel {
+    min-width: 0;
+    background: #ffffff;
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 8px 18px rgba(44, 62, 80, 0.07);
+}
+
+.broker-panel-wide {
+    grid-column: 1 / -1;
+}
+
+.broker-panel-title {
+    margin: 0 0 12px;
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.broker-topic-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.broker-topic-chip {
+    display: inline-block;
+    max-width: 100%;
+    padding: 6px 9px;
+    border-radius: 6px;
+    color: #0f172a;
+    background: #eef2f7;
+    border: 1px solid #d8e0ea;
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.broker-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.broker-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.broker-table th,
+.broker-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: top;
+}
+
+.broker-table th {
+    color: #475569;
+    background: #f8fafc;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.broker-table td {
+    color: #1f2937;
+    overflow-wrap: anywhere;
+}
+
+.broker-empty {
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 400;
+}
+
+.broker-error {
+    color: #7f1d1d;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+@media (max-width: 900px) {
+    .broker-command-bar,
+    .broker-command-main {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .broker-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

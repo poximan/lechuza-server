@@ -32,7 +32,7 @@ MODE_PROTECTED = "protected"
 NAV_TABS = (
     ("dash exemys", BASE, False),
     ("charito", f"{BASE}/charito", False),
-    ("Generadores", f"{BASE}/generadores", False),
+    ("generadores", f"{BASE}/generadores", False),
     ("proxmox", f"{BASE}/proxmox", False),
     ("reles MiCOM", f"{BASE}/reles", True),
     ("mantenimiento", f"{BASE}/mantenimiento", True),

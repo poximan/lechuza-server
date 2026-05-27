@@ -152,6 +152,7 @@ MQTT_RPC_RES_ROOT = _req("MQTT_RPC_RES_ROOT")
 MQTT_RPC_ALLOWED_ACTIONS = {
     "get_global_status",   # responde en estado/exemys con resumen + ultimos estados por GRD
     "get_modem_status",    # responde en estado/sensor con estado del modem
+    "get_ge_status",       # responde con estado actual de interruptores GE Estivariz
     "send_email_test",     # dispara un correo de prueba via mensagelo
 }
 

@@ -44,7 +44,7 @@ class MqttTopicPublisher:
         r = self._retain_state if retain is None else bool(retain)
         try:
             data = payload if isinstance(payload, str) else str(payload)
-            self._manager.publish(topic, data, qos=q, retain=r)
+            self._manager.publish(topic, data, qos=q, retain=r, source=self._origen)
         except Exception as e:
             self.log.log(f"Error publicando en '{topic}': {e}", origin=self._origen)
 

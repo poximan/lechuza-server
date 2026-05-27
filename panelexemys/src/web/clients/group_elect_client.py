@@ -4,7 +4,7 @@ import config
 
 class GrupoElectrogenoClient:
     """
-    Cliente HTTP para recuperar el estado de marcha/parada del grupo electrГіgeno
+    Cliente HTTP para recuperar el estado de interruptores del grupo electrogeno
     expuesto por modbus-mw-service.
     """
 
@@ -18,12 +18,9 @@ class GrupoElectrogenoClient:
         resp = self._session.get(url, timeout=self.timeout)
         resp.raise_for_status()
         data = resp.json()
-        if not isinstance(data, dict) or "estado" not in data:
+        if not isinstance(data, dict) or "interruptor_linea" not in data or "interruptor_grupo" not in data:
             raise ValueError("Respuesta invalida desde /api/ge/status")
-        return {
-            "estado": str(data.get("estado", "desconocido")),
-            "ts": str(data.get("ts", "")),
-        }
+        return data
 
 
 group_elect_client = GrupoElectrogenoClient()

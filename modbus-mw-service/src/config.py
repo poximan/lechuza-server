@@ -26,7 +26,6 @@ MB_INTERVAL_SECONDS = _req_int("MODBUS_MW_MB_INTERVAL_SECONDS")
 GE_EMAR = {
     "grd_id": _req_int("GE_EMAR_GRD_ID"),
     "register_offset": _req_int("GE_EMAR_REGISTER_OFFSET"),
-    "bit_index": _req_int("GE_EMAR_BIT_INDEX"),
     "topic": _req("GE_EMAR_TOPIC"),
 }
 

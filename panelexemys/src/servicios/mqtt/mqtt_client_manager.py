@@ -5,6 +5,7 @@ from typing import Callable, List, Tuple, Optional
 
 import config
 from .mqtt_driver import MqttDriver
+from .mqtt_telemetry import MqttTrafficTelemetry
 from src.utils import timebox
 
 
@@ -28,6 +29,7 @@ class MqttClientManager:
         # Mensajes entrantes: por defecto una cola nueva
         self.msg_queue: "queue.Queue[Tuple[str, str]]" = queue.Queue()
         self._listeners: List[Tuple[str, Callable[[str, str], None]]] = []
+        self.telemetry = MqttTrafficTelemetry()
 
         # Suscripciones por defecto (si no se dieron) - TODO desde config
         self.subscriptions = [
@@ -77,6 +79,7 @@ class MqttClientManager:
         self.log.log("MQTT Client Manager: on_connect OK. Suscribiendo topicos...", origin=self._origen)
         try:
             for topic, qos in self.subscriptions:
+                self.telemetry.record_subscription(topic, qos, "mqtt_client_manager")
                 self.driver.subscribe(topic, qos)
         except TypeError:
             self.log.log("MQTT Client Manager: subscriptions no es iterable en _on_driver_connect.", origin=self._origen)
@@ -94,6 +97,7 @@ class MqttClientManager:
             payload = str(msg.payload)
 
         self.log.log(f"Mensaje en {msg.topic}: {payload}", origin=self._origen)
+        self.telemetry.record_receive(msg.topic, payload)
 
         try:
             self.msg_queue.put_nowait((msg.topic, payload))
@@ -108,11 +112,14 @@ class MqttClientManager:
                     self.log.log(f"MQTT Client Manager: listener error ({prefix}): {exc}", origin=self._origen)
 
     # ----------------- API hacia el resto del sistema
-    def publish(self, topic: str, payload, qos: int = 0, retain: bool = False):
+    def publish(self, topic: str, payload, qos: int = 0, retain: bool = False, source: str = "panelexemys"):
+        if self.driver.is_connected():
+            self.telemetry.record_publish(topic, payload, qos, retain, source)
         self.driver.publish(topic, payload, qos=qos, retain=retain)
 
-    def subscribe(self, topic: str, qos: int = 0):
+    def subscribe(self, topic: str, qos: int = 0, source: str = "panelexemys"):
         self.subscriptions.append((topic, qos))
+        self.telemetry.record_subscription(topic, qos, source)
         if self.driver.is_connected():
             self.driver.subscribe(topic, qos)
 
@@ -136,7 +143,7 @@ class MqttClientManager:
         if isinstance(q, queue.Queue):
             self.msg_queue = q
 
-    def register_prefix_listener(self, prefix: str, callback: Callable[[str, str], None]) -> None:
+    def register_prefix_listener(self, prefix: str, callback: Callable[[str, str], None], source: str = "panelexemys") -> None:
         """
         Registra un callback para los mensajes cuyo topic comience con prefix.
         El listener NO consume la cola compartida.
@@ -144,6 +151,10 @@ class MqttClientManager:
         if not callable(callback):
             raise ValueError("callback debe ser invocable")
         self._listeners.append((prefix, callback))
+        self.telemetry.record_listener(prefix, source)
+
+    def get_traffic_snapshot(self) -> dict:
+        return self.telemetry.snapshot()
 
     def _publish_status(self, online: bool, reason: str) -> None:
         if not self._status_topic:
@@ -155,9 +166,18 @@ class MqttClientManager:
             "source": "panelexemys",
         }
         try:
+            data = json.dumps(payload, ensure_ascii=False)
+            if self.driver.is_connected():
+                self.telemetry.record_publish(
+                    self._status_topic,
+                    data,
+                    self._status_qos,
+                    self._status_retain,
+                    "mqtt_client_manager",
+                )
             self.driver.publish(
                 self._status_topic,
-                json.dumps(payload, ensure_ascii=False),
+                data,
                 qos=self._status_qos,
                 retain=self._status_retain,
             )

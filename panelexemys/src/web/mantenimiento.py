@@ -75,7 +75,7 @@ def _render_phone_item(item: dict[str, str]) -> html.Li:
 def get_mantenimiento_layout() -> html.Div:
     return html.Div(
         children=[
-            html.H1("Mantenimiento", className="main-title"),
+            html.H1("mantenimiento", className="main-title"),
             html.Div(
                 className="mantenimiento-section",
                 children=[

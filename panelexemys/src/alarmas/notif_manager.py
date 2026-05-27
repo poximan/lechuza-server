@@ -112,9 +112,9 @@ class NotifManager:
             self._send_notification_and_log(subject, body, config.ALARM_EMAIL_RECIPIENT)
 
         if self.ge_notifier.evaluate_condition():
-            subject = "edif. estivariz GE en marcha"
+            subject = "edif. estivariz interruptor GE cerrado"
             body = (
-                "El grupo electrogeno de edif. Estivariz se encuentra en marcha por mas de 1 minuto."
+                "El interruptor de grupo electrogeno de edif. Estivariz permanece cerrado por mas de 1 minuto."
             )
             self._send_notification_and_log(subject, body, config.ALARM_EMAIL_RECIPIENT)
 

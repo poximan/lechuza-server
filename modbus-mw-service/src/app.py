@@ -232,8 +232,11 @@ def get_grd_outages(grd_id: int, limit: int = 10) -> Dict[str, Any]:
 
 
 @app.get("/api/ge/status")
-def get_ge_status() -> Dict[str, str]:
-    return _ctx().ge_cache.snapshot()
+def get_ge_status() -> Dict[str, Any]:
+    try:
+        return _ctx().ge_cache.snapshot()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/reles/faults")

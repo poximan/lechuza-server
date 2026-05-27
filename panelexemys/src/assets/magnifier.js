@@ -24,8 +24,8 @@ document.addEventListener('mouseover', function (e) {
     // Mostrar la lupa
     loupe.style.display = 'block';
 
-    const zoomScale = 2;
-    const loupeSize = 150;
+    const zoomScale = 3;
+    const loupeSize = 300;
 
     // Actualizar la posición de la lupa y el fondo cuando el mouse se mueve
     container.addEventListener('mousemove', function (e) {

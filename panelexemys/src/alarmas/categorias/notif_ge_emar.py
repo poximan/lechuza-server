@@ -7,7 +7,7 @@ from src.utils import timebox
 
 class NotifGeEmar:
     """
-    Genera una alarma cuando el GE se mantiene en marcha mas de min_duration.
+    Genera una alarma cuando el interruptor de grupo permanece cerrado.
     """
 
     def __init__(self, logger: Logosaurio, ge_client, min_duration_seconds: int = 60):
@@ -20,14 +20,15 @@ class NotifGeEmar:
     def evaluate_condition(self) -> bool:
         try:
             status = self.ge_client.get_status()
-            estado = str(status.get("estado", "desconocido")).strip().lower()
+            interruptor_grupo = status.get("interruptor_grupo") or {}
+            estado = str(interruptor_grupo.get("estado", "desconocido")).strip().lower()
         except Exception as exc:
             self.logger.log(f"GE_EMAR: error consultando estado: {exc}", origin="ALRM/GE")
             estado = "desconocido"
 
-        if estado != "marcha":
+        if estado != "cerrado":
             if self._start_time is not None or self._triggered:
-                self.logger.log("GE_EMAR: estado volvio a parado, se reinicia conteo.", origin="ALRM/GE")
+                self.logger.log("GE_EMAR: interruptor de grupo abierto, se reinicia conteo.", origin="ALRM/GE")
             self._start_time = None
             self._triggered = False
             return False
@@ -35,7 +36,7 @@ class NotifGeEmar:
         now = timebox.utc_now()
         if self._start_time is None:
             self._start_time = now
-            self.logger.log("GE_EMAR: deteccion inicial de marcha, iniciando conteo.", origin="ALRM/GE")
+            self.logger.log("GE_EMAR: interruptor de grupo cerrado, iniciando conteo.", origin="ALRM/GE")
             return False
 
         if not self._triggered and (now - self._start_time) >= self.min_duration:
@@ -44,4 +45,3 @@ class NotifGeEmar:
             return True
 
         return False
-

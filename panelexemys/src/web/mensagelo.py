@@ -74,7 +74,7 @@ def register_mensagelo_callbacks(app: dash.Dash) -> None:
             )
 
         return html.Div(
-            className="disconnected-table-wrapper",
+            className="disconnected-table-wrapper mensagelo-attempts-table-wrapper",
             children=[
                 html.Table(
                     className="disconnected-table",

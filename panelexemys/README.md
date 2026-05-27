@@ -34,4 +34,4 @@ Los assets estaticos viven en `src/assets` y el javascript auxiliar en `src/asse
 - Separar topicos de estado y topicos de comando.
 - Evitar respuestas RPC en topicos de estado compartidos.
 - Mover gradualmente el arbol `exemys/*` hacia namespaces funcionales de `lechuza-server/*`.
-- El detalle consolidado vive en [docs/contratos-sistema.md](/c:/HSD/git/infra-monitor/docs/contratos-sistema.md).
+- El detalle consolidado vive en [`../../docs/contratos-sistema.md`](../../docs/contratos-sistema.md).
