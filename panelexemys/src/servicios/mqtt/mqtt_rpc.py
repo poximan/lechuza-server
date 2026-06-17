@@ -215,7 +215,7 @@ class MqttRequestRouter:
 
     def _handle_get_ge_status(self, corr: str, reply_to: str):
         """
-        devuelve el estado vigente de interruptores GE desde modbus-mw-service
+        devuelve el estado vigente de interruptores GE desde modbus-collector-service
         """
         try:
             data = modbus_client.get_ge_status()

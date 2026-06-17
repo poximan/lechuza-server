@@ -1,33 +1,67 @@
 import os
 
 
-def _req(name: str) -> str:
-    value = os.getenv(name)
+def _env(*names: str) -> str | None:
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _req(name: str, *aliases: str) -> str:
+    value = _env(name, *aliases)
     if value is None or not str(value).strip():
         raise EnvironmentError(f"Falta variable obligatoria: {name}")
-    return str(value).strip()
+    return value
 
 
-def _req_int(name: str) -> int:
-    return int(_req(name))
+def _req_int(name: str, *aliases: str) -> int:
+    return int(_req(name, *aliases))
 
 
-def _req_bool(name: str) -> bool:
-    return _req(name).lower() in {"1", "true", "yes", "on"}
+def _req_bool(name: str, *aliases: str) -> bool:
+    return _req(name, *aliases).lower() in {"1", "true", "yes", "on"}
 
 
-# ------------------ Modbus middleware ------------------
-MB_HOST = _req("MODBUS_MW_MB_HOST")
-MB_PORT = _req_int("MODBUS_MW_MB_PORT")
-MB_ID = _req_int("MODBUS_MW_MB_ID")
-MB_COUNT = _req_int("MODBUS_MW_MB_COUNT")
-MB_INTERVAL_SECONDS = _req_int("MODBUS_MW_MB_INTERVAL_SECONDS")
-
-GE_EMAR = {
-    "grd_id": _req_int("GE_EMAR_GRD_ID"),
-    "register_offset": _req_int("GE_EMAR_REGISTER_OFFSET"),
-    "topic": _req("GE_EMAR_TOPIC"),
+# ------------------ Modbus connections ------------------
+MW_EXEMYS = {
+    "name": "mw-exemys",
+    "host": _req("MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST"),
+    "port": _req_int("MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT"),
+    "unit_id": _req_int("MODBUS_COLLECTOR_MW_EXEMYS_MB_ID"),
+    "register_count": _req_int("MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT"),
+    "interval_seconds": _req_int("MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS"),
 }
+
+EDIF_ESTIVARIZ_GE = {
+    "name": "edif-estivariz",
+    "grd_id": _req_int("EDIF_ESTIVARIZ_GE_GRD_ID"),
+    "register_offset": _req_int("EDIF_ESTIVARIZ_GE_REGISTER_OFFSET"),
+    "line_bit_index": _req_int("EDIF_ESTIVARIZ_GE_LINE_BIT_INDEX"),
+    "generator_bit_index": _req_int("EDIF_ESTIVARIZ_GE_GENERATOR_BIT_INDEX"),
+    "topic": _req("EDIF_ESTIVARIZ_GE_TOPIC"),
+}
+
+EDIF_FONTANA_GE = {
+    "name": "edif-fontana",
+    "host": _req("MODBUS_COLLECTOR_EDIF_FONTANA_MB_HOST"),
+    "port": _req_int("MODBUS_COLLECTOR_EDIF_FONTANA_MB_PORT"),
+    "unit_id": _req_int("MODBUS_COLLECTOR_EDIF_FONTANA_MB_ID"),
+    "register_offset": _req_int("EDIF_FONTANA_GE_REGISTER_OFFSET"),
+    "register_count": _req_int("EDIF_FONTANA_GE_REGISTER_COUNT"),
+    "line_bit_index": _req_int("EDIF_FONTANA_GE_LINE_BIT_INDEX"),
+    "generator_bit_index": _req_int("EDIF_FONTANA_GE_GENERATOR_BIT_INDEX"),
+    "interval_seconds": _req_int("EDIF_FONTANA_GE_INTERVAL_SECONDS"),
+    "topic": _req("EDIF_FONTANA_GE_TOPIC"),
+}
+
+# Backward-compatible aliases for legacy modules still scoped to mw-exemys.
+MB_HOST = MW_EXEMYS["host"]
+MB_PORT = MW_EXEMYS["port"]
+MB_ID = MW_EXEMYS["unit_id"]
+MB_COUNT = MW_EXEMYS["register_count"]
+MB_INTERVAL_SECONDS = MW_EXEMYS["interval_seconds"]
 
 GRD_DESCRIPTIONS: dict[int, str] = {
     1: "SS - presuriz doradillo",
@@ -67,9 +101,9 @@ ESCLAVOS_MB: dict[int, str] = {
 }
 
 # ------------------ Data paths ------------------
-DATABASE_DIR = _req("MODBUS_MW_DATA_DIR")
-DATABASE_NAME = _req("MODBUS_MW_DATABASE_NAME")
-OBS_STATE_FILE = os.path.join(DATABASE_DIR, "modbus-mw-state.json")
+DATABASE_DIR = _req("MODBUS_COLLECTOR_DATA_DIR")
+DATABASE_NAME = _req("MODBUS_COLLECTOR_DATABASE_NAME")
+OBS_STATE_FILE = os.path.join(DATABASE_DIR, "modbus-collector-state.json")
 
 # ------------------ MQTT ------------------
 MQTT_BROKER_HOST = _req("MQTT_BROKER_HOST")

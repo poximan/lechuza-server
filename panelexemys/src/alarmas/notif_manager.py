@@ -5,14 +5,13 @@ from ..servicios.mqtt import mqtt_event_bus as bus
 from .categorias.notif_mw_global import NotifMwGlobal
 from .categorias.notif_mw_nodo import NotifMwNodo
 from .categorias.notif_modem import NotifModem
-from .categorias.notif_ge_emar import NotifGeEmar
+from .categorias.notif_ge_generadores import NotifGeGeneradores
 from .categorias.notif_proxmox import NotifProxmoxHost, NotifProxmoxVm
 from .categorias.notif_charito import NotifCharitoDaemon
 from src.dao.dao_mensajes_enviados import mensajes_enviados_dao
 from src.servicios.email.mensagelo_client import MensageloClient
 from src.utils import timebox
 from src.web.clients.modbus_client import modbus_client
-from src.web.clients.group_elect_client import group_elect_client
 from src.web.clients.proxmox_client import ProxmoxClient
 from src.web.clients.charito_client import CharitoClient
 import config
@@ -30,7 +29,23 @@ class NotifManager:
         self.global_notifier = NotifMwGlobal(logger)
         self.nodo_notifier = NotifMwNodo(logger, excluded_grd_ids)
         self.modem_notifier = NotifModem(logger)
-        self.ge_notifier = NotifGeEmar(logger, group_elect_client, min_duration_seconds=60)
+        self.ge_notifier = NotifGeGeneradores(
+            logger,
+            buildings=[
+                {
+                    "key": "edif-estivariz",
+                    "label": "edif. Estivariz",
+                    "fetch_status": modbus_client.get_ge_edif_estivariz_status,
+                    "sustained_closed_alarm": True,
+                },
+                {
+                    "key": "edif-fontana",
+                    "label": "edif. Fontana",
+                    "fetch_status": modbus_client.get_ge_edif_fontana_status,
+                },
+            ],
+            min_duration_seconds=60,
+        )
         self.proxmox_host_notifier = NotifProxmoxHost(logger)
         self.proxmox_vm_notifier = NotifProxmoxVm(logger)
         self.charito_notifier = NotifCharitoDaemon(logger)
@@ -111,12 +126,8 @@ class NotifManager:
             )
             self._send_notification_and_log(subject, body, config.ALARM_EMAIL_RECIPIENT)
 
-        if self.ge_notifier.evaluate_condition():
-            subject = "edif. estivariz interruptor GE cerrado"
-            body = (
-                "El interruptor de grupo electrogeno de edif. Estivariz permanece cerrado por mas de 1 minuto."
-            )
-            self._send_notification_and_log(subject, body, config.ALARM_EMAIL_RECIPIENT)
+        for alert in self.ge_notifier.evaluate():
+            self._send_notification_and_log(alert["subject"], alert["body"], config.ALARM_EMAIL_RECIPIENT)
 
     def _process_proxmox_alarms(self, snapshot):
         if not isinstance(snapshot, dict):

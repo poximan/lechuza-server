@@ -1,23 +1,31 @@
 import os
 
 
-def _req(name: str) -> str:
-    v = os.getenv(name)
+def _env(*names: str) -> str | None:
+    for name in names:
+        v = os.getenv(name)
+        if v is not None and v.strip():
+            return v.strip()
+    return None
+
+
+def _req(name: str, *aliases: str) -> str:
+    v = _env(name, *aliases)
     if v is None or not v.strip():
         raise EnvironmentError(f"Falta variable de entorno obligatoria: {name}")
-    return v.strip()
+    return v
 
 
-def _req_int(name: str) -> int:
-    return int(_req(name))
+def _req_int(name: str, *aliases: str) -> int:
+    return int(_req(name, *aliases))
 
 
-def _req_float(name: str) -> float:
-    return float(_req(name))
+def _req_float(name: str, *aliases: str) -> float:
+    return float(_req(name, *aliases))
 
 
-def _req_bool(name: str) -> bool:
-    return _req(name).lower() in {"1", "true", "yes", "on"}
+def _req_bool(name: str, *aliases: str) -> bool:
+    return _req(name, *aliases).lower() in {"1", "true", "yes", "on"}
 
 
 def _parse_csv_ints(raw: str) -> list[int]:
@@ -40,10 +48,10 @@ PANELEXEMYS_PORT = _req_int("PANELEXEMYS_PORT")
 PANELEXEMYS_DATA_DIR = _req("PANELEXEMYS_DATA_DIR")
 
 # ---------------------------------------------------------
-# --- Cliente HTTP hacia modbus-mw-service ----------------
+# --- Cliente HTTP hacia modbus-collector-service ----------
 # ---------------------------------------------------------
-MODBUS_MW_API_BASE = _req("MODBUS_MW_API_BASE")
-MODBUS_MW_HTTP_TIMEOUT = _req_int("MODBUS_MW_HTTP_TIMEOUT")
+MODBUS_COLLECTOR_API_BASE = _req("MODBUS_COLLECTOR_API_BASE")
+MODBUS_COLLECTOR_HTTP_TIMEOUT = _req_int("MODBUS_COLLECTOR_HTTP_TIMEOUT")
 MODBUS_HTTP_POLL_SECONDS = _req_int("MODBUS_HTTP_POLL_SECONDS")
 
 # ---------------------------------------------------------

@@ -3,8 +3,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 COPY shared /shared
 ENV PYTHONPATH="/shared:${PYTHONPATH}"
-COPY modbus-mw-service/requirements.txt /app/requirements.txt
+COPY modbus-collector-service/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
-COPY modbus-mw-service/src ./src
+COPY modbus-collector-service/src ./src
 EXPOSE 8084
 CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8084"]

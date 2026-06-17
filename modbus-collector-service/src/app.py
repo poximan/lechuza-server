@@ -17,7 +17,7 @@ from src.persistencia.dao.dao_reles import reles_dao
 from src.utils import timebox
 from src.bootstrap import ApplicationContext, create_context
 
-app = FastAPI(title="modbus-mw-service", version="1.0.0")
+app = FastAPI(title="modbus-collector-service", version="1.0.0")
 
 _context: ApplicationContext | None = None
 
@@ -41,7 +41,7 @@ def _ensure_catalogs() -> None:
 def _startup() -> None:
     global _context
     ctx = create_context()
-    ctx.logger.log("Inicializando esquema y catálogos de Modbus MW.", origin="MW/APP")
+    ctx.logger.log("Inicializando esquema y catalogos de Modbus Collector.", origin="MW/APP")
     ddl_esquema.create_database_schema()
     _ensure_catalogs()
     _context = ctx
@@ -231,12 +231,25 @@ def get_grd_outages(grd_id: int, limit: int = 10) -> Dict[str, Any]:
     return _outages_payload(grd_id, limit)
 
 
-@app.get("/api/ge/status")
-def get_ge_status() -> Dict[str, Any]:
+@app.get("/api/ge/edif-estivariz/status")
+def get_ge_edif_estivariz_status() -> Dict[str, Any]:
     try:
-        return _ctx().ge_cache.snapshot()
+        return _ctx().generator_cache.snapshot("edif-estivariz")
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/ge/edif-fontana/status")
+def get_ge_edif_fontana_status() -> Dict[str, Any]:
+    try:
+        return _ctx().generator_cache.snapshot("edif-fontana")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/ge/status")
+def get_ge_status() -> Dict[str, Any]:
+    return get_ge_edif_estivariz_status()
 
 
 @app.get("/api/reles/faults")

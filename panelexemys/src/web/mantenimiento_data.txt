@@ -71,8 +71,8 @@
       "localhost": "http://localhost:8083/api/pve/state"
     },
     {
-      "servicio": "modbus-mw-service",
-      "interno": "cont-modbus-mw-service:8084 (http)",
+      "servicio": "modbus-collector-service",
+      "interno": "cont-modbus-collector-service:8084 (http)",
       "externo_path": "/api/",
       "localhost": "http://localhost:8084"
     },

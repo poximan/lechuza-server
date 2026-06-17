@@ -1,14 +1,24 @@
 import threading
+from dataclasses import dataclass
 
 from pymodbus.client import ModbusTcpClient
 from logosaurio import Logosaurio
+
+
+@dataclass(frozen=True)
+class ModbusTcpConnectionConfig:
+    name: str
+    host: str
+    port: int
+    timeout: int = 10
+
 
 class ModbusTcpDriver:
     """
     Driver generico para la conexion y comunicacion con un servidor Modbus TCP.
     Encapsula la logica de conexion, reintento y manejo de errores basicos.
     """
-    def __init__(self, host: str, port: int, timeout: int, logger: Logosaurio):
+    def __init__(self, host: str, port: int, timeout: int, logger: Logosaurio, name: str = "modbus"):
         """
         Inicializa el driver Modbus TCP.
 
@@ -22,9 +32,18 @@ class ModbusTcpDriver:
         self.port = port
         self.timeout = timeout
         self.logger = logger
+        self.name = name
         self._client = None
         self._is_connected = False
         self._io_lock = threading.RLock()
+
+    @classmethod
+    def from_config(cls, cfg: ModbusTcpConnectionConfig, logger: Logosaurio) -> "ModbusTcpDriver":
+        return cls(host=cfg.host, port=cfg.port, timeout=cfg.timeout, logger=logger, name=cfg.name)
+
+    @property
+    def endpoint(self) -> str:
+        return f"{self.name} {self.host}:{self.port}"
 
     def connect(self) -> bool:
         """
@@ -32,10 +51,10 @@ class ModbusTcpDriver:
         """
         with self._io_lock:
             if self._is_connected and self._client:
-                self.logger.log(f"Ya conectado a {self.host}:{self.port}. No se necesita reconectar.", origin="OBS/DRV")
+                self.logger.log(f"Ya conectado a {self.endpoint}. No se necesita reconectar.", origin="OBS/DRV")
                 return True
 
-            self.logger.log(f"Intentando conectar a {self.host}:{self.port}...", origin="OBS/DRV")
+            self.logger.log(f"Intentando conectar a {self.endpoint}...", origin="OBS/DRV")
             self.disconnect()
 
             try:
@@ -43,15 +62,15 @@ class ModbusTcpDriver:
 
                 if self._client.connect():
                     self._is_connected = True
-                    self.logger.log(f"Conectado exitosamente a {self.host}:{self.port}", origin="OBS/DRV")
+                    self.logger.log(f"Conectado exitosamente a {self.endpoint}", origin="OBS/DRV")
                     return True
                 else:
                     self._is_connected = False
-                    self.logger.log(f"No se pudo conectar a {self.host}:{self.port}", origin="OBS/DRV")
+                    self.logger.log(f"No se pudo conectar a {self.endpoint}", origin="OBS/DRV")
                     return False
             except Exception as e:
                 self._is_connected = False
-                self.logger.log(f"Error al intentar conectar a {self.host}:{self.port}: {e}", origin="OBS/DRV")
+                self.logger.log(f"Error al intentar conectar a {self.endpoint}: {e}", origin="OBS/DRV")
                 return False
 
     def disconnect(self):
@@ -65,7 +84,7 @@ class ModbusTcpDriver:
                 except Exception:
                     pass
                 self._is_connected = False
-                self.logger.log(f"Desconectado de {self.host}:{self.port}", origin="OBS/DRV")
+                self.logger.log(f"Desconectado de {self.endpoint}", origin="OBS/DRV")
 
     def read_input_registers(self, address_offset: int, count: int, unit_id: int):
         """

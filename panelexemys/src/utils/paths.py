@@ -54,7 +54,7 @@ def get_observar_path() -> str:
     """
     path = os.path.join(get_data_dir(), "observar.json")
     _seed_json_file(path, [
-        os.path.join(get_data_dir(), "modbus-mw-state.json"),
+        os.path.join(get_data_dir(), "modbus-collector-state.json"),
         get_legacy_observar_path(),
     ])
     return path

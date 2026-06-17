@@ -128,8 +128,7 @@ class ModbusMqttPublisher:
             retain=config.MQTT_PUBLISH_RETAIN_STATE,
         )
 
-    def publish_ge_emar(self, payload: dict) -> None:
-        topic = config.GE_EMAR["topic"]
+    def publish_ge_status(self, topic: str, payload: dict) -> None:
         self._publish(
             topic,
             payload,

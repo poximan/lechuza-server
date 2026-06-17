@@ -9,13 +9,13 @@ import config
 
 class ModbusMiddlewareHttpClient:
     """
-    Cliente HTTP del servicio modbus-mw-service.
+    Cliente HTTP del servicio modbus-collector-service.
     Mantiene una sesion propia y expone helpers de alto nivel.
     """
 
     def __init__(self) -> None:
-        self.base_url = config.MODBUS_MW_API_BASE.rstrip("/")
-        self.timeout = int(config.MODBUS_MW_HTTP_TIMEOUT)
+        self.base_url = config.MODBUS_COLLECTOR_API_BASE.rstrip("/")
+        self.timeout = int(config.MODBUS_COLLECTOR_HTTP_TIMEOUT)
         self._session = requests.Session()
         self._lock = threading.RLock()
         self._descriptions_cache: Dict[int, str] | None = None
@@ -72,7 +72,13 @@ class ModbusMiddlewareHttpClient:
         return bool(data.get("enabled", False))
 
     def get_ge_status(self) -> Dict[str, Any]:
-        return self._request("GET", "/api/ge/status")
+        return self.get_ge_edif_estivariz_status()
+
+    def get_ge_edif_estivariz_status(self) -> Dict[str, Any]:
+        return self._request("GET", "/api/ge/edif-estivariz/status")
+
+    def get_ge_edif_fontana_status(self) -> Dict[str, Any]:
+        return self._request("GET", "/api/ge/edif-fontana/status")
 
 
 modbus_client = ModbusMiddlewareHttpClient()

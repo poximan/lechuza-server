@@ -8,7 +8,7 @@ La arquitectura sigue una separacion estricta de incumbencias:
 
 - `panelexemys` es la interfaz operativa y el orquestador de visualizacion, alarmas y mensajeria.
 - `mensagelo` encapsula el envio de correo y su persistencia operacional.
-- `modbus-mw-service` consulta el dominio Modbus/GRD y expone estado por HTTP y MQTT.
+- `modbus-collector-service` consulta el dominio Modbus/GRD y expone estado por HTTP y MQTT.
 - `pve-service` adapta Proxmox VE al resto del sistema.
 - `router-telef-service` monitorea conectividad del modem/router y publica su estado.
 - `charito-service` releva instancias remotas de `charo-daemon` sin mezclar su dominio con el resto del sistema.
@@ -28,7 +28,7 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 | --- | --- | --- |
 | `panelexemys` | Dashboard, alarmas y coordinacion | HTTP interno, MQTT |
 | `mensagelo` | API de email y cola de envio | HTTP interno |
-| `modbus-mw-service` | Estado GRD/MiCOM y observacion Modbus | HTTP interno, MQTT |
+| `modbus-collector-service` | Estado GRD/MiCOM y observacion Modbus | HTTP interno, MQTT |
 | `pve-service` | Estado e historial de Proxmox | HTTP interno, MQTT |
 | `router-telef-service` | Sondeo del enlace de modem/router | HTTP interno, MQTT |
 | `charito-service` | Relevamiento de instancias remotas | HTTP interno, MQTT |
@@ -40,9 +40,9 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 
 `docker-compose.yml` define el despliegue conjunto y deja clara la frontera entre servicios:
 
-- `panelexemys`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `scada-citec-service` se conectan tambien a `servicoop-edge-net` para ser alcanzados exclusivamente por el edge router.
-- `panelexemys` consume por HTTP a `mensagelo`, `modbus-mw-service`, `pve-service`, `router-telef-service` y `charito-service`.
-- `modbus-mw-service`, `pve-service` y `router-telef-service` publican estados operativos en MQTT.
+- `panelexemys`, `modbus-collector-service`, `pve-service`, `router-telef-service` y `scada-citec-service` se conectan tambien a `servicoop-edge-net` para ser alcanzados exclusivamente por el edge router.
+- `panelexemys` consume por HTTP a `mensagelo`, `modbus-collector-service`, `pve-service`, `router-telef-service` y `charito-service`.
+- `modbus-collector-service`, `pve-service` y `router-telef-service` publican estados operativos en MQTT.
 - `charito-service` consulta endpoints remotos `/metrics` declarados en `CHARITO_TARGETS_JSON` y publica el estado consolidado en MQTT como fuente de verdad para `panelito`; la identidad estable de cada daemon se declara explicitamente como `id`.
 - `scada-citec-service` consulta un daemon externo definido por `SCADA_DAEMON_BASE_URL`.
 
@@ -66,7 +66,7 @@ lechuza-server/
 |- .gitignore
 |- panelexemys/
 |- mensagelo/
-|- modbus-mw-service/
+|- modbus-collector-service/
 |- pve-service/
 |- router-telef-service/
 |- charito-service/

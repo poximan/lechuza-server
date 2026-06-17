@@ -1341,6 +1341,12 @@ body.nav-locked {
     border-left-color: #475569;
 }
 
+.ge-state-chip-incierto,
+.ge-state-chip-desconocido {
+    border-left-color: #94a3b8;
+    color: #64748b;
+}
+
 .sub-title,
 .mantenimiento-section-title {
     color: #2c3e50;
