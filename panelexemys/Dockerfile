@@ -21,15 +21,16 @@ ENV PYTHONPATH="/shared:${PYTHONPATH}"
 COPY panelexemys/requirements.txt /app/requirements.txt
 RUN pip install --no-compile -r /app/requirements.txt
 
-RUN useradd -m -u 10001 appuser
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/sh appuser
 
 COPY panelexemys/src /app/src
 COPY panelexemys/config.py /app/config.py
 
-RUN chown -R appuser:appuser /app
+RUN chown -R 1000:1000 /app
 
-USER appuser
+USER 1000:1000
 
 EXPOSE 8052
 
-CMD ["waitress-serve", "--listen=0.0.0.0:8052", "src.app:server"]
+CMD ["python", "-m", "src.start_server"]

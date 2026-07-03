@@ -22,12 +22,15 @@ COPY mensagelo/email_service/requirements.txt /app/requirements.txt
 RUN pip install --no-compile -r /app/requirements.txt
 
 # usuario no-root
-RUN useradd -m -u 10002 appsvc
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/sh appuser
 
-# código
+# codigo
 COPY mensagelo/email_service /app/email_service
 
-USER appsvc
+RUN chown -R 1000:1000 /app
+
+USER 1000:1000
 
 EXPOSE 8081
 
