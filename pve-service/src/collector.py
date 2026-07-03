@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import requests
+import urllib3
 from typing import Any, Dict, List, Tuple
+from urllib3.exceptions import InsecureRequestWarning
 
 from . import config as cfg
 from .logger import logger
@@ -27,6 +29,7 @@ class PveCollector:
                 "PVE_VERIFY_SSL=false: se deshabilita la verificación TLS (no recomendado)",
                 "PVE/COLLECT",
             )
+            urllib3.disable_warnings(InsecureRequestWarning)
             self._verify_target = False
 
     def _fetch_qemu(self) -> List[Dict[str, Any]]:
