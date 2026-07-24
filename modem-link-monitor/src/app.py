@@ -9,7 +9,7 @@ from .logger import logger
 from .mqtt_publisher import MqttPublisher
 from .tcp_probe import TcpProbe
 
-app = FastAPI(title="router-telef-service", version="1.0.0")
+app = FastAPI(title="modem-link-monitor", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -74,7 +74,7 @@ async def _monitor_loop():
 @app.on_event("startup")
 async def on_startup():
     global _publisher, _monitor_task
-    logger.info("Iniciando router-telef-service para %s:%s", config.TARGET_IP, config.TARGET_PORT, origin="ROUTER-TELEF")
+    logger.info("Iniciando modem-link-monitor para %s:%s", config.TARGET_IP, config.TARGET_PORT, origin="ROUTER-TELEF")
     _publisher = MqttPublisher()
     _monitor_task = asyncio.create_task(_monitor_loop())
 
@@ -92,7 +92,7 @@ async def on_shutdown():
     if _publisher:
         _publisher.stop()
         _publisher = None
-    logger.info("router-telef-service finalizado", origin="ROUTER-TELEF")
+    logger.info("modem-link-monitor finalizado", origin="ROUTER-TELEF")
 
 
 @app.get("/status")

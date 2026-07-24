@@ -21,7 +21,7 @@ class RouterStatusClient:
         return data
 
 
-router_client = RouterStatusClient(
-    base_url=config.ROUTER_SERVICE_BASE_URL,
-    timeout_seconds=float(config.ROUTER_CLIENT_TIMEOUT_SECONDS),
+modem_link_monitor_client = RouterStatusClient(
+    base_url=config.MODEM_LINK_MONITOR_URL,
+    timeout_seconds=float(config.MODEM_LINK_MONITOR_TIMEOUT_SECONDS),
 )

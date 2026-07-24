@@ -12,7 +12,10 @@ COPY scada-citec-service/backend /app/backend
 COPY scada-citec-service/frontend /app/frontend
 RUN chown -R 1000:1000 /app
 
-ENV PYTHONPATH=/app:/shared
+ENV PYTHONPATH=/app:/shared \
+    PYTHONUNBUFFERED=1 \
+    TZ=America/Argentina/Buenos_Aires \
+    SCADA_CITEC_SERVICE_PORT=8094
 EXPOSE 8094
 
 USER 1000:1000

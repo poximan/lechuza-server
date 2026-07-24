@@ -3,15 +3,12 @@
     build:
       context: .
       dockerfile: mensagelo/Dockerfile
-    image: img-mensagelo:1.0.0
-    container_name: cont-mensagelo
+    image: comunic-mon-mensagelo:1.0.0
+    container_name: comunic-mon-mensagelo
     hostname: mensagelo
     env_file:
       - .env
     environment:
-      TZ: America/Argentina/Buenos_Aires
-      SERVICE_HOST: ${MENSAGELO_SERVICE_HOST}
-      SERVICE_PORT: ${MENSAGELO_SERVICE_PORT}
       DATABASE_DIR: ${MENSAGELO_DATABASE_DIR}
       DATABASE_NAME: ${MENSAGELO_DATABASE_NAME}
       QUEUE_MAXSIZE: ${MENSAGELO_QUEUE_MAXSIZE}
@@ -24,11 +21,6 @@
       SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS}
     volumes:
       - ./volumes/mensagelo:/app/data
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -40,18 +32,16 @@
     build:
       context: .
       dockerfile: panelexemys/Dockerfile
-    image: img-panelexemys:1.0.0
-    container_name: cont-panelexemys
+    image: comunic-mon-panelexemys:1.0.0
+    container_name: comunic-mon-panelexemys
     depends_on:
       modbus-collector-service:
         condition: service_started
     env_file:
       - .env
     environment:
-      TZ: America/Argentina/Buenos_Aires
       MENSAGELO_BASE_URL: ${MENSAGELO_BASE_URL}
       API_KEY: ${MENSAGELO_API_KEY}
-      PORT: ${PANELEXEMYS_PORT}
       CHARITO_API_BASE: ${CHARITO_API_BASE}
       PVE_API_BASE: ${PVE_API_BASE}
       MODBUS_COLLECTOR_API_BASE: ${MODBUS_COLLECTOR_API_BASE}
@@ -82,12 +72,11 @@
     build:
       context: .
       dockerfile: charito-service/Dockerfile
-    image: img-charito-service:1.0.0
-    container_name: cont-charito-service
+    image: comunic-mon-charito-service:1.0.0
+    container_name: comunic-mon-charito-service
     env_file:
       - .env
     environment:
-      TZ: America/Argentina/Buenos_Aires
       CHARITO_DATA_DIR: ${CHARITO_DATA_DIR}
       CHARITO_STATE_FILE: ${CHARITO_STATE_FILE}
       CHARITO_TARGETS_JSON: ${CHARITO_TARGETS_JSON}
@@ -109,12 +98,11 @@
     build:
       context: .
       dockerfile: pve-service/Dockerfile
-    image: img-pve-service:1.0.0
-    container_name: cont-pve-service
+    image: comunic-mon-pve-service:1.0.0
+    container_name: comunic-mon-pve-service
     env_file:
       - .env
     environment:
-      TZ: America/Argentina/Buenos_Aires
       DATA_DIR: ${PVE_DATA_DIR}
       PVE_BASE_URL: ${PVE_BASE_URL}
       PVE_API_TOKEN: ${PVE_API_TOKEN}
@@ -145,12 +133,11 @@
     build:
       context: .
       dockerfile: modbus-collector-service/Dockerfile
-    image: img-modbus-collector-service:1.0.0
-    container_name: cont-modbus-collector-service
+    image: comunic-mon-modbus-collector-service:1.0.0
+    container_name: comunic-mon-modbus-collector-service
     env_file:
       - .env
     environment:
-      TZ: America/Argentina/Buenos_Aires
       MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST}
       MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT}
       MODBUS_COLLECTOR_MW_EXEMYS_MB_ID: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_ID}
@@ -190,12 +177,12 @@
       - backend
       - edge
 
-  router-telef-service:
+  modem-link-monitor:
     build:
       context: .
-      dockerfile: router-telef-service/Dockerfile
-    image: img-router-telef-service:1.0.0
-    container_name: cont-router-telef-service
+      dockerfile: modem-link-monitor/Dockerfile
+    image: comunic-mon-modem-link-monitor:1.0.0
+    container_name: comunic-mon-modem-link-monitor
     env_file:
       - .env
     ports:
@@ -209,8 +196,8 @@
     build:
       context: .
       dockerfile: scada-citec-service/Dockerfile
-    image: img-scada-citec-service:1.0.0
-    container_name: cont-scada-citec-service
+    image: comunic-mon-scada-citec-service:1.0.0
+    container_name: comunic-mon-scada-citec-service
     env_file:
       - .env
     ports:
@@ -219,6 +206,8 @@
     networks:
       - backend
       - edge
+
+name: comunic-mon
 
 networks:
   backend:

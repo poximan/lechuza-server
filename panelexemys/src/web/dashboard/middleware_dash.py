@@ -5,7 +5,7 @@ import config
 from src.web.dashboard.middleware_kpi import get_kpi_panel_layout
 from src.web.dashboard.middleware_histograma import get_controls_and_graph_layout
 from src.web.dashboard.middleware_tabla import get_main_data_table_layout
-from src.web.clients.router_client import router_client
+from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 
 def get_dashboard(db_grd_descriptions, initial_grd_value):
     """
@@ -115,10 +115,10 @@ def register_dashboard_callbacks(app):
     )
     def update_tcp_status(_n_intervals):
         """
-        Consulta router-telef-service para conocer el estado actual del puerto.
+        Consulta modem-link-monitor para conocer el estado actual del puerto.
         """
         try:
-            status_data = router_client.get_status()
+            status_data = modem_link_monitor_client.get_status()
             label = f"estado [{status_data['ip']}:{status_data['port']}] = "
             state = str(status_data.get("state", "desconocido"))
             return label, state

@@ -24,8 +24,9 @@ Variables obligatorias:
 - `CITEC_ADAPTER_QUERY_INTERVAL_SECONDS`
 - `CITEC_REFRESH_ON_START`
 - `CITEC_TAG_REFRESH_INTERVAL_SECONDS`
-- `SCADA_CITEC_SERVICE_PORT`
 - `SCADA_STATIC_CACHE_SECONDS`
+
+El puerto interno canonico `8094` se define en el Dockerfile y no forma parte de la configuracion de despliegue.
 
 ## Integracion en el mono-repo
 

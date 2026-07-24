@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Dict, Any
 from src.logger import Logosaurio
 from src.utils import timebox
-from src.web.clients.router_client import router_client
+from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 import config
 
 class NotifModem:
@@ -42,10 +42,10 @@ class NotifModem:
         return False
 
     def _get_modem_status(self) -> str:
-        """Consulta router-telef-service para conocer el estado."""
+        """Consulta modem-link-monitor para conocer el estado."""
         try:
-            status = router_client.get_status()
+            status = modem_link_monitor_client.get_status()
             return str(status.get("state", "cerrado"))
         except Exception as e:
-            self.logger.log(f"ERROR consultando router-telef-service: {e}. Asumiendo puerto cerrado.", origin="NOTIF/MODEM")
+            self.logger.log(f"ERROR consultando modem-link-monitor: {e}. Asumiendo puerto cerrado.", origin="NOTIF/MODEM")
             return "cerrado"

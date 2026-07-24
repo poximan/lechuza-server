@@ -2,7 +2,7 @@
 
 Mono-repo de la plataforma Lechuza orientada a microservicios. Este arbol concentra el backend operativo, la capa web interna, los adaptadores de integracion y los recursos compartidos que se despliegan juntos desde `docker-compose.yml`.
 
-La puerta publica HTTP/HTTPS ya no vive en este repo. Esa responsabilidad fue migrada a `router-atrevido`, que publica `comunicaciones.servicoop.com.ar`, aplica TLS, muestra el menu de bienvenida y enruta hacia los servicios internos por la red Docker externa `servicoop-edge-net`.
+La puerta publica HTTP/HTTPS ya no vive en este repo. Esa responsabilidad fue migrada a `edge-platform`, que publica `comunicaciones.servicoop.com.ar`, aplica TLS, muestra el menu de bienvenida y enruta hacia los servicios internos por la red Docker externa `servicoop-edge-net`.
 
 La arquitectura sigue una separacion estricta de incumbencias:
 
@@ -10,7 +10,7 @@ La arquitectura sigue una separacion estricta de incumbencias:
 - `mensagelo` encapsula el envio de correo y su persistencia operacional.
 - `modbus-collector-service` consulta el dominio Modbus/GRD y expone estado por HTTP y MQTT.
 - `pve-service` adapta Proxmox VE al resto del sistema.
-- `router-telef-service` monitorea conectividad del modem/router y publica su estado.
+- `modem-link-monitor` monitorea conectividad del modem/router y publica su estado.
 - `charito-service` releva instancias remotas de `charo-daemon` sin mezclar su dominio con el resto del sistema.
 - `scada-citec-service` adapta un daemon SCADA externo para la vista mimic.
 - `shared` concentra utilidades y paquetes compartidos.
@@ -18,7 +18,7 @@ La arquitectura sigue una separacion estricta de incumbencias:
 
 Quedan explicitamente fuera de alcance de este mono-repo:
 
-- La publicacion HTTP/HTTPS, que corresponde a `router-atrevido`.
+- La publicacion HTTP/HTTPS, que corresponde a `edge-platform`.
 - `panelito`, que actua como consumidor externo de contratos MQTT/HTTP.
 - `charo-daemon`, que sigue siendo una dependencia externa relevada por `charito-service` y `scada-citec-service`.
 
@@ -30,7 +30,7 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 | `mensagelo` | API de email y cola de envio | HTTP interno |
 | `modbus-collector-service` | Estado GRD/MiCOM y observacion Modbus | HTTP interno, MQTT |
 | `pve-service` | Estado e historial de Proxmox | HTTP interno, MQTT |
-| `router-telef-service` | Sondeo del enlace de modem/router | HTTP interno, MQTT |
+| `modem-link-monitor` | Sondeo del enlace de modem/router | HTTP interno, MQTT |
 | `charito-service` | Relevamiento de instancias remotas | HTTP interno, MQTT |
 | `scada-citec-service` | Adaptador mimic sobre daemon SCADA externo | HTTP interno |
 | `shared` | Codigo compartido | Importado por servicios Python |
@@ -40,9 +40,9 @@ Quedan explicitamente fuera de alcance de este mono-repo:
 
 `docker-compose.yml` define el despliegue conjunto y deja clara la frontera entre servicios:
 
-- `panelexemys`, `modbus-collector-service`, `pve-service`, `router-telef-service` y `scada-citec-service` se conectan tambien a `servicoop-edge-net` para ser alcanzados exclusivamente por el edge router.
-- `panelexemys` consume por HTTP a `mensagelo`, `modbus-collector-service`, `pve-service`, `router-telef-service` y `charito-service`.
-- `modbus-collector-service`, `pve-service` y `router-telef-service` publican estados operativos en MQTT.
+- `panelexemys`, `modbus-collector-service`, `pve-service`, `modem-link-monitor` y `scada-citec-service` se conectan tambien a `servicoop-edge-net` para ser alcanzados exclusivamente por `edge-gateway`.
+- `panelexemys` consume por HTTP a `mensagelo`, `modbus-collector-service`, `pve-service`, `modem-link-monitor` y `charito-service`.
+- `modbus-collector-service`, `pve-service` y `modem-link-monitor` publican estados operativos en MQTT.
 - `charito-service` consulta endpoints remotos `/metrics` declarados en `CHARITO_TARGETS_JSON` y publica el estado consolidado en MQTT como fuente de verdad para `panelito`; la identidad estable de cada daemon se declara explicitamente como `id`.
 - `scada-citec-service` consulta un daemon externo definido por `SCADA_DAEMON_BASE_URL`.
 
@@ -68,7 +68,7 @@ lechuza-server/
 |- mensagelo/
 |- modbus-collector-service/
 |- pve-service/
-|- router-telef-service/
+|- modem-link-monitor/
 |- charito-service/
 |- scada-citec-service/
 |- shared/

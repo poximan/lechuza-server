@@ -12,7 +12,11 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY charito-service/src /app/src
 RUN chown -R 1000:1000 /app
 
-ENV PYTHONPATH=/app/src:/shared
+ENV PYTHONPATH=/app/src:/shared \
+    PYTHONUNBUFFERED=1 \
+    TZ=America/Argentina/Buenos_Aires
+
+EXPOSE 8082
 
 USER 1000:1000
 

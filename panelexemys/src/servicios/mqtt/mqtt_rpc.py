@@ -15,7 +15,7 @@ from src.utils import timebox
 from src.servicios.email.mensagelo_client import MensageloClient
 from src.servicios.mqtt import mqtt_event_bus
 from src.web.clients.modbus_client import modbus_client
-from src.web.clients.router_client import router_client
+from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 import config
 
 
@@ -201,10 +201,10 @@ class MqttRequestRouter:
 
     def _handle_get_modem_status(self, corr: str, reply_to: str):
         """
-        devuelve estado del modem consultando router-telef-service
+        devuelve estado del modem consultando modem-link-monitor
         """
         try:
-            status_data = router_client.get_status()
+            status_data = modem_link_monitor_client.get_status()
             estado = str(status_data.get("state", "desconocido"))
         except Exception as exc:
             estado = "desconocido"

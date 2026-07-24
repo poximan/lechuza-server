@@ -3,7 +3,10 @@ FROM python:3.12-slim-bookworm
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    TZ=America/Argentina/Buenos_Aires \
+    SERVICE_HOST=0.0.0.0 \
+    SERVICE_PORT=8081
 
 RUN set -eux; \
     printf "deb https://deb.debian.org/debian bookworm main\n" > /etc/apt/sources.list; \
@@ -33,5 +36,8 @@ RUN chown -R 1000:1000 /app
 USER 1000:1000
 
 EXPOSE 8081
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
+    CMD curl -fsS http://localhost:8081/health
 
 CMD ["python", "-m", "email_service.main"]

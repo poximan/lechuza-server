@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /app
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    TZ=America/Argentina/Buenos_Aires
 COPY shared /shared
 ENV PYTHONPATH="/shared:${PYTHONPATH}"
 COPY modbus-collector-service/requirements.txt /app/requirements.txt

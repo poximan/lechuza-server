@@ -60,31 +60,31 @@
   "port_mappings": [
     {
       "servicio": "panelexemys",
-      "interno": "cont-panelexemys:8052 (http)",
+      "interno": "comunic-mon-panelexemys:8052 (http)",
       "externo_path": "/dash/",
       "localhost": "http://localhost:8052"
     },
     {
       "servicio": "pve-service",
-      "interno": "cont-pve-service:8083 (http)",
+      "interno": "comunic-mon-pve-service:8083 (http)",
       "externo_path": "/pve/api/pve/state",
       "localhost": "http://localhost:8083/api/pve/state"
     },
     {
       "servicio": "modbus-collector-service",
-      "interno": "cont-modbus-collector-service:8084 (http)",
+      "interno": "comunic-mon-modbus-collector-service:8084 (http)",
       "externo_path": "/api/",
       "localhost": "http://localhost:8084"
     },
     {
-      "servicio": "router-telef-service",
-      "interno": "cont-router-telef-service:8086 (http)",
+      "servicio": "modem-link-monitor",
+      "interno": "comunic-mon-modem-link-monitor:8086 (http)",
       "externo_path": "/router/status",
       "localhost": "http://localhost:8086/status"
     },
     {
       "servicio": "scada-citec-service",
-      "interno": "cont-scada-citec-service:8094 (http)",
+      "interno": "comunic-mon-scada-citec-service:8094 (http)",
       "externo_path": "/scada/",
       "localhost": "http://localhost:8094"
     }
