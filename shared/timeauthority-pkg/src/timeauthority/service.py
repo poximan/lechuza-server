@@ -1,117 +1,104 @@
-import os
-from datetime import datetime, timezone
-from typing import Optional, Union
-from zoneinfo import ZoneInfo
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta, timezone
+import time
+from typing import Callable, Optional, Union
+
+
+TimestampLike = Union[str, datetime]
+UTC = timezone.utc
+PRESENTATION_TIMEZONE = timezone(timedelta(hours=-3), name="UTC-03:00")
 
 
 class TimeAuthority:
-    """
-    API centralizada para emitir y validar fechas en UTC con precision a segundos.
-    """
+    """Autoridad temporal del sistema para UTC y presentacion UTC-3."""
 
-    def __init__(self, tz_name: Optional[str] = None) -> None:
-        raw_tz = self._require_tz_name(tz_name)
-        self._tz_name = raw_tz
-        self._local_tz = self._resolve_timezone(raw_tz)
-
-    @staticmethod
-    def _require_tz_name(tz_name: Optional[str]) -> str:
-        if tz_name and tz_name.strip():
-            return tz_name.strip()
-        env_tz = os.getenv("TZ")
-        if env_tz and env_tz.strip():
-            return env_tz.strip()
-        raise EnvironmentError("Falta variable de entorno obligatoria: TZ")
-
-    @staticmethod
-    def _resolve_timezone(name: str) -> timezone:
-        try:
-            return ZoneInfo(name)
-        except Exception as exc:
-            raise ValueError(f"Zona horaria invalida: {name}") from exc
-
-    @property
-    def timezone_name(self) -> str:
-        return self._tz_name
-
-    def refresh_timezone(self) -> None:
-        """
-        Relee la variable TZ (permite cambios dinamicos en contenedores).
-        """
-        raw_tz = self._require_tz_name(None)
-        self._tz_name = raw_tz
-        self._local_tz = self._resolve_timezone(raw_tz)
+    def __init__(
+        self,
+        utc_now_source: Callable[[], datetime] | None = None,
+        monotonic_source: Callable[[], float] | None = None,
+    ) -> None:
+        self._utc_now_source = utc_now_source or (lambda: datetime.now(UTC))
+        self._monotonic_source = monotonic_source or time.monotonic
 
     def utc_now(self) -> datetime:
-        """
-        Retorna datetime timezone-aware en UTC truncado a segundos.
-        """
-        return datetime.now(timezone.utc).replace(microsecond=0)
+        value = self._utc_now_source()
+        if value.tzinfo is None:
+            raise ValueError("La fuente de hora debe devolver un datetime con zona")
+        return value.astimezone(UTC).replace(microsecond=0)
+
+    def utc_today(self) -> date:
+        return self.utc_now().date()
+
+    def monotonic(self) -> float:
+        return self._monotonic_source()
 
     def utc_iso(self, value: Optional[datetime] = None) -> str:
-        """
-        Serializa en ISO-8601 con sufijo Z (UTC) y segundos como maxima precision.
-        """
-        dt = self.ensure_utc(value or self.utc_now())
-        text = dt.isoformat()
-        return text.replace("+00:00", "Z")
+        normalized = self.ensure_utc(value or self.utc_now())
+        return normalized.isoformat().replace("+00:00", "Z")
 
     def ensure_utc(self, value: datetime) -> datetime:
-        """
-        Normaliza cualquier datetime timezone-aware a UTC y remueve microsegundos.
-        """
         if value.tzinfo is None:
             raise ValueError("datetime sin zona horaria")
-        return value.astimezone(timezone.utc).replace(microsecond=0)
+        return value.astimezone(UTC).replace(microsecond=0)
 
     def parse(
         self,
-        value: Union[str, datetime],
+        value: TimestampLike,
         *,
         assume_utc_on_naive: bool = False,
     ) -> datetime:
-        """
-        Convierte string ISO o datetime timezone-aware a UTC.
-        Si assume_utc_on_naive es True y la entrada no tiene zona, se asume UTC.
-        """
         if isinstance(value, datetime):
-            dt = value
+            parsed = value
         elif isinstance(value, str):
             text = value.strip()
             if not text:
                 raise ValueError("timestamp vacio")
-            if text.endswith("Z"):
-                text = text[:-1] + "+00:00"
-            dt = datetime.fromisoformat(text)
+            parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
         else:
             raise TypeError("tipo no soportado para parsear timestamp")
 
-        if dt.tzinfo is None:
+        if parsed.tzinfo is None:
             if not assume_utc_on_naive:
                 raise ValueError("timestamp sin informacion de zona horaria")
-            dt = dt.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
+        return self.ensure_utc(parsed)
 
-        return self.ensure_utc(dt)
+    def parse_format(self, value: str, pattern: str) -> datetime:
+        parsed = datetime.strptime(value, pattern).replace(tzinfo=UTC)
+        return self.ensure_utc(parsed)
 
-    def to_local(self, value: Union[str, datetime], *, assume_utc_on_naive: bool = False) -> datetime:
-        """
-        Convierte el timestamp recibido a la zona local configurada.
-        """
-        utc_dt = self.parse(value, assume_utc_on_naive=assume_utc_on_naive)
-        return utc_dt.astimezone(self._local_tz)
+    def format_utc(self, value: datetime, pattern: str) -> str:
+        return self.ensure_utc(value).strftime(pattern)
+
+    def utc_series(self, values):
+        """Normaliza una serie tabular a instantes UTC sin exigir pandas al importar."""
+        import pandas as pd
+
+        return pd.to_datetime(values, utc=True)
+
+    def to_local(
+        self,
+        value: TimestampLike,
+        *,
+        assume_utc_on_naive: bool = False,
+    ) -> datetime:
+        return self.parse(
+            value,
+            assume_utc_on_naive=assume_utc_on_naive,
+        ).astimezone(PRESENTATION_TIMEZONE)
 
     def format_local(
         self,
-        value: Union[str, datetime],
+        value: TimestampLike,
         fmt: str = "%Y-%m-%d %H:%M:%S",
         *,
         assume_utc_on_naive: bool = False,
     ) -> str:
-        """
-        Convierte a zona local y serializa usando el formato solicitado.
-        """
-        local_dt = self.to_local(value, assume_utc_on_naive=assume_utc_on_naive)
-        return local_dt.strftime(fmt)
+        return self.to_local(
+            value,
+            assume_utc_on_naive=assume_utc_on_naive,
+        ).strftime(fmt)
 
 
 _DEFAULT_AUTHORITY = TimeAuthority()

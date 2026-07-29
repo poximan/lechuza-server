@@ -137,7 +137,7 @@ def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
     if grd_id not in descriptions:
         raise HTTPException(status_code=404, detail="GRD no encontrado")
 
-    today_str = timebox.utc_now().strftime("%Y-%m-%d")
+    today_str = timebox.utc_today_iso()
     if window not in {"1sem", "1mes", "todo"}:
         raise HTTPException(status_code=400, detail="window debe ser 1sem, 1mes o todo")
     window_norm = window

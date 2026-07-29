@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import traceback
-from datetime import datetime, timezone
 from typing import Dict, Optional
+from timeauthority import get_time_authority
+
+
+_TIME = get_time_authority()
 
 
 class Logosaurio:
@@ -32,7 +35,7 @@ class Logosaurio:
         last = self._last_messages.get(dedupe_key)
         if last == formatted:
             return
-        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        timestamp = _TIME.format_local(_TIME.utc_now(), "%Y-%m-%dT%H:%M:%S-03:00")
         print(f"[{timestamp}] - [{normalized_level}] - [{normalized_origin}] - {formatted}")
         self._last_messages[dedupe_key] = formatted
 

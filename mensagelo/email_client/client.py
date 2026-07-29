@@ -1,10 +1,13 @@
 import os
-import time
+from timeauthority import get_time_authority
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 import requests
 from logosaurio import Logosaurio
+
+
+time_provider = get_time_authority()
 from . import config
 
 logger = Logosaurio()
@@ -51,7 +54,7 @@ def blast_async(
     Retorna una lista de tuples (idx, ok, result|error_str).
     """
     results = []
-    t0 = time.time()
+    t0 = time_provider.monotonic()
 
     def _one(i: int):
         subj = f"{subject_prefix} #{i:03d}"
@@ -67,7 +70,7 @@ def blast_async(
         for fut in as_completed(futures):
             results.append(fut.result())
 
-    elapsed = time.time() - t0
+    elapsed = time_provider.monotonic() - t0
 
     # Resumen en consola
     ok_count = sum(1 for _, ok, _ in results if ok)

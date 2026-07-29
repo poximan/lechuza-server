@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from timeauthority import get_time_authority
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,7 @@ from .mqtt_publisher import MqttPublisher
 from .tcp_probe import TcpProbe
 
 app = FastAPI(title="modem-link-monitor", version="1.0.0")
+time_provider = get_time_authority()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,7 +36,7 @@ class ConnectionState:
 
     @staticmethod
     def _iso_now() -> str:
-        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        return time_provider.utc_iso()
 
     async def set_state(self, state: str) -> None:
         async with self._lock:

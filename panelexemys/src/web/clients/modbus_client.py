@@ -1,10 +1,10 @@
 import threading
-import time
 from typing import Any, Dict
 
 import requests
 
 import config
+from src.utils import timebox
 
 
 class ModbusMiddlewareHttpClient:
@@ -39,7 +39,7 @@ class ModbusMiddlewareHttpClient:
 
     def get_descriptions(self) -> Dict[int, str]:
         with self._lock:
-            now = time.time()
+            now = timebox.monotonic()
             if self._descriptions_cache is not None and (now - self._descriptions_ts) < self._descriptions_ttl:
                 return self._descriptions_cache
             data = self._request("GET", "/api/grd/descriptions")

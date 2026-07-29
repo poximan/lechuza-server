@@ -28,7 +28,7 @@ class GrdMiddlewareClient:
         self.refresh_interval = refresh_interval
         self.logger = logger
         self._active_grd_data = None
-        self._last_grd_data_refresh = 0
+        self._last_grd_data_refresh = None
 
         self.publisher = mqtt_publisher
 
@@ -37,9 +37,10 @@ class GrdMiddlewareClient:
 
     def _refresh_grd_data(self):
         """Refresca la lista de GRDs activos desde la base de datos."""
-        if time.time() - self._last_grd_data_refresh > 2000:
+        now = timebox.monotonic()
+        if self._last_grd_data_refresh is None or now - self._last_grd_data_refresh > 2000:
             self._active_grd_data = grd_dao.get_all_grds_with_descriptions(only_active=True)
-            self._last_grd_data_refresh = time.time()
+            self._last_grd_data_refresh = now
             if not self._active_grd_data:
                 self.logger.log(
                     "No se encontraron GRDs activos en la base de datos para monitorear.",
@@ -129,7 +130,7 @@ class GrdMiddlewareClient:
                 time.sleep(self.refresh_interval)
                 continue
 
-            timestamp_now = timebox.utc_now().strftime('%Y-%m-%d %H:%M:%S')
+            timestamp_now = timebox.format_utc(timebox.utc_now(), '%Y-%m-%d %H:%M:%S')
 
             if not self.driver.is_connected() and not self.driver.connect():
                 self.logger.log(

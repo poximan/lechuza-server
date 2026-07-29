@@ -2,12 +2,16 @@ import json
 import ssl
 import threading
 import time
+from timeauthority import get_time_authority
 
 import certifi
 import paho.mqtt.client as mqtt
 
 from . import config
 from .logger import logger
+
+
+time_provider = get_time_authority()
 
 
 class MqttPublisher:
@@ -96,7 +100,7 @@ class MqttPublisher:
     def _publish(self, state: str) -> bool:
         payload = {
             "estado": state,
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "ts": time_provider.utc_iso(),
         }
         data = json.dumps(payload, ensure_ascii=False)
         with self._lock:

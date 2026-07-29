@@ -201,7 +201,7 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         df = pd.DataFrame(history_payload.get('data', []))
         if not df.empty:
             df = df.sort_values(by='timestamp').reset_index(drop=True)
-            df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+            df['timestamp'] = timebox.utc_series(df['timestamp'])
 
         if time_window == '1sem':
             grd_title_period = f"Semana {page_number + 1}"

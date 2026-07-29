@@ -1,10 +1,14 @@
 import time
+from timeauthority import get_time_authority
 from typing import Any, Dict, Optional
 
 import certifi
 import requests
 
 from .logger import logger
+
+
+time_provider = get_time_authority()
 
 
 class TcpProbe:
@@ -34,10 +38,10 @@ class TcpProbe:
             logger.error("No se pudo iniciar el chequeo TCP: %s", exc, origin="ROUTER-TELEF/TCP")
             return "desconocido"
 
-        deadline = time.monotonic() + self.result_timeout
+        deadline = time_provider.monotonic() + self.result_timeout
         failure_detected = False
 
-        while time.monotonic() < deadline:
+        while time_provider.monotonic() < deadline:
             try:
                 nodes = self._fetch_results(request_id)
             except Exception as exc:
