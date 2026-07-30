@@ -160,7 +160,10 @@ class HistoricosDAO:
                     disconnected_grds.append({
                         'id_grd': row['id_grd'],
                         'description': row['descripcion'],
-                        'last_disconnected_timestamp': datetime.strptime(row['last_disconnected_timestamp'], '%Y-%m-%d %H:%M:%S') # Convertir a datetime
+                        'last_disconnected_timestamp': timebox.parse_format(
+                            row['last_disconnected_timestamp'],
+                            '%Y-%m-%d %H:%M:%S',
+                        )
                     })
             except sqlite3.Error as e:
                 logger.error("Error al obtener los GRD desconectados con timestamp: %s", e, origin="MODBUS/DAO")
@@ -184,7 +187,7 @@ class HistoricosDAO:
                     WHERE id_grd = ? AND timestamp < ?
                     ORDER BY timestamp DESC
                     LIMIT 1
-                """, (grd_id, timestamp.strftime('%Y-%m-%d %H:%M:%S')))
+                """, (grd_id, timebox.format_utc(timestamp, '%Y-%m-%d %H:%M:%S')))
                 result = cursor.fetchone()
                 return result['conectado'] if result else None
             except sqlite3.Error as e:
@@ -283,7 +286,7 @@ class HistoricosDAO:
             try:
                 conn = get_db_connection()
                 
-                reference_date = datetime.strptime(reference_date_str, '%Y-%m-%d')
+                reference_date = timebox.parse_format(reference_date_str, '%Y-%m-%d')
                 
                 week_end_date = reference_date - timedelta(weeks=page_number)
                 week_start_date = week_end_date - timedelta(days=6)
@@ -291,13 +294,13 @@ class HistoricosDAO:
                 query = f"""
                     SELECT timestamp, id_grd, conectado
                     FROM historicos
-                    WHERE id_grd = ? AND timestamp BETWEEN '{week_start_date.strftime('%Y-%m-%d 00:00:00')}' AND '{week_end_date.strftime('%Y-%m-%d 23:59:59')}'
+                    WHERE id_grd = ? AND timestamp BETWEEN '{timebox.format_utc(week_start_date, '%Y-%m-%d 00:00:00')}' AND '{timebox.format_utc(week_end_date, '%Y-%m-%d 23:59:59')}'
                     ORDER BY timestamp ASC;
                 """
                 
                 df = pd.read_sql_query(query, conn, params=(grd_id,))
                 if not df.empty:
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+                    df['timestamp'] = timebox.utc_series(df['timestamp'])
             except sqlite3.Error as e:
                 logger.error("Error al obtener datos semanales para GRD ID %s: %s", grd_id, e, origin="MODBUS/DAO")
             finally:
@@ -316,7 +319,7 @@ class HistoricosDAO:
             try:
                 conn = get_db_connection()
                 
-                current_dashboard_date = datetime.strptime(reference_date_str, '%Y-%m-%d')
+                current_dashboard_date = timebox.parse_format(reference_date_str, '%Y-%m-%d')
                 
                 first_day_of_current_month = current_dashboard_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                 
@@ -334,13 +337,13 @@ class HistoricosDAO:
                 query = f"""
                     SELECT timestamp, id_grd, conectado
                     FROM historicos
-                    WHERE id_grd = ? AND timestamp BETWEEN '{month_start_datetime_for_query.strftime('%Y-%m-%d %H:%M:%S')}' AND '{month_end_datetime_for_query.strftime('%Y-%m-%d %H:%M:%S')}'
+                    WHERE id_grd = ? AND timestamp BETWEEN '{timebox.format_utc(month_start_datetime_for_query, '%Y-%m-%d %H:%M:%S')}' AND '{timebox.format_utc(month_end_datetime_for_query, '%Y-%m-%d %H:%M:%S')}'
                     ORDER BY timestamp ASC;
                 """
                 
                 df = pd.read_sql_query(query, conn, params=(grd_id,))
                 if not df.empty:
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+                    df['timestamp'] = timebox.utc_series(df['timestamp'])
             except sqlite3.Error as e:
                 logger.error("Error al obtener datos mensuales para GRD ID %s: %s", grd_id, e, origin="MODBUS/DAO")
             finally:
@@ -364,7 +367,7 @@ class HistoricosDAO:
                 """
                 df = pd.read_sql_query(query, conn, params=(grd_id,))
                 if not df.empty:
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+                    df['timestamp'] = timebox.utc_series(df['timestamp'])
             except sqlite3.Error as e:
                 logger.error("Error al obtener todos los datos para GRD ID %s: %s", grd_id, e, origin="MODBUS/DAO")
             finally:
@@ -390,7 +393,7 @@ class HistoricosDAO:
                 if not min_ts_str:
                     return 0
 
-                min_ts = datetime.strptime(min_ts_str, '%Y-%m-%d %H:%M:%S')
+                min_ts = timebox.parse_format(min_ts_str, '%Y-%m-%d %H:%M:%S')
                 current_time = timebox.utc_now() 
 
                 if current_time.date() < min_ts.date(): 
@@ -425,9 +428,9 @@ class HistoricosDAO:
                 if not min_ts_str:
                     return 0
 
-                min_ts = datetime.strptime(min_ts_str, '%Y-%m-%d %H:%M:%S')
+                min_ts = timebox.parse_format(min_ts_str, '%Y-%m-%d %H:%M:%S')
                 
-                current_date_for_total = timebox.utc_now().replace(tzinfo=None) 
+                current_date_for_total = timebox.utc_now()
 
                 if min_ts > current_date_for_total:
                     return 0 

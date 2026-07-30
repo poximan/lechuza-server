@@ -40,6 +40,42 @@ app = dash.Dash(
     requests_pathname_prefix="/dash/",
     suppress_callback_exceptions=True,  # opcional pero util en apps multipagina
 )
+app.index_string = """<!DOCTYPE html>
+<html lang="es">
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+    </head>
+    <body class="lechuza-splash-active">
+        <div
+            id="lechuza-splash"
+            class="lechuza-splash"
+            role="status"
+            aria-live="polite"
+            aria-label="Cargando panel de monitoreo"
+        >
+            <div class="lechuza-splash-content">
+                <div class="lechuza-splash-flight" aria-hidden="true">
+                    <img
+                        class="lechuza-splash-logo"
+                        src="__LECHUZA_SPLASH_ICON__"
+                        alt=""
+                    >
+                </div>
+                <p class="lechuza-splash-message">Cargando panel de monitoreo...</p>
+            </div>
+        </div>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+""".replace("__LECHUZA_SPLASH_ICON__", app.get_asset_url("icono.png"))
 server = app.server
 server.wsgi_app = ProxyFix(server.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 

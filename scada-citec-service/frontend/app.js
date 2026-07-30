@@ -40,7 +40,7 @@ async function fetchState() {
         }
         const data = await response.json();
         state.groups = data.groups || [];
-        state.lastRefresh = new Date().toLocaleTimeString();
+        state.lastRefresh = window.appTime.formatCurrentTimeForPresentation();
         state.error = "";
         state.loaded = true;
     } catch (err) {

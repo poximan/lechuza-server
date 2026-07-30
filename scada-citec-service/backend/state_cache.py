@@ -1,9 +1,12 @@
 import asyncio
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from timeauthority import get_time_authority
 
 from .catalog import ElementDescriptor
+
+
+time_provider = get_time_authority()
 
 
 @dataclass
@@ -43,7 +46,7 @@ class StateCache:
             parsed = _map_state(raw_state)
             state.state = parsed
             state.raw_value = raw_state
-            state.updated_at = timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds")
+            state.updated_at = timestamp or time_provider.utc_iso()
 
     async def snapshot_by_tag(self) -> Dict[str, ElementState]:
         async with self._lock:

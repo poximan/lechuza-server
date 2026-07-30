@@ -22,6 +22,26 @@ def utc_iso(value: datetime | None = None) -> str:
     return _AUTH.utc_iso(value)
 
 
+def utc_today_iso() -> str:
+    return _AUTH.utc_today().isoformat()
+
+
+def monotonic() -> float:
+    return _AUTH.monotonic()
+
+
+def parse_format(value: str, pattern: str) -> datetime:
+    return _AUTH.parse_format(value, pattern)
+
+
+def format_utc(value: datetime, pattern: str) -> str:
+    return _AUTH.format_utc(value, pattern)
+
+
+def utc_series(values):
+    return _AUTH.utc_series(values)
+
+
 def parse(value: TimestampLike, *, legacy: bool = False) -> datetime:
     return _AUTH.parse(value, assume_utc_on_naive=legacy)
 

@@ -4,7 +4,6 @@ import json
 import os
 import threading
 from typing import Any, Dict, Optional
-from datetime import datetime, timezone
 
 from . import config as cfg
 from .utils import timebox
@@ -67,7 +66,7 @@ class SnapshotRepository:
         if not ts:
             return None
         try:
-            snap_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            snap_dt = timebox.parse(ts, legacy=True)
         except Exception:
             return None
-        return (datetime.now(timezone.utc) - snap_dt).total_seconds()
+        return (timebox.utc_now() - snap_dt).total_seconds()
