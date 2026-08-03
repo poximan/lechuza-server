@@ -156,6 +156,7 @@ EMAIL_HEALTH_PING_REMOTE_HOST = _req("EMAIL_HEALTH_PING_REMOTE_HOST")
 # Requests y respuestas usan arboles separados de los topicos de estado.
 MQTT_RPC_REQ_ROOT = _req("MQTT_RPC_REQ_ROOT")
 MQTT_RPC_RES_ROOT = _req("MQTT_RPC_RES_ROOT")
+MQTT_RPC_QUEUE_MAXSIZE = _req_int("MQTT_RPC_QUEUE_MAXSIZE")
 # Acciones soportadas (para validacion/evolucion)
 MQTT_RPC_ALLOWED_ACTIONS = {
     "get_global_status",   # responde en estado/exemys con resumen + ultimos estados por GRD

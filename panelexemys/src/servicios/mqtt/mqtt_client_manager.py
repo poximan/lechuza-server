@@ -1,7 +1,6 @@
 import json
-import queue
 import threading
-from typing import Callable, List, Tuple, Optional
+from typing import Callable, List, Tuple
 
 import config
 from .mqtt_driver import MqttDriver
@@ -26,8 +25,6 @@ class MqttClientManager:
         self._status_qos = config.MQTT_SERVICE_STATUS_QOS
         self._status_retain = config.MQTT_SERVICE_STATUS_RETAIN
 
-        # Mensajes entrantes: por defecto una cola nueva
-        self.msg_queue: "queue.Queue[Tuple[str, str]]" = queue.Queue()
         self._listeners: List[Tuple[str, Callable[[str, str], None]]] = []
         self.telemetry = MqttTrafficTelemetry()
 
@@ -99,11 +96,6 @@ class MqttClientManager:
         self.log.log(f"Mensaje en {msg.topic}: {payload}", origin=self._origen)
         self.telemetry.record_receive(msg.topic, payload)
 
-        try:
-            self.msg_queue.put_nowait((msg.topic, payload))
-        except queue.Full:
-            pass
-
         for prefix, callback in list(self._listeners):
             if msg.topic.startswith(prefix):
                 try:
@@ -123,12 +115,6 @@ class MqttClientManager:
         if self.driver.is_connected():
             self.driver.subscribe(topic, qos)
 
-    def get_message(self, timeout: Optional[float] = None):
-        try:
-            return self.msg_queue.get(timeout=timeout)
-        except queue.Empty:
-            return None
-
     def is_connected(self) -> bool:
         return self.driver.is_connected()
 
@@ -138,10 +124,6 @@ class MqttClientManager:
         if self._started:
             return "conectando"
         return "desconectado"
-
-    def set_message_queue(self, q: "queue.Queue[Tuple[str,str]]"):
-        if isinstance(q, queue.Queue):
-            self.msg_queue = q
 
     def register_prefix_listener(self, prefix: str, callback: Callable[[str, str], None], source: str = "panelexemys") -> None:
         """

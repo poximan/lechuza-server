@@ -6,7 +6,6 @@ from flask import jsonify, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 import dash
 from .web import dash_config
-from queue import Queue
 
 from src.servicios.mqtt.mqtt_client_manager import MqttClientManager
 
@@ -16,6 +15,7 @@ from src.servicios.mqtt.mqtt_rpc import MqttRequestRouter
 from src.servicios.email.estado_email import start_email_health_monitor
 from src.alarmas.notif_manager import NotifManager
 from src.logger import Logosaurio
+from src.control.bounded_key_registry import BoundedKeyRegistry
 import config
 
 
@@ -31,7 +31,7 @@ USE_RELOADER = False
 AUTO_START_MQTT = True
 _services_lock = threading.Lock()
 _services_started = False
-_rejected_dash_callbacks_logged: set[str] = set()
+_rejected_dash_callbacks_logged = BoundedKeyRegistry(256)
 
 # servidor dash
 app = dash.Dash(
@@ -96,8 +96,7 @@ def log_user_ip():
         payload = request.get_json(silent=True) or {}
         output = payload.get("output")
         if isinstance(output, str) and output not in app.callback_map:
-            if output not in _rejected_dash_callbacks_logged:
-                _rejected_dash_callbacks_logged.add(output)
+            if _rejected_dash_callbacks_logged.add_if_new(output):
                 logger_app.log(
                     f"Callback Dash rechazado por contrato invalido: {output}",
                     origin="APP/DASH",
@@ -105,24 +104,18 @@ def log_user_ip():
             return jsonify({"error": "callback_contract_invalid"}), 409
 
 
-# cola de mensajes y cliente mqtt
-message_queue = Queue()
 mqtt_client_manager = MqttClientManager(logger_app)
-
-# Provide the external queue explicitly (contract hard)
-mqtt_client_manager.set_message_queue(message_queue)
 
 # exponer manager al event bus de publicaciones
 mqtt_event_bus.set_manager(mqtt_client_manager)
 
 # router rpc mqtt (suscribe y procesa requests en la cola)
-rpc_router = MqttRequestRouter(logger_app, mqtt_client_manager, api_key, message_queue)
+rpc_router = MqttRequestRouter(logger_app, mqtt_client_manager, api_key)
 
 # configurar vistas y callbacks dash
 dash_config.configure_dash_app(
     app,
     mqtt_client_manager,
-    message_queue,
     auto_start_mqtt=AUTO_START_MQTT,
 )
 

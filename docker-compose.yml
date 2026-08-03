@@ -1,5 +1,11 @@
 ﻿services:
   mensagelo:
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     build:
       context: .
       dockerfile: mensagelo/Dockerfile
@@ -29,6 +35,12 @@
       - backend
 
   panelexemys:
+    pids_limit: 256
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     build:
       context: .
       dockerfile: panelexemys/Dockerfile
@@ -69,6 +81,8 @@
       - edge
 
   charito-service:
+    pids_limit: 256
+    logging: *default-logging
     build:
       context: .
       dockerfile: charito-service/Dockerfile
@@ -95,6 +109,8 @@
       - backend
 
   pve-service:
+    pids_limit: 256
+    logging: *default-logging
     build:
       context: .
       dockerfile: pve-service/Dockerfile
@@ -130,6 +146,8 @@
       - edge
 
   modbus-collector-service:
+    pids_limit: 256
+    logging: *default-logging
     build:
       context: .
       dockerfile: modbus-collector-service/Dockerfile
@@ -178,6 +196,8 @@
       - edge
 
   modem-link-monitor:
+    pids_limit: 256
+    logging: *default-logging
     build:
       context: .
       dockerfile: modem-link-monitor/Dockerfile
@@ -193,6 +213,8 @@
       - edge
 
   scada-citec-service:
+    pids_limit: 256
+    logging: *default-logging
     build:
       context: .
       dockerfile: scada-citec-service/Dockerfile

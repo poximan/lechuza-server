@@ -1,6 +1,5 @@
 import dash
 from dash import dcc, html
-from queue import Queue
 from dash.dependencies import Input, Output
 from flask import has_request_context, request
 from src.web.clients.modbus_client import modbus_client
@@ -65,7 +64,6 @@ def _build_nav_links(mode: str) -> list:
 def configure_dash_app(
     app: dash.Dash,
     mqtt_client_manager,
-    message_queue: Queue,
     auto_start_mqtt: bool = True,
 ) -> None:
     """Configura el layout y los callbacks de la aplicacion Dash."""
@@ -75,7 +73,7 @@ def configure_dash_app(
         db_grd_descriptions = {}
     initial_grd_value = next(iter(db_grd_descriptions), None)
 
-    initialize_broker_components(mqtt_client_manager, message_queue, auto_start=auto_start_mqtt)
+    initialize_broker_components(mqtt_client_manager, auto_start=auto_start_mqtt)
 
     dashboard_layout = get_dashboard(db_grd_descriptions, initial_grd_value)
     generadores_layout = get_generadores_layout()

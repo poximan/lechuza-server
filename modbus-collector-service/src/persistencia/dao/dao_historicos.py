@@ -351,29 +351,48 @@ class HistoricosDAO:
                     conn.close()
         return df
 
-    def get_all_data_for_grd(self, grd_id: int) -> pd.DataFrame:
+    def get_data_page_for_grd(
+        self,
+        grd_id: int,
+        page_number: int,
+        page_size: int,
+    ) -> tuple[pd.DataFrame, int]:
         """
-        Obtiene todos los datos historicos de 'conectado' para un GRD_ID especifico.
+        Obtiene una pagina del historico, comenzando por los cambios mas recientes.
         """
         conn = None
+        df = pd.DataFrame()
+        total = 0
         with db_lock:
             try:
                 conn = get_db_connection()
-                query = f"""
+                count_row = conn.execute(
+                    "SELECT COUNT(1) AS total FROM historicos WHERE id_grd = ?",
+                    (grd_id,),
+                ).fetchone()
+                total = int(count_row["total"] if count_row else 0)
+                query = """
                     SELECT timestamp, id_grd, conectado
                     FROM historicos
                     WHERE id_grd = ?
-                    ORDER BY timestamp ASC;
+                    ORDER BY timestamp DESC
+                    LIMIT ? OFFSET ?;
                 """
-                df = pd.read_sql_query(query, conn, params=(grd_id,))
+                offset = max(0, page_number) * page_size
+                df = pd.read_sql_query(
+                    query,
+                    conn,
+                    params=(grd_id, page_size, offset),
+                )
                 if not df.empty:
                     df['timestamp'] = timebox.utc_series(df['timestamp'])
+                    df = df.sort_values(by='timestamp').reset_index(drop=True)
             except sqlite3.Error as e:
-                logger.error("Error al obtener todos los datos para GRD ID %s: %s", grd_id, e, origin="MODBUS/DAO")
+                logger.error("Error al paginar datos para GRD ID %s: %s", grd_id, e, origin="MODBUS/DAO")
             finally:
                 if conn:
                     conn.close()
-        return df
+        return df, total
 
     def get_total_weeks_for_grd(self, grd_id: int, reference_date_str: str) -> int:
         """

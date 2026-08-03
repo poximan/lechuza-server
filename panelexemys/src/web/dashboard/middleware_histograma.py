@@ -117,7 +117,7 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         page_number = new_state['page_number']
         grd_id = new_state['current_grd_id']
 
-        if grd_id is None or time_window not in {'1sem', '1mes'}:
+        if grd_id is None or time_window not in {'1sem', '1mes', 'todo'}:
             raise dash.exceptions.PreventUpdate
 
         if button_id == 'prev-btn':
@@ -132,7 +132,7 @@ def register_controls_and_graph_callbacks(app: dash.Dash):
         return new_state
 
     def _pagination_controls_state(grd_id, time_window, page_number, total_segments):
-        if grd_id is None or time_window == 'todo':
+        if grd_id is None:
             return {'display': 'none'}, True, True
         if total_segments <= 1:
             return {'display': 'flex', 'justifyContent': 'center', 'gap': '1rem'}, True, True

@@ -8,8 +8,8 @@ RPC sobre MQTT.
 """
 
 import json
-import queue
 from typing import Optional, Tuple
+from src.control.bounded_work_queue import BoundedWorkQueue
 from src.logger import Logosaurio
 from src.utils import timebox
 from src.servicios.email.mensagelo_client import MensageloClient
@@ -31,15 +31,15 @@ class MqttRequestRouter:
 
     """
 
-    def __init__(self, logger: Logosaurio, mqtt_manager, key, message_queue=None):
+    def __init__(self, logger: Logosaurio, mqtt_manager, key):
 
         self.log = logger
 
         self.manager = mqtt_manager
 
-        self.queue = message_queue  # mantenido por compatibilidad (no se consume)
-
-        self._listener_queue: "queue.Queue[Tuple[str, str]]" = queue.Queue()
+        self._listener_queue = BoundedWorkQueue[Tuple[str, str]](
+            config.MQTT_RPC_QUEUE_MAXSIZE
+        )
 
         self._listener = None
 
@@ -76,8 +76,12 @@ class MqttRequestRouter:
         if self._listener is None:
 
             def _enqueue(topic: str, payload: str) -> None:
-
-                self._listener_queue.put((topic, payload))
+                if not self._listener_queue.try_put((topic, payload)):
+                    stats = self._listener_queue.snapshot()
+                    self.log.log(
+                        f"RPC MQTT rechazado por cola completa: {stats}",
+                        origin=self._origen,
+                    )
 
             self._listener = _enqueue
 
@@ -90,6 +94,7 @@ class MqttRequestRouter:
         while True:
 
             topic, payload = self._listener_queue.get()
+            self._listener_queue.task_done()
 
 
 

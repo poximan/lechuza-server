@@ -7,6 +7,7 @@ from . import config as cfg
 from src.utils import timebox
 
 _LOCK = threading.RLock()
+_HISTORY_CACHE: Dict[str, Any] | None = None
 
 
 def _path(filename: str) -> str:
@@ -37,10 +38,17 @@ def _write_json(filename: str, data: Dict[str, Any]) -> None:
         pass
 
 
+def _history() -> Dict[str, Any]:
+    global _HISTORY_CACHE
+    if _HISTORY_CACHE is None:
+        _HISTORY_CACHE = _read_json(cfg.HISTORY_FILE, {"meta": {}, "vms": {}})
+    return _HISTORY_CACHE
+
+
 def update_history(snapshot: Dict[str, Any], poll_seconds: int, hours: int) -> Tuple[Dict[str, Any], int]:
     max_entries = int((hours * 3600 + poll_seconds - 1) / poll_seconds)
     with _LOCK:
-        history = _read_json(cfg.HISTORY_FILE, {"meta": {}, "vms": {}})
+        history = _history()
         history.setdefault("meta", {})
         history.setdefault("vms", {})
         history["meta"].update({"hours": hours, "poll_seconds": poll_seconds, "max_entries": max_entries})
@@ -70,21 +78,21 @@ def update_history(snapshot: Dict[str, Any], poll_seconds: int, hours: int) -> T
 
 def load_history_for_dashboard() -> Tuple[Dict[int, Dict[str, Any]], Dict[str, Any]]:
     with _LOCK:
-        history = _read_json(cfg.HISTORY_FILE, {"meta": {}, "vms": {}})
-    result: Dict[int, Dict[str, Any]] = {}
-    for vmid_str, data in (history.get("vms") or {}).items():
-        try:
-            vmid = int(vmid_str)
-        except Exception:
-            continue
-        entries = data.get("history") or []
-        prepared = {"cpu_pct": [], "mem_pct": [], "disk_pct": []}
-        for item in reversed(entries):
-            ts = item.get("ts")
-            if not ts:
+        history = _history()
+        result: Dict[int, Dict[str, Any]] = {}
+        for vmid_str, data in (history.get("vms") or {}).items():
+            try:
+                vmid = int(vmid_str)
+            except Exception:
                 continue
-            prepared["cpu_pct"].append({"ts": ts, "value": item.get("cpu", 0.0)})
-            prepared["mem_pct"].append({"ts": ts, "value": item.get("mem", 0.0)})
-            prepared["disk_pct"].append({"ts": ts, "value": item.get("disk", 0.0)})
-        result[vmid] = {"name": data.get("name"), "history": prepared}
-    return result, history.get("meta", {})
+            entries = data.get("history") or []
+            prepared = {"cpu_pct": [], "mem_pct": [], "disk_pct": []}
+            for item in reversed(entries):
+                ts = item.get("ts")
+                if not ts:
+                    continue
+                prepared["cpu_pct"].append({"ts": ts, "value": item.get("cpu", 0.0)})
+                prepared["mem_pct"].append({"ts": ts, "value": item.get("mem", 0.0)})
+                prepared["disk_pct"].append({"ts": ts, "value": item.get("disk", 0.0)})
+            result[vmid] = {"name": data.get("name"), "history": prepared}
+        return result, dict(history.get("meta", {}))

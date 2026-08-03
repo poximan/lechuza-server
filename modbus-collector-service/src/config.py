@@ -103,6 +103,7 @@ ESCLAVOS_MB: dict[int, str] = {
 # ------------------ Data paths ------------------
 DATABASE_DIR = _req("MODBUS_COLLECTOR_DATA_DIR")
 DATABASE_NAME = _req("MODBUS_COLLECTOR_DATABASE_NAME")
+HISTORY_PAGE_SIZE = _req_int("MODBUS_HISTORY_PAGE_SIZE")
 OBS_STATE_FILE = os.path.join(DATABASE_DIR, "modbus-collector-state.json")
 
 # ------------------ MQTT ------------------

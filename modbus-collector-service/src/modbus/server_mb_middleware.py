@@ -6,6 +6,7 @@ from logosaurio import Logosaurio
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src import config
 from src.utils import timebox
+from src.control.latest_state_registry import LatestStateRegistry
 
 class GrdMiddlewareClient:
     """
@@ -34,6 +35,9 @@ class GrdMiddlewareClient:
 
         self._last_payload_grado = None
         self._last_payload_down = None
+        self._latest_states = LatestStateRegistry(
+            dao.get_latest_states_for_all_grds()
+        )
 
     def _refresh_grd_data(self):
         """Refresca la lista de GRDs activos desde la base de datos."""
@@ -64,11 +68,10 @@ class GrdMiddlewareClient:
         conectados = sum(1 for v in latest_states.values() if v == 1)
         porcentaje = round((conectados / total) * 100, 2) if total else 0.0
 
-        grado_payload = {
+        grado_state = {
             "porcentaje": porcentaje,
             "total": total,
             "conectados": conectados,
-            "ts": timebox.utc_iso()
         }
 
         down = []
@@ -88,22 +91,22 @@ class GrdMiddlewareClient:
                 "ultima_caida": ultima_caida
             })
 
-        down_timestamp = timebox.utc_iso()
-        down_payload = {
+        down_state = {
             "items": down,
-            "ts": down_timestamp
         }
 
         # Publicar grado si cambiÃ³
-        if grado_payload != self._last_payload_grado:
+        if grado_state != self._last_payload_grado:
+            grado_payload = {**grado_state, "ts": timebox.utc_iso()}
             self.publisher.publish_grado(grado_payload)
-            self._last_payload_grado = grado_payload
+            self._last_payload_grado = grado_state
             self.logger.log(f"Publicado grado global en {config.MQTT_TOPIC_GRADO}: {grado_payload}", origin="OBS/MW")
 
         # Publicar desconectados si cambiÃ³
-        if down_payload != self._last_payload_down:
+        if down_state != self._last_payload_down:
+            down_payload = {**down_state, "ts": timebox.utc_iso()}
             self.publisher.publish_grds(down_payload)
-            self._last_payload_down = down_payload
+            self._last_payload_down = down_state
             self.logger.log(f"Publicado snapshot de desconectados en {config.MQTT_TOPIC_GRDS}: {down_payload}", origin="OBS/MW")
 
     def start_observer_loop(self):
@@ -166,7 +169,7 @@ class GrdMiddlewareClient:
                     )
                     current_connected_value = 0
 
-                latest_value_in_db_for_grd = dao.get_latest_connected_state_for_grd(grd_id)
+                latest_value_in_db_for_grd = self._latest_states.get(grd_id)
 
                 if current_connected_value != latest_value_in_db_for_grd:
                     self.logger.log(
@@ -174,6 +177,7 @@ class GrdMiddlewareClient:
                         origin="OBS/MW"
                     )
                     dao.insert_historico_reading(grd_id, timestamp_now, current_connected_value)
+                    self._latest_states.update(grd_id, current_connected_value)
                     hubo_cambios = True
 
             if hubo_cambios:

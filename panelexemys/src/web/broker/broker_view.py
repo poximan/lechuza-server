@@ -1,5 +1,4 @@
 import threading
-from queue import Queue
 from typing import Any
 
 import dash
@@ -11,7 +10,6 @@ import config
 from src.utils import timebox
 
 
-message_queue: Queue | None = None
 mqtt_client_manager = None
 _auto_start_enabled = True
 
@@ -52,14 +50,10 @@ def get_broker_layout():
     )
 
 
-def initialize_broker_components(manager, queue, auto_start=True):
-    global mqtt_client_manager, message_queue, _auto_start_enabled
+def initialize_broker_components(manager, auto_start=True):
+    global mqtt_client_manager, _auto_start_enabled
     mqtt_client_manager = manager
-    message_queue = queue
     _auto_start_enabled = bool(auto_start)
-
-    if mqtt_client_manager is not None:
-        mqtt_client_manager.set_message_queue(message_queue)
 
 
 def register_broker_callbacks(app: dash.Dash):

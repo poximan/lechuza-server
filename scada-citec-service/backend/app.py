@@ -11,6 +11,7 @@ from .catalog import MimicCatalog
 from .daemon_client import DaemonClient
 from .logger import logger
 from .state_cache import StateCache
+from .control.single_flight import AsyncSingleFlight
 
 app = FastAPI(title="scada-citec-service", version="1.0.0")
 app.add_middleware(
@@ -25,14 +26,16 @@ catalog = MimicCatalog()
 daemon_client: DaemonClient | None = None
 refresh_task: asyncio.Task | None = None
 catalog_task: asyncio.Task | None = None
+refresh_control = AsyncSingleFlight()
+catalog_control = AsyncSingleFlight()
 
 
 @app.on_event("startup")
 async def _startup() -> None:
     global daemon_client, refresh_task, catalog_task
     daemon_client = DaemonClient()
+    await catalog_control.run(_refresh_catalog_once)
     catalog_task = asyncio.create_task(_catalog_loop())
-    await _refresh_catalog_once()
     if config.REFRESH_ON_START:
         refresh_task = asyncio.create_task(_refresh_loop())
 
@@ -62,14 +65,14 @@ async def _shutdown() -> None:
 async def _refresh_loop() -> None:
     assert daemon_client is not None
     while True:
-        await _refresh_cycle_once()
+        await refresh_control.run(_refresh_cycle_once)
         await asyncio.sleep(config.ADAPTER_QUERY_INTERVAL_SECONDS)
 
 
 async def _catalog_loop() -> None:
     assert daemon_client is not None
     while True:
-        await _refresh_catalog_once()
+        await catalog_control.run(_refresh_catalog_once)
         await asyncio.sleep(config.TAG_REFRESH_INTERVAL_SECONDS)
 
 
@@ -132,7 +135,9 @@ async def get_state() -> Dict[str, List[Dict[str, Any]]]:
 async def manual_refresh() -> JSONResponse:
     if not daemon_client:
         return JSONResponse({"status": "adapter"}, status_code=503)
-    await _refresh_cycle_once()
+    if refresh_control.running:
+        return JSONResponse({"status": "refresh_in_progress"}, status_code=409)
+    await refresh_control.run(_refresh_cycle_once)
     return JSONResponse({"status": "ok"})
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import math
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -152,8 +153,12 @@ def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
         total_periods = max(1, historicos_dao.get_total_months_for_grd(grd_id, today_str))
         plot_start, plot_end = _compute_range(window_norm, page)
     elif window_norm == "todo":
-        df = historicos_dao.get_all_data_for_grd(grd_id)
-        total_periods = 1
+        df, total_rows = historicos_dao.get_data_page_for_grd(
+            grd_id,
+            page,
+            config.HISTORY_PAGE_SIZE,
+        )
+        total_periods = max(1, math.ceil(total_rows / config.HISTORY_PAGE_SIZE))
         if df is not None and not df.empty:
             timestamps = df["timestamp"]
             first_ts = timestamps.min()
@@ -177,6 +182,7 @@ def _history_payload(grd_id: int, window: str, page: int) -> Dict[str, Any]:
         "window": window_norm,
         "page": page,
         "total_periods": total_periods,
+        "page_size": config.HISTORY_PAGE_SIZE if window_norm == "todo" else None,
         "range_start": timebox.utc_iso(plot_start),
         "range_end": timebox.utc_iso(plot_end),
         "connected_before": int(connected_before),
