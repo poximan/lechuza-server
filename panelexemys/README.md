@@ -6,6 +6,7 @@ Aplicacion Dash/Flask que presenta el tablero operativo y orquesta alarmas/mensa
 
 - Frontend Dash (`src/web/*`) con clientes HTTP en `src/web/clients` para Modbus, Proxmox, router, etc.
 - Gestor de alarmas (`src/alarmas`) que usa Mensagelo para emails.
+- API interna autenticada `GET /internal/alarms` para que Alarmero consuma estados y eventos sin leer la base.
 - Solapa protegida `mensagelo` con los ultimos diez intentos de envio registrados en memoria del proceso.
 - MQTT client para recibir estados (`lechuza-server/*`).
 
@@ -26,7 +27,7 @@ Los assets estaticos viven en `src/assets` y el javascript auxiliar en `src/asse
 
 - `panelito` consume por MQTT los topicos normalizados `lechuza-server/router/status`, `lechuza-server/modbus/grd/summary`, `lechuza-server/modbus/grd/disconnected`, `lechuza-server/email/status`, `lechuza-server/email/event`, `lechuza-server/pve/status`, `lechuza-server/modbus/ge/edif-estivariz/status`, `lechuza-server/modbus/ge/edif-fontana/status`, `charito/state` y `panelexemys/status`.
 - `panelito` dispara pedidos RPC por `lechuza-server/rpc/req/{accion}` y recibe respuestas en `lechuza-server/rpc/res/{clientId}/{corr}`. Las acciones vigentes son `get_global_status`, `get_modem_status` y `send_email_test`.
-- `panelexemys` consume por HTTP a `modbus-collector-service`, `pve-service`, `modem-link-monitor`, `charito-service` y `mensagelo`.
+- `panelexemys` consume por HTTP a `modbus-collector-service`, `pve-service`, `modem-link-monitor`, `charito-service` y `mensagelo`; `alarmero-service` consume a `panelexemys` por HTTP.
 - `panelexemys` envia email a `ALARM_EMAIL_RECIPIENT` cuando cambia el interruptor lado grupo de Estivariz o Fontana. Mantiene ademas la alarma sostenida historica para Estivariz cuando el lado grupo permanece cerrado.
 - `charo-daemon` queda fuera de este arbol MQTT legado y sigue un contrato propio normalizado sobre `charodaemon/host/{clientId}/*`.
 

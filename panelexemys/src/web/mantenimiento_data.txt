@@ -83,9 +83,9 @@
       "localhost": "http://localhost:8086/status"
     },
     {
-      "servicio": "scada-citec-service",
-      "interno": "comunic-mon-scada-citec-service:8094 (http)",
-      "externo_path": "/scada/",
+      "servicio": "alarmero-service",
+      "interno": "comunic-mon-alarmero-service:8094 (http)",
+      "externo_path": "/alarmero/",
       "localhost": "http://localhost:8094"
     }
   ]

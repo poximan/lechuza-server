@@ -1,12 +1,18 @@
 from datetime import timedelta
-from typing import Dict, Any, List
+from typing import Any, Callable, Dict, List
 from src.logger import Logosaurio
 from src.utils import timebox
 import config
 
 class NotifMwNodo:
-    def __init__(self, logger: Logosaurio, excluded_grd_ids: set):
+    def __init__(
+        self,
+        logger: Logosaurio,
+        excluded_grd_ids: set,
+        on_condition: Callable[[str, bool], None],
+    ):
         self.logger = logger
+        self.on_condition = on_condition
         self.individual_grd_alarm_states: Dict[int, Dict[str, Any]] = {}
         self.excluded_grd_ids: set = excluded_grd_ids
 
@@ -27,8 +33,9 @@ class NotifMwNodo:
                
         for grd_id in grds_to_remove:
             if grd_id in self.individual_grd_alarm_states:
+                self.on_condition(f"mw-node:{grd_id}", False)
                 self.logger.log(
-                    f"Alarma individual para GRD {grd_id} ({self.individual_grd_alarm_states[grd_id]['description']}) resuelta.",
+                    f"GRD {grd_id} ({self.individual_grd_alarm_states[grd_id]['description']}) reconectado. Confirmando recuperacion.",
                     origin="NOTIF/NODO"
                 )
                 del self.individual_grd_alarm_states[grd_id]
@@ -39,6 +46,7 @@ class NotifMwNodo:
             grd_description = grd_info['description']
 
             if current_percentage >= config.GLOBAL_THRESHOLD_ROJO and grd_id not in self.excluded_grd_ids:
+                self.on_condition(f"mw-node:{grd_id}", True)
                 if grd_id not in self.individual_grd_alarm_states:
                     self.individual_grd_alarm_states[grd_id] = {
                         'start_time': timebox.utc_now(),

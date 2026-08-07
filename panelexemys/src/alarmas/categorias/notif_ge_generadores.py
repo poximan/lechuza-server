@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, List
+from typing import Any, Callable, List
 
 from src.logger import Logosaurio
 from src.utils import timebox
@@ -15,10 +15,14 @@ class NotifGeGeneradores:
         logger: Logosaurio,
         buildings: list[dict[str, Any]],
         min_duration_seconds: int = 60,
+        on_condition: Callable[[str, bool], None] | None = None,
     ):
         self.logger = logger
         self.buildings = buildings
         self.min_duration = timedelta(seconds=max(1, min_duration_seconds))
+        if on_condition is None:
+            raise ValueError("on_condition es obligatorio")
+        self.on_condition = on_condition
         self._sustained_states: dict[str, dict[str, Any]] = {}
         self._last_generator_bits: dict[str, int] = {}
 
@@ -43,6 +47,7 @@ class NotifGeGeneradores:
         key = str(building["key"])
         label = str(building["label"])
         estado = self._generator_estado(status)
+        alarm_key = f"ge:{key}:closed-sustained"
         state = self._sustained_states.setdefault(
             key,
             {
@@ -51,9 +56,16 @@ class NotifGeGeneradores:
             },
         )
 
+        if estado not in {"abierto", "cerrado"}:
+            return None
+
+        self.on_condition(alarm_key, estado == "cerrado")
         if estado != "cerrado":
             if state["start_time"] is not None or state["triggered"]:
-                self.logger.log(f"{key}: interruptor de grupo abierto, se reinicia conteo.", origin="ALRM/GE")
+                self.logger.log(
+                    f"{key}: interruptor de grupo abierto. Confirmando recuperacion.",
+                    origin="ALRM/GE",
+                )
             state["start_time"] = None
             state["triggered"] = False
             return None
@@ -73,6 +85,7 @@ class NotifGeGeneradores:
                     f"El interruptor de grupo electrogeno de {label} permanece cerrado "
                     "por mas de 1 minuto."
                 ),
+                "alarm_key": alarm_key,
             }
 
         return None

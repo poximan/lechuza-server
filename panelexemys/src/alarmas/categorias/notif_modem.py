@@ -1,13 +1,14 @@
 from datetime import timedelta
-from typing import Dict, Any
+from typing import Any, Callable, Dict
 from src.logger import Logosaurio
 from src.utils import timebox
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 import config
 
 class NotifModem:
-    def __init__(self, logger: Logosaurio):
+    def __init__(self, logger: Logosaurio, on_condition: Callable[[str, bool], None]):
         self.logger = logger
+        self.on_condition = on_condition
         self.state: Dict[str, Any] = {
             'start_time': None,
             'triggered': False,
@@ -21,6 +22,7 @@ class NotifModem:
         """
         modem_status = self._get_modem_status()
         is_disconnected = modem_status == "cerrado"
+        self.on_condition("modem-link", is_disconnected)
 
         if is_disconnected:
             if self.state['start_time'] is None:
@@ -35,7 +37,10 @@ class NotifModem:
                 return True
         else:
             if self.state['start_time'] is not None:
-                self.logger.log("Alarma de router modem resuelta (puerto abierto).", origin="NOTIF/MODEM")
+                self.logger.log(
+                    "Puerto de router abierto. Confirmando recuperacion.",
+                    origin="NOTIF/MODEM",
+                )
             self.state['start_time'] = None
             self.state['triggered'] = False
 

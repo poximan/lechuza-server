@@ -1,3 +1,4 @@
+import json
 import os
 
 
@@ -40,6 +41,16 @@ def _req_csv(name: str) -> list[str]:
     return items
 
 
+def _req_int_map(name: str) -> dict[str, int]:
+    raw = json.loads(_req(name))
+    if not isinstance(raw, dict) or not raw:
+        raise EnvironmentError(f"{name} debe ser un objeto JSON no vacio")
+    parsed = {str(key): int(value) for key, value in raw.items()}
+    if any(value < 0 for value in parsed.values()):
+        raise EnvironmentError(f"{name} no admite minutos negativos")
+    return parsed
+
+
 # ---------------------------------------------------------
 # --- Panelexemys (host/puerto) ---------------------------
 # ---------------------------------------------------------
@@ -67,8 +78,10 @@ GLOBAL_THRESHOLD_AMARILLO = _req_int("GLOBAL_THRESHOLD_AMARILLO")  # Porcentaje 
 # ---------------------------------------------------------
 ALARM_CHECK_INTERVAL_SECONDS = _req_int("ALARM_CHECK_INTERVAL_SECONDS")  # Intervalo para revisar condicion de alarma
 ALARM_MIN_SUSTAINED_DURATION_MINUTES = _req_int("ALARM_MIN_SUSTAINED_DURATION_MINUTES")  # Cuanto debe sostenerse una alarma para enviar email
+ALARM_MIN_RECOVERY_DURATION_MINUTES = _req_int("ALARM_MIN_RECOVERY_DURATION_MINUTES")
 ALARM_EMAIL_RECIPIENT = _req_csv("ALARM_EMAIL_RECIPIENT")
 ALARM_EMAIL_SUBJECT_PREFIX = _req("ALARM_EMAIL_SUBJECT_PREFIX")  # Prefijo para el asunto del email
+ALARM_CLEARANCE_ESTIMATES_MINUTES = _req_int_map("ALARM_CLEARANCE_ESTIMATES_MINUTES")
 
 # ---------------------------------------------------------
 # --- Mensagelo (servicio HTTP de mensajeria) -------------

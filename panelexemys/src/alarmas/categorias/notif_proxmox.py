@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from src.logger import Logosaurio
 from src.utils import timebox
@@ -11,8 +11,9 @@ class NotifProxmoxHost:
     Supervisa la disponibilidad del hipervisor Proxmox.
     """
 
-    def __init__(self, logger: Logosaurio):
+    def __init__(self, logger: Logosaurio, on_condition: Callable[[str, bool], None]):
         self.logger = logger
+        self.on_condition = on_condition
         self.state: Dict[str, Any] = {
             "start_time": None,
             "triggered": False,
@@ -55,6 +56,8 @@ class NotifProxmoxHost:
             offline = True
             error_text = error_text or "sin snapshot disponible"
 
+        self.on_condition("proxmox:host", offline)
+
         min_duration = timedelta(minutes=config.ALARM_MIN_SUSTAINED_DURATION_MINUTES)
 
         if offline:
@@ -73,7 +76,10 @@ class NotifProxmoxHost:
                 return True
         else:
             if self.state["start_time"] is not None:
-                self.logger.log("Alarma de hipervisor Proxmox resuelta.", origin="NOTIF/PVE_HOST")
+                self.logger.log(
+                    "Hipervisor Proxmox disponible. Confirmando recuperacion.",
+                    origin="NOTIF/PVE_HOST",
+                )
             self.state = {"start_time": None, "triggered": False, "last_error": ""}
 
         return False
@@ -96,8 +102,9 @@ class NotifProxmoxVm:
     Supervisa el estado individual de las VMs de Proxmox configuradas.
     """
 
-    def __init__(self, logger: Logosaurio):
+    def __init__(self, logger: Logosaurio, on_condition: Callable[[str, bool], None]):
         self.logger = logger
+        self.on_condition = on_condition
         self.vm_states: Dict[int, Dict[str, Any]] = {}
 
     def evaluate_condition(self, snapshot: Dict[str, Any], allow_processing: bool = True) -> List[Dict[str, Any]]:
@@ -137,6 +144,7 @@ class NotifProxmoxVm:
                 name = f"VM {vmid}"
 
             is_running = status_raw == "running"
+            self.on_condition(f"proxmox:vm:{vmid}", not is_running)
             state = self.vm_states.setdefault(
                 vmid,
                 {
@@ -170,7 +178,7 @@ class NotifProxmoxVm:
             else:
                 if state["start_time"] is not None:
                     self.logger.log(
-                        f"Alarma Proxmox resuelta: VM {vmid} ({name}) regresó a estado RUNNING.",
+                        f"VM {vmid} ({name}) regreso a RUNNING. Confirmando recuperacion.",
                         origin="NOTIF/PVE_VM",
                     )
                 state["start_time"] = None

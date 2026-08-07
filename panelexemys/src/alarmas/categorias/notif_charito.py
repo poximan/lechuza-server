@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from src.logger import Logosaurio
 from src.utils import timebox
@@ -11,8 +11,9 @@ class NotifCharitoDaemon:
     Supervisa el estado de los demonios administrados por charito-service.
     """
 
-    def __init__(self, logger: Logosaurio):
+    def __init__(self, logger: Logosaurio, on_condition: Callable[[str, bool], None]):
         self.logger = logger
+        self.on_condition = on_condition
         self.daemon_states: Dict[str, Dict[str, Any]] = {}
 
     def evaluate_condition(self, snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -30,7 +31,6 @@ class NotifCharitoDaemon:
         min_duration = timedelta(minutes=config.ALARM_MIN_SUSTAINED_DURATION_MINUTES)
         alerts: List[Dict[str, Any]] = []
 
-        current_ids = set()
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -43,10 +43,9 @@ class NotifCharitoDaemon:
                 else:
                     continue
 
-            current_ids.add(instance_id)
-
             status_raw = str(item.get("status") or "unknown").lower()
             is_online = status_raw == "online"
+            self.on_condition(f"charito:{instance_id}", not is_online)
             received_at = item.get("receivedAt")
             data_error = str(item.get("dataError") or "").strip()
 
@@ -88,15 +87,10 @@ class NotifCharitoDaemon:
             else:
                 if state["start_time"] is not None:
                     self.logger.log(
-                        f"Alarma charo-daemon resuelta: {state['alias']} regreso a estado ONLINE.",
+                        f"Condicion normal observada: {state['alias']} regreso a ONLINE. Confirmando recuperacion.",
                         origin="NOTIF/CHARITO",
                     )
                 state["start_time"] = None
                 state["triggered"] = False
-
-        # Limpiar estados ya no reportados por el servicio
-        obsolete_ids = [iid for iid in list(self.daemon_states.keys()) if iid not in current_ids]
-        for iid in obsolete_ids:
-            del self.daemon_states[iid]
 
         return alerts

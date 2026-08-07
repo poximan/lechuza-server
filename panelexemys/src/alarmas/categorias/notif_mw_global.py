@@ -1,12 +1,13 @@
 from datetime import timedelta
-from typing import Dict, Any
+from typing import Any, Callable, Dict
 from src.logger import Logosaurio
 from src.utils import timebox
 import config
 
 class NotifMwGlobal:
-    def __init__(self, logger: Logosaurio):
+    def __init__(self, logger: Logosaurio, on_condition: Callable[[str, bool], None]):
         self.logger = logger
+        self.on_condition = on_condition
         self.state: Dict[str, Any] = {
             'start_time': None,
             'triggered': False,
@@ -19,6 +20,7 @@ class NotifMwGlobal:
         Retorna True si la alarma debe ser disparada, False en caso contrario.
         """
         is_below_threshold = current_percentage < config.GLOBAL_THRESHOLD_ROJO
+        self.on_condition("mw-global", is_below_threshold)
 
         if is_below_threshold:
             if self.state['start_time'] is None:
@@ -36,7 +38,7 @@ class NotifMwGlobal:
         else:
             if self.state['start_time'] is not None:
                 self.logger.log(
-                    f"Alarma de conectividad global resuelta. Conectividad actual: {current_percentage:.2f}%.", 
+                    f"Condicion global normal observada ({current_percentage:.2f}%). Confirmando recuperacion.",
                     origin="NOTIF/GBL"
                 )
             self.state['start_time'] = None

@@ -1,4 +1,5 @@
 import os
+import uuid
 from timeauthority import get_time_authority
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
@@ -22,8 +23,11 @@ def _req_test_recipients() -> List[str]:
         raise EnvironmentError("TEST_RECIPIENTS no contiene destinatarios validos")
     return items
 
-def _headers():
-    return {"X-API-Key": config.API_KEY}
+def _headers(idempotency_key: str | None = None):
+    headers = {"X-API-Key": config.API_KEY}
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
+    return headers
 
 def send_sync(recipients: List[str], subject: str, body: str, message_type: Optional[str] = None):
     url = f"{config.SERVICE_BASE_URL}/send"
@@ -32,10 +36,16 @@ def send_sync(recipients: List[str], subject: str, body: str, message_type: Opti
     r.raise_for_status()
     return r.json()
 
-def send_async(recipients: List[str], subject: str, body: str, message_type: Optional[str] = None):
+def send_async(
+    recipients: List[str],
+    subject: str,
+    body: str,
+    message_type: Optional[str],
+    idempotency_key: str,
+):
     url = f"{config.SERVICE_BASE_URL}/send_async"
     payload = {"recipients": recipients, "subject": subject, "body": body, "message_type": message_type}
-    r = requests.post(url, json=payload, headers=_headers(), timeout=30)
+    r = requests.post(url, json=payload, headers=_headers(idempotency_key), timeout=30)
     r.raise_for_status()
     return r.json()
 
@@ -54,13 +64,15 @@ def blast_async(
     Retorna una lista de tuples (idx, ok, result|error_str).
     """
     results = []
+    batch_id = str(uuid.uuid4())
     t0 = time_provider.monotonic()
 
     def _one(i: int):
         subj = f"{subject_prefix} #{i:03d}"
         body = f"{body_prefix} [#{i:03d}]"
         try:
-            res = send_async(recipients, subj, body, message_type)
+            key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"mensagelo-load:{batch_id}:{i}"))
+            res = send_async(recipients, subj, body, message_type, key)
             return (i, True, res)
         except Exception as e:
             return (i, False, str(e))

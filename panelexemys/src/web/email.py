@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
@@ -131,6 +132,7 @@ def register_email_callbacks(app: dash.Dash, key) -> None:
                 subject=prefixed_subject,
                 body=test_body,
                 message_type="maintenance_test",
+                idempotency_key=str(uuid.uuid4()),
             )
         except Exception as exc:  # pragma: no cover - logging defensivo
             ok, msg = False, f"error al contactar mensagelo: {exc}"

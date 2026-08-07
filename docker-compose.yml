@@ -80,6 +80,41 @@
       - backend
       - edge
 
+  alarmero-service:
+    pids_limit: 256
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: alarmero-service/Dockerfile
+    image: comunic-mon-alarmero-service:1.0.0
+    container_name: comunic-mon-alarmero-service
+    depends_on:
+      panelexemys:
+        condition: service_started
+      mensagelo:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      DATABASE_DIR: ${ALARMERO_DATABASE_DIR}
+      DATABASE_NAME: ${ALARMERO_DATABASE_NAME}
+      PANELEXEMYS_BASE_URL: ${ALARMERO_PANELEXEMYS_BASE_URL}
+      MENSAGELO_BASE_URL: ${ALARMERO_MENSAGELO_BASE_URL}
+      SOURCE_API_KEY: ${MENSAGELO_API_KEY}
+      HTTP_TIMEOUT_SECONDS: ${ALARMERO_HTTP_TIMEOUT_SECONDS}
+      POLL_INTERVAL_SECONDS: ${ALARMERO_POLL_INTERVAL_SECONDS}
+    volumes:
+      - ./volumes/alarmero-service:/app/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8094:8094"
+    networks:
+      - backend
+      - edge
+
   charito-service:
     pids_limit: 256
     logging: *default-logging
@@ -207,23 +242,6 @@
       - .env
     ports:
       - "127.0.0.1:8086:8086"
-    restart: unless-stopped
-    networks:
-      - backend
-      - edge
-
-  scada-citec-service:
-    pids_limit: 256
-    logging: *default-logging
-    build:
-      context: .
-      dockerfile: scada-citec-service/Dockerfile
-    image: comunic-mon-scada-citec-service:1.0.0
-    container_name: comunic-mon-scada-citec-service
-    env_file:
-      - .env
-    ports:
-      - "127.0.0.1:8094:8094"
     restart: unless-stopped
     networks:
       - backend

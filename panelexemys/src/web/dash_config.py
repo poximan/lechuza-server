@@ -24,7 +24,6 @@ from src.web.charito import get_charito_layout, register_charito_callbacks
 
 api_key = config.MENSAGELO_API_KEY
 BASE = "/dash"
-COOKIE_NAME = "panelexemys_mode"
 MODE_SECURE = "secure"
 MODE_PROTECTED = "protected"
 
@@ -41,11 +40,9 @@ NAV_TABS = (
 
 
 def _current_mode() -> str:
-    """Lee la cookie panelexemys_mode para determinar el modo activo."""
-    if has_request_context():
-        cookie_value = request.cookies.get(COOKIE_NAME, MODE_SECURE)
-        if cookie_value == MODE_PROTECTED:
-            return MODE_PROTECTED
+    """Lee el modo autenticado e inyectado por el gateway."""
+    if has_request_context() and request.headers.get("X-Edge-Mode") == MODE_PROTECTED:
+        return MODE_PROTECTED
     return MODE_SECURE
 
 
@@ -57,7 +54,7 @@ def _build_nav_links(mode: str) -> list:
             continue
         class_name = "nav-link nav-link-protected" if protected else "nav-link"
         links.append(dcc.Link(label, href=href, className=class_name))
-    links.append(html.A("Salir", href="/", className="nav-link nav-link-logout"))
+    links.append(html.A("Salir", href="/logout", className="nav-link nav-link-logout"))
     return links
 
 
@@ -150,14 +147,22 @@ def configure_dash_app(
 
         return html.Div("Ruta no encontrada", className="error-page")
 
+    protected_callback_outputs: set[str] = set()
+
+    def register_protected_callbacks(register_callback, *args) -> None:
+        previous_outputs = set(app.callback_map)
+        register_callback(app, *args)
+        protected_callback_outputs.update(set(app.callback_map) - previous_outputs)
+
     register_dashboard_callbacks(app)
     register_kpi_panel_callbacks(app, config)
     register_controls_and_graph_callbacks(app)
     register_main_data_table_callbacks(app)
-    register_reles_micom_callbacks(app)
+    register_protected_callbacks(register_reles_micom_callbacks)
     register_generadores_callbacks(app)
     register_email_callbacks(app, api_key)
-    register_mensagelo_callbacks(app)
-    register_broker_callbacks(app)
+    register_protected_callbacks(register_mensagelo_callbacks)
+    register_protected_callbacks(register_broker_callbacks)
     register_proxmox_callbacks(app)
     register_charito_callbacks(app)
+    app.server.config["PROTECTED_DASH_OUTPUTS"] = frozenset(protected_callback_outputs)

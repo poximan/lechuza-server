@@ -8,6 +8,7 @@ RPC sobre MQTT.
 """
 
 import json
+import uuid
 from typing import Optional, Tuple
 from src.control.bounded_work_queue import BoundedWorkQueue
 from src.logger import Logosaurio
@@ -313,6 +314,12 @@ class MqttRequestRouter:
                 body=body,
 
                 message_type="maintenance_test",
+
+                idempotency_key=str(
+
+                    uuid.uuid5(uuid.NAMESPACE_URL, f"panelexemys:mqtt:{corr}")
+
+                ),
 
             )
 

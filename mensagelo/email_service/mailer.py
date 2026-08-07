@@ -1,7 +1,6 @@
 import smtplib
 from email.mime.text import MIMEText
 from typing import List
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from . import config
 
 class SmtpError(Exception):
@@ -14,12 +13,6 @@ def _build_message(subject: str, body: str, sender: str, recipients: List[str]) 
     msg["To"] = ", ".join(recipients)
     return msg
 
-@retry(
-    retry=retry_if_exception_type(SmtpError),
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    reraise=True,
-)
 def send_email(recipients: List[str], subject: str, body: str) -> None:
     if not config.SMTP_SERVER:
         raise SmtpError("SMTP_SERVER no configurado")

@@ -11,4 +11,4 @@ class SendResponse(BaseModel):
     ok: bool
     queued: bool = False
     message: str
-    id: Optional[str] = None  # si quisieras asignar IDs de cola en el futuro.
+    id: Optional[str] = None

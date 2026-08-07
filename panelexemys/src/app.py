@@ -1,4 +1,5 @@
 # src/app.py
+import hmac
 import os
 import threading
 import time
@@ -16,6 +17,7 @@ from src.servicios.email.estado_email import start_email_health_monitor
 from src.alarmas.notif_manager import NotifManager
 from src.logger import Logosaurio
 from src.control.bounded_key_registry import BoundedKeyRegistry
+from src.dao.dao_alarm_incidents import alarm_incidents_dao
 import config
 
 
@@ -80,6 +82,20 @@ server = app.server
 server.wsgi_app = ProxyFix(server.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 
+@server.get("/internal/alarms")
+def alarm_lifecycle_snapshot():
+    """Expone el ciclo de vida; panelexemys conserva su propiedad y su SQLite."""
+    supplied_key = request.headers.get("X-API-Key", "")
+    if not hmac.compare_digest(supplied_key, config.MENSAGELO_API_KEY):
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        after_event_id = int(request.args.get("after_event_id", "0"))
+        event_limit = int(request.args.get("event_limit", "1000"))
+    except ValueError:
+        return jsonify({"error": "invalid_pagination"}), 400
+    return jsonify(alarm_incidents_dao.snapshot(after_event_id, event_limit))
+
+
 @server.before_request
 def log_user_ip():
     """
@@ -102,6 +118,9 @@ def log_user_ip():
                     origin="APP/DASH",
                 )
             return jsonify({"error": "callback_contract_invalid"}), 409
+        protected_outputs = server.config.get("PROTECTED_DASH_OUTPUTS", frozenset())
+        if output in protected_outputs and request.headers.get("X-Edge-Mode") != "protected":
+            return jsonify({"error": "protected_mode_required"}), 403
 
 
 mqtt_client_manager = MqttClientManager(logger_app)
@@ -211,6 +230,5 @@ if __name__ == "__main__":
         host=APP_HOST,
         port=APP_PORT,
     )
-
 
 
