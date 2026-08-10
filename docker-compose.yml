@@ -253,6 +253,7 @@ name: comunic-mon
 
 networks:
   backend:
+    name: comunic-mon-backend-net
     driver: bridge
   edge:
     name: servicoop-edge-net

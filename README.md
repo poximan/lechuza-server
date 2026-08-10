@@ -20,6 +20,10 @@ La frontera HTTP pertenece a `servicoop/platform/edge-platform`. El DNS externo 
 
 Los servicios publicables se conectan a `servicoop-edge-net`. Esta red pertenece a `platform`; este Compose solo la consume como `external: true`. Desplegar primero `platform/docker-compose.yml` y no crear la red manualmente.
 
+La comunicacion privada entre servicios usa la red explicita
+`comunic-mon-backend-net`; el despliegue no depende del nombre automatico de
+Compose.
+
 ## Integraciones
 
 - `panelexemys` consume las APIs internas de los demas servicios.
