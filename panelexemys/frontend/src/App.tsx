@@ -1,27 +1,28 @@
-import { AppShell, StatusBadge } from "@servicoop/frontend-foundation";
+import { AppShell } from "@servicoop/frontend-foundation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import styles from "./App.module.css";
 import { PanelexemysApiClient } from "./PanelexemysApiClient";
-import { DataView } from "./components/DataView";
-import { OverviewPage } from "./components/OverviewPage";
-import { PageActions } from "./components/PageActions";
+import { PageErrorBoundary } from "./components/PageErrorBoundary";
+import { PageRenderer } from "./pages/PageRenderer";
 import type { JsonRecord, NavigationContract } from "./models";
 
 const PAGE_TITLES: Record<string, string> = {
-  overview: "Middleware Exemys",
-  charito: "Charito",
-  generadores: "Generadores",
-  proxmox: "Proxmox",
-  reles: "Relés MiCOM",
-  mantenimiento: "Mantenimiento",
-  mensagelo: "Mensagelo",
-  broker: "Broker MQTT",
-  email: "Estado de correo",
+  overview: "middleware exemys",
+  charito: "charo-daemon",
+  generadores: "generadores",
+  proxmox: "proxmox",
+  reles: "estado reles MiCOM",
+  mantenimiento: "mantenimiento",
+  mensagelo: "mensagelo",
+  broker: "broker mqtt",
+  email: "estado de correo",
 };
 
 function currentPage(): string {
-  const segment = window.location.pathname.replace(/^\/panelexemys\/?/, "").split("/")[0];
+  const segment = window.location.pathname
+    .replace(/^\/panelexemys\/?/, "")
+    .split("/")[0];
   return segment || "overview";
 }
 
@@ -30,21 +31,49 @@ export function App() {
   const page = currentPage();
   const [navigation, setNavigation] = useState<NavigationContract | null>(null);
   const [data, setData] = useState<JsonRecord | null>(null);
+  const [dataRevision, setDataRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const generatorAlarm =
+    page === "generadores" &&
+    data !== null &&
+    [data.estivariz, data.fontana].some((raw) => {
+      if (raw === null || typeof raw !== "object" || Array.isArray(raw))
+        return false;
+      const generator = raw as JsonRecord;
+      const line = generator.interruptor_linea;
+      const group = generator.interruptor_grupo;
+      if (
+        line === null ||
+        typeof line !== "object" ||
+        Array.isArray(line) ||
+        group === null ||
+        typeof group !== "object" ||
+        Array.isArray(group)
+      )
+        return false;
+      const lineBit = (line as JsonRecord).bit;
+      const groupBit = (group as JsonRecord).bit;
+      return (lineBit === 0 || lineBit === 1) && lineBit === groupBit;
+    });
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [nextNavigation, nextData] = await Promise.all([
-        client.navigation(signal),
-        client.page(page, signal),
-      ]);
-      setNavigation(nextNavigation);
-      setData(nextData);
-      setError(null);
-    } catch (reason) {
-      if (!signal?.aborted) setError(reason instanceof Error ? reason.message : String(reason));
-    }
-  }, [client, page]);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const [nextNavigation, nextData] = await Promise.all([
+          client.navigation(signal),
+          client.page(page, signal),
+        ]);
+        setNavigation(nextNavigation);
+        setData(nextData);
+        setDataRevision((current) => current + 1);
+        setError(null);
+      } catch (reason) {
+        if (!signal?.aborted)
+          setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    },
+    [client, page],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,25 +82,62 @@ export function App() {
       () => void load(controller.signal),
       navigation?.refresh_ms ?? 10_000,
     );
-    return () => { controller.abort(); window.clearInterval(timer); };
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
   }, [load, navigation?.refresh_ms]);
 
   return (
     <AppShell productName="Panelexemys" sectionName="Comunicaciones">
       <main className={styles.main}>
         <header className={styles.header}>
-          <div><p>lechuza-server</p><h1>{PAGE_TITLES[page] ?? "Panelexemys"}</h1><span>Supervisión operativa centralizada</span></div>
-          <StatusBadge tone={navigation?.mode === "protected" ? "warning" : "info"}>{navigation?.mode ?? "cargando"}</StatusBadge>
+          <h1
+            className={generatorAlarm ? styles.generatorTitleAlarm : undefined}
+          >
+            {PAGE_TITLES[page] ?? "Panelexemys"}
+          </h1>
         </header>
 
         <nav className={styles.navigation} aria-label="Secciones Panelexemys">
-          {navigation?.items.map((item) => <a className={window.location.pathname.replace(/\/$/, "") === item.href ? styles.active : undefined} href={`${item.href}/`} key={item.href}>{item.label}</a>)}
+          {navigation?.items.map((item) => (
+            <a
+              className={
+                window.location.pathname.replace(/\/$/, "") === item.href
+                  ? styles.active
+                  : undefined
+              }
+              href={`${item.href}/`}
+              key={item.href}
+            >
+              {item.label}
+            </a>
+          ))}
         </nav>
 
-        {error && <div className={styles.error} role="alert"><strong>No se pudo actualizar la vista.</strong><span>{error}</span></div>}
-        {!data && !error && <p className={styles.loading}>Cargando estado operativo…</p>}
-        {data && <PageActions client={client} data={data} onChanged={() => load()} page={page} />}
-        {data && (page === "overview" ? <OverviewPage client={client} data={data} /> : <DataView data={data} />)}
+        {error && (
+          <div className={styles.error} role="alert">
+            <strong>No se pudo actualizar la vista.</strong>
+            <span>{error}</span>
+          </div>
+        )}
+        {!data && !error && (
+          <p className={styles.loading}>Cargando estado operativo…</p>
+        )}
+        {data && (
+          <PageErrorBoundary
+            className={styles.error}
+            resetToken={`${page}-${dataRevision}`}
+          >
+            <PageRenderer
+              client={client}
+              data={data}
+              onChanged={() => load()}
+              page={page}
+              protectedMode={navigation?.mode === "protected"}
+            />
+          </PageErrorBoundary>
+        )}
       </main>
     </AppShell>
   );

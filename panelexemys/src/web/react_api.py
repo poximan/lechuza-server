@@ -13,7 +13,11 @@ from src.servicios.email.mensagelo_attempt_log import get_mensagelo_attempts
 from src.servicios.email.mensagelo_client import MensageloClient
 from src.servicios.mqtt import mqtt_event_bus
 from src.utils import timebox
-from src.utils.paths import load_observar
+from src.utils.paths import (
+    load_observar,
+    load_proxmox_view_preference,
+    update_proxmox_view_preference,
+)
 from src.web.clients.charito_client import CharitoClient
 from src.web.clients.modbus_client import modbus_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
@@ -38,6 +42,7 @@ class ReactApi:
         self.blueprint.get("/charito")(self.charito_state)
         self.blueprint.get("/generadores")(self.generator_state)
         self.blueprint.get("/proxmox")(self.proxmox_state)
+        self.blueprint.put("/proxmox/view")(self.set_proxmox_view)
         self.blueprint.get("/reles")(self.reles_state)
         self.blueprint.put("/reles/observer")(self.set_reles_observer)
         self.blueprint.get("/mantenimiento")(self.maintenance)
@@ -66,10 +71,24 @@ class ReactApi:
 
     def overview(self) -> Any:
         def load() -> dict[str, Any]:
+            try:
+                modem = modem_link_monitor_client.get_status()
+            except Exception as exc:
+                modem = {
+                    "ip": None,
+                    "port": None,
+                    "state": "desconocido",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
             return {
+                "reference_now": timebox.utc_iso(),
                 "summary": modbus_client.get_summary(),
                 "descriptions": modbus_client.get_descriptions(),
-                "modem": modem_link_monitor_client.get_status(),
+                "modem": modem,
+                "thresholds": {
+                    "red_below": config.GLOBAL_THRESHOLD_ROJO,
+                    "yellow_below": config.GLOBAL_THRESHOLD_AMARILLO,
+                },
                 "links": {
                     "external_check": config.MODEM_EXTERNAL_CHECK_URL,
                     "modem_admin": config.MODEM_ADMIN_URL,
@@ -107,20 +126,58 @@ class ReactApi:
         return self._response(self.charito.get_state)
 
     def generator_state(self) -> Any:
-        return self._response(
-            lambda: {
-                "estivariz": modbus_client.get_ge_edif_estivariz_status(),
-                "fontana": modbus_client.get_ge_edif_fontana_status(),
+        def load_source(operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+            try:
+                return operation()
+            except Exception as exc:
+                return {
+                    "interruptor_linea": {"estado": "desconocido", "bit": None},
+                    "interruptor_grupo": {"estado": "desconocido", "bit": None},
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+
+        return jsonify(
+            {
+                "estivariz": load_source(modbus_client.get_ge_edif_estivariz_status),
+                "fontana": load_source(modbus_client.get_ge_edif_fontana_status),
             }
         )
 
     def proxmox_state(self) -> Any:
-        return self._response(
-            lambda: {
-                "state": self.proxmox.get_state(),
-                "history": self.proxmox.get_history(),
+        state: dict[str, Any] | None = None
+        history: dict[str, Any] | None = None
+        state_error: str | None = None
+        history_error: str | None = None
+        try:
+            state = self.proxmox.get_state()
+        except Exception as exc:
+            state_error = f"{type(exc).__name__}: {exc}"
+        try:
+            history = self.proxmox.get_history()
+        except Exception as exc:
+            history_error = f"{type(exc).__name__}: {exc}"
+        return jsonify(
+            {
+                "state": state,
+                "state_error": state_error,
+                "history": history,
+                "history_error": history_error,
+                "view": load_proxmox_view_preference("historico"),
             }
         )
+
+    def set_proxmox_view(self) -> Any:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or body.get("view") not in {"vivo", "historico"}:
+            return jsonify({"error": "view debe ser 'vivo' o 'historico'"}), 400
+        view = str(body["view"])
+
+        def save() -> dict[str, Any]:
+            if not update_proxmox_view_preference(view):
+                raise RuntimeError("no se pudo persistir la vista de Proxmox")
+            return {"saved": True, "view": view}
+
+        return self._response(save)
 
     def reles_state(self) -> Any:
         denied = self._require_protected()
@@ -233,7 +290,16 @@ class ReactApi:
                 message_type="maintenance_test",
                 idempotency_key=str(uuid.uuid4()),
             )
-            mqtt_event_bus.publish_email_event(subject=subject, ok=ok)
-            return {"ok": ok, "recipients": recipient, "detail": detail}
+            event_error = None
+            try:
+                mqtt_event_bus.publish_email_event(subject=subject, ok=ok)
+            except Exception as exc:
+                event_error = f"{type(exc).__name__}: {exc}"
+            return {
+                "ok": ok,
+                "recipients": recipient,
+                "detail": detail,
+                "event_error": event_error,
+            }
 
         return self._response(send)

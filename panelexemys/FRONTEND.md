@@ -28,3 +28,22 @@ visibles para ese modo, ademas del intervalo de actualizacion obligatorio.
 
 Los modulos bajo `src/web/clients` son los adaptadores HTTP consumidos por Flask;
 no contienen presentacion ni estado operativo propio.
+
+## Vistas operativas
+
+- `dash exemys`: estado del modem, gauge, semaforo, desconectados, historico con
+  paginacion y zoom, y ultimas caidas por GRD.
+- `charito`: salud, CPU, memoria, temperatura, interfaces IPv4 y procesos vigilados
+  por instancia.
+- `generadores`: unifilares de Estivariz y Fontana, estados de interruptores y
+  alarmas de barra.
+- `proxmox`: vista viva e historica por VM, con preferencia persistida por el backend.
+- `correo`: vista directa de chequeos SMTP y ping; el envio de prueba requiere el modo protegido.
+- `reles MiCOM`: observacion persistente y ultima falla de cada rele activo.
+- `mantenimiento`: topologia HTTP, lineas telefonicas y mapeo de puertos.
+- `mensagelo`: ultimos diez intentos de envio conservados por el proceso.
+- `broker`: conexion, KPI de trafico, topicos, actores, rankings y eventos recientes.
+
+No existe un renderizador generico de objetos JSON: cada pagina valida su contrato y
+presenta componentes propios del dominio. Los errores de contrato quedan aislados en
+la pagina afectada y se reintentan al recibir el siguiente snapshot.

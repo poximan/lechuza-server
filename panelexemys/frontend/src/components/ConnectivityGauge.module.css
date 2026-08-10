@@ -1,0 +1,42 @@
+.gauge {
+  position: relative;
+  width: min(100%, 14rem);
+  margin: 0 auto;
+}
+.gauge svg {
+  display: block;
+  width: 100%;
+}
+.gauge path {
+  fill: none;
+  stroke-linecap: butt;
+  stroke-width: 18;
+}
+.base {
+  stroke: var(--sc-color-border);
+}
+.red {
+  stroke: var(--sc-color-danger);
+}
+.yellow {
+  stroke: var(--sc-color-warning);
+}
+.green {
+  stroke: var(--sc-color-success);
+}
+.needle {
+  stroke: var(--sc-color-text);
+  stroke-linecap: round;
+  stroke-width: 4;
+}
+.hub {
+  fill: var(--sc-color-text);
+}
+.gauge strong {
+  position: absolute;
+  right: 0;
+  bottom: 0.15rem;
+  left: 0;
+  font-size: var(--sc-font-size-xl);
+  text-align: center;
+}

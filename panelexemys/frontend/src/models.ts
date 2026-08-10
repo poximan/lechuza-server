@@ -1,4 +1,10 @@
-export type JsonValue = string | number | boolean | null | JsonRecord | JsonValue[];
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonRecord
+  | JsonValue[];
 export type JsonRecord = { [key: string]: JsonValue };
 
 export interface NavigationItem {

@@ -1,0 +1,529 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-space-4);
+}
+.gridThree {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sc-space-3);
+}
+.card {
+  min-width: 0;
+}
+.cardHeader,
+.toolbar,
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc-space-3);
+}
+.cardHeader {
+  margin-bottom: var(--sc-space-3);
+}
+.cardHeader h2,
+.cardHeader h3,
+.cardHeader p,
+.sectionTitle {
+  margin: 0;
+}
+.subtitle,
+.muted {
+  color: var(--sc-color-text-muted);
+}
+.stack {
+  display: grid;
+  gap: var(--sc-space-3);
+}
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--sc-space-2);
+}
+.metric {
+  display: grid;
+  gap: var(--sc-space-1);
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+.metric span {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}
+.metric strong {
+  overflow-wrap: anywhere;
+  font-size: var(--sc-font-size-lg);
+}
+.progressBlock {
+  display: grid;
+  gap: var(--sc-space-1);
+}
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sc-space-2);
+}
+.progressTrack {
+  height: 0.65rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sc-color-border);
+}
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sc-color-primary);
+}
+.progressWarning {
+  background: var(--sc-color-warning);
+}
+.progressDanger {
+  background: var(--sc-color-danger);
+}
+.chipGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--sc-space-2);
+}
+.chip {
+  display: grid;
+  gap: 0.25rem;
+  padding: var(--sc-space-2);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+.chipOk {
+  border-color: var(--sc-color-success);
+}
+.chipBad {
+  border-color: var(--sc-color-danger);
+}
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th,
+.table td {
+  padding: var(--sc-space-2) var(--sc-space-3);
+  border-bottom: 1px solid var(--sc-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+.table th {
+  background: var(--sc-color-surface-raised);
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.preWrap {
+  min-width: 15rem;
+  white-space: pre-wrap;
+}
+.error {
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-danger);
+  border-radius: var(--sc-radius-md);
+  color: var(--sc-color-danger);
+}
+.success {
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-success);
+  border-radius: var(--sc-radius-md);
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-space-2);
+}
+.toggle input {
+  width: 2.8rem;
+  height: 1.4rem;
+  accent-color: var(--sc-color-primary);
+}
+.topicCloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sc-space-2);
+}
+.topicCloud code {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  color: var(--sc-color-primary);
+  background: var(--sc-color-surface-raised);
+}
+.diagram {
+  width: 100%;
+  min-height: 22rem;
+}
+.diagram text {
+  fill: var(--sc-color-text);
+  font-family: var(--sc-font-sans);
+}
+.diagramWire {
+  stroke: var(--sc-color-text-muted);
+  stroke-width: 4;
+  fill: none;
+}
+.diagramBus {
+  stroke: var(--sc-color-text);
+  stroke-width: 8;
+  fill: none;
+}
+.diagramNode {
+  fill: var(--sc-color-surface-raised);
+  stroke: var(--sc-color-border);
+  stroke-width: 3;
+}
+.alarmCard {
+  border-color: var(--sc-color-danger);
+  box-shadow: 0 0 0 1px var(--sc-color-danger);
+}
+.resourceGauge {
+  --resource-value: 0deg;
+  position: relative;
+  display: grid;
+  place-content: center;
+  width: 8rem;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--sc-color-primary) var(--resource-value),
+    var(--sc-color-border) 0
+  );
+  text-align: center;
+}
+.resourceGauge::before {
+  position: absolute;
+  inset: 0.7rem;
+  border-radius: 50%;
+  background: var(--sc-color-surface);
+  content: "";
+}
+.resourceGauge span,
+.resourceGauge strong {
+  position: relative;
+  z-index: 1;
+}
+.resourceGauge span {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}
+.resourceGauge strong {
+  font-size: var(--sc-font-size-xl);
+}
+.phoneList {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.phoneList li {
+  margin: 0.35rem 0;
+}
+.chart {
+  width: 100%;
+  min-height: 12rem;
+}
+.chart polyline {
+  fill: none;
+  stroke: var(--sc-color-primary);
+  stroke-width: 3;
+}
+.chartArea {
+  fill: color-mix(in srgb, var(--sc-color-primary) 18%, transparent);
+}
+.chartGrid {
+  stroke: var(--sc-color-border);
+  stroke-width: 1;
+}
+.chartLabel {
+  fill: var(--sc-color-text-muted);
+  font-size: 11px;
+}
+.emailHealthGrid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sc-space-4);
+  margin-top: var(--sc-space-3);
+}
+.emailHealthItem {
+  display: flex;
+  flex: 1 1 16.25rem;
+  flex-direction: column;
+  min-width: 13.75rem;
+  padding: var(--sc-space-3) var(--sc-space-4);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+.healthOk {
+  color: var(--sc-color-success);
+  text-transform: uppercase;
+}
+.healthBad {
+  color: var(--sc-color-danger);
+  text-transform: uppercase;
+}
+.emailAction {
+  display: grid;
+  justify-items: center;
+  gap: var(--sc-space-3);
+  margin-top: var(--sc-space-5);
+  text-align: center;
+}
+.relayControls {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-space-3);
+  margin-bottom: var(--sc-space-4);
+}
+.relayGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.25rem;
+}
+.relayGrid > article {
+  padding: var(--sc-space-4);
+}
+.brokerCommandBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc-space-4);
+}
+.brokerCommandMain {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-space-3);
+}
+.proxmoxToolbar {
+  display: grid;
+  justify-items: center;
+  gap: var(--sc-space-2);
+  text-align: center;
+}
+.proxmoxToolbar p {
+  margin: 0;
+}
+.proxmoxLastUpdate {
+  color: var(--sc-color-text-muted);
+}
+.proxmoxViewControl {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: var(--sc-space-3);
+  margin-top: var(--sc-space-2);
+}
+.proxmoxCardTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.proxmoxCardTitle p {
+  margin: 0.125rem 0 0;
+}
+.proxmoxStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-space-2);
+  font-size: var(--sc-font-size-sm);
+  font-weight: 700;
+}
+.proxmoxStatus i {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 0.3rem color-mix(in srgb, currentColor 12%, transparent);
+}
+.proxmoxStatusRunning {
+  color: var(--sc-color-success);
+}
+.proxmoxStatusStopped {
+  color: var(--sc-color-danger);
+}
+.proxmoxStatusUnknown {
+  color: var(--sc-color-text-muted);
+}
+.proxmoxGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(26.25rem, 1fr));
+  gap: 1.5rem;
+  margin-top: var(--sc-space-4);
+}
+.proxmoxCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc-space-4);
+  padding: 1.375rem;
+  border-radius: 0.875rem;
+}
+.charitoLastUpdate {
+  color: var(--sc-color-text-muted);
+}
+.charitoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22.5rem, 1fr));
+  gap: 1.5rem;
+  margin-top: var(--sc-space-4);
+}
+.charitoCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.375rem;
+  border-radius: 1.125rem;
+  color: #f8f9fb;
+  background: #292b38;
+  box-shadow: 0 0.625rem 1.875rem rgba(0, 0, 0, 0.35);
+}
+.charitoCardStale {
+  border: 1px solid rgba(231, 76, 60, 0.4);
+}
+.charitoHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sc-space-4);
+}
+.charitoStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc-space-2);
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--sc-radius-pill);
+  color: #6cff9d;
+  background: rgba(39, 174, 96, 0.14);
+  font-size: var(--sc-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.charitoStatusOffline {
+  color: #ff8b82;
+  background: rgba(231, 76, 60, 0.14);
+}
+.charitoStatusDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+.charitoProgressGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-space-4);
+}
+.charitoTemperature {
+  display: grid;
+  gap: var(--sc-space-1);
+  padding: var(--sc-space-3);
+  border-radius: var(--sc-radius-md);
+  background: rgba(255, 255, 255, 0.06);
+}
+.charitoTemperature span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--sc-font-size-sm);
+}
+.charitoTemperature strong {
+  font-size: var(--sc-font-size-lg);
+}
+.charitoTile {
+  display: grid;
+  gap: 0.25rem;
+  padding: var(--sc-space-3);
+  border-radius: var(--sc-radius-md);
+  color: #fff;
+}
+.charitoTileOk {
+  background: #207544;
+}
+.charitoTileBad {
+  background: #9f2f2f;
+}
+.charitoTileUnknown {
+  background: #505567;
+}
+.generatorsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1.125rem;
+  margin-bottom: 2rem;
+}
+.generatorStateChip {
+  flex: 1;
+  padding: 0.625rem 0.75rem;
+  border-left: 0.35rem solid;
+  border-radius: var(--sc-radius-sm);
+  background: var(--sc-color-surface-raised);
+  font-weight: 700;
+}
+.generatorStateClosed {
+  border-color: var(--sc-color-danger);
+}
+.generatorStateOpen {
+  border-color: var(--sc-color-success);
+}
+.generatorStateUnknown {
+  border-color: var(--sc-color-text-muted);
+}
+.phoneGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-space-4);
+}
+.phoneGeneral {
+  margin-top: var(--sc-space-4);
+}
+.topologyViewport {
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.topologyViewport svg {
+  transition: transform 0.18s ease;
+  transform-origin: center;
+}
+.topologyViewport:hover svg {
+  transform: scale(1.35);
+}
+@media (max-width: 70rem) {
+  .gridThree {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 46rem) {
+  .grid,
+  .gridThree,
+  .relayGrid,
+  .phoneGrid {
+    grid-template-columns: 1fr;
+  }
+  .proxmoxGrid,
+  .charitoGrid {
+    grid-template-columns: 1fr;
+  }
+  .brokerCommandBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .cardHeader,
+  .toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

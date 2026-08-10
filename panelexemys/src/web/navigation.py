@@ -9,11 +9,10 @@ class PanelexemysNavigation:
     protected_mode = "protected"
 
     _items = (
-        ("panel Exemys", "/panelexemys", False),
+        ("dash exemys", "/panelexemys", False),
         ("charito", "/panelexemys/charito", False),
         ("generadores", "/panelexemys/generadores", False),
         ("proxmox", "/panelexemys/proxmox", False),
-        ("correo", "/panelexemys/email", False),
         ("reles MiCOM", "/panelexemys/reles", True),
         ("mantenimiento", "/panelexemys/mantenimiento", True),
         ("mensagelo", "/panelexemys/mensagelo", True),
