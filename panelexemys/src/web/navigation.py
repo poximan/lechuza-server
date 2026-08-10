@@ -1,20 +1,23 @@
 from flask import has_request_context, request
 
+import config
+
 
 class PanelexemysNavigation:
-    base_path = "/dash"
+    base_path = "/panelexemys"
     secure_mode = "secure"
     protected_mode = "protected"
 
     _items = (
-        ("dash exemys", "/dash", False),
-        ("charito", "/dash/charito", False),
-        ("generadores", "/dash/generadores", False),
-        ("proxmox", "/dash/proxmox", False),
-        ("reles MiCOM", "/dash/reles", True),
-        ("mantenimiento", "/dash/mantenimiento", True),
-        ("mensagelo", "/dash/mensagelo", True),
-        ("broker", "/dash/broker", True),
+        ("panel Exemys", "/panelexemys", False),
+        ("charito", "/panelexemys/charito", False),
+        ("generadores", "/panelexemys/generadores", False),
+        ("proxmox", "/panelexemys/proxmox", False),
+        ("correo", "/panelexemys/email", False),
+        ("reles MiCOM", "/panelexemys/reles", True),
+        ("mantenimiento", "/panelexemys/mantenimiento", True),
+        ("mensagelo", "/panelexemys/mensagelo", True),
+        ("broker", "/panelexemys/broker", True),
     )
 
     def current_mode(self) -> str:
@@ -31,6 +34,7 @@ class PanelexemysNavigation:
         return {
             "base_path": self.base_path,
             "mode": mode,
+            "refresh_ms": config.PANELEXEMYS_REFRESH_MS,
             "items": [
                 {"label": label, "href": href, "protected": protected}
                 for label, href, protected in self.visible_items(mode)

@@ -3,10 +3,10 @@ import hmac
 import os
 import threading
 import time
-from flask import jsonify, request
+from pathlib import Path
+
+from flask import Flask, jsonify, redirect, request, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
-import dash
-from .web import dash_config
 
 from src.servicios.mqtt.mqtt_client_manager import MqttClientManager
 
@@ -16,9 +16,8 @@ from src.servicios.mqtt.mqtt_rpc import MqttRequestRouter
 from src.servicios.email.estado_email import start_email_health_monitor
 from src.alarmas.notif_manager import NotifManager
 from src.logger import Logosaurio
-from src.control.bounded_key_registry import BoundedKeyRegistry
 from src.dao.dao_alarm_incidents import alarm_incidents_dao
-from src.web.navigation import panelexemys_navigation
+from src.web.react_api import ReactApi
 import config
 
 
@@ -34,52 +33,8 @@ USE_RELOADER = False
 AUTO_START_MQTT = True
 _services_lock = threading.Lock()
 _services_started = False
-_rejected_dash_callbacks_logged = BoundedKeyRegistry(256)
-
-# servidor dash
-app = dash.Dash(
-    __name__,
-    routes_pathname_prefix="/dash/",
-    requests_pathname_prefix="/dash/",
-    suppress_callback_exceptions=True,  # opcional pero util en apps multipagina
-)
-app.index_string = """<!DOCTYPE html>
-<html lang="es">
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-    </head>
-    <body class="lechuza-splash-active">
-        <div
-            id="lechuza-splash"
-            class="lechuza-splash"
-            role="status"
-            aria-live="polite"
-            aria-label="Cargando panel de monitoreo"
-        >
-            <div class="lechuza-splash-content">
-                <div class="lechuza-splash-flight" aria-hidden="true">
-                    <img
-                        class="lechuza-splash-logo"
-                        src="__LECHUZA_SPLASH_ICON__"
-                        alt=""
-                    >
-                </div>
-                <p class="lechuza-splash-message">Cargando panel de monitoreo...</p>
-            </div>
-        </div>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-""".replace("__LECHUZA_SPLASH_ICON__", app.get_asset_url("icono.png"))
-server = app.server
+FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
+server = Flask(__name__, static_folder=None)
 server.wsgi_app = ProxyFix(server.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 
@@ -97,12 +52,6 @@ def alarm_lifecycle_snapshot():
     return jsonify(alarm_incidents_dao.snapshot(after_event_id, event_limit))
 
 
-@server.get("/dash/api/navigation")
-def navigation_contract():
-    mode = panelexemys_navigation.current_mode()
-    return jsonify(panelexemys_navigation.contract(mode))
-
-
 @server.before_request
 def log_user_ip():
     """
@@ -115,21 +64,6 @@ def log_user_ip():
             origin="APP/HTTP",
         )
 
-    if request.path.endswith("/_dash-update-component") and request.method == "POST":
-        payload = request.get_json(silent=True) or {}
-        output = payload.get("output")
-        if isinstance(output, str) and output not in app.callback_map:
-            if _rejected_dash_callbacks_logged.add_if_new(output):
-                logger_app.log(
-                    f"Callback Dash rechazado por contrato invalido: {output}",
-                    origin="APP/DASH",
-                )
-            return jsonify({"error": "callback_contract_invalid"}), 409
-        protected_outputs = server.config.get("PROTECTED_DASH_OUTPUTS", frozenset())
-        if output in protected_outputs and request.headers.get("X-Edge-Mode") != "protected":
-            return jsonify({"error": "protected_mode_required"}), 403
-
-
 mqtt_client_manager = MqttClientManager(logger_app)
 
 # exponer manager al event bus de publicaciones
@@ -137,13 +71,23 @@ mqtt_event_bus.set_manager(mqtt_client_manager)
 
 # router rpc mqtt (suscribe y procesa requests en la cola)
 rpc_router = MqttRequestRouter(logger_app, mqtt_client_manager, api_key)
+server.register_blueprint(ReactApi(mqtt_client_manager).blueprint)
 
-# configurar vistas y callbacks dash
-dash_config.configure_dash_app(
-    app,
-    mqtt_client_manager,
-    auto_start_mqtt=AUTO_START_MQTT,
-)
+
+@server.get("/panelexemys")
+def frontend_redirect():
+    return redirect("/panelexemys/", code=308)
+
+
+@server.get("/panelexemys/")
+@server.get("/panelexemys/<path:frontend_path>")
+def frontend(frontend_path: str = ""):
+    if frontend_path.startswith("api/"):
+        return jsonify({"error": "api_route_not_found"}), 404
+    candidate = FRONTEND_DIR / frontend_path
+    if frontend_path and candidate.is_file():
+        return send_from_directory(FRONTEND_DIR, frontend_path)
+    return send_from_directory(FRONTEND_DIR, "index.html")
 
 
 def _load_grd_exclusion_ids(logger: Logosaurio) -> set:
@@ -230,11 +174,10 @@ _start_background_services()
 
 
 if __name__ == "__main__":
-    logger_app.log("Iniciando servidor Dash...", origin="APP")
-    app.run_server(
+    logger_app.log("Iniciando servidor React/Flask...", origin="APP")
+    server.run(
         debug=DEBUG_MODE,
         use_reloader=USE_RELOADER,
         host=APP_HOST,
         port=APP_PORT,
     )
-

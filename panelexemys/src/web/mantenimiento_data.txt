@@ -61,7 +61,7 @@
     {
       "servicio": "panelexemys",
       "interno": "comunic-mon-panelexemys:8052 (http)",
-      "externo_path": "/dash/",
+      "externo_path": "/panelexemys/",
       "localhost": "http://localhost:8052"
     },
     {

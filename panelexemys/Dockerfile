@@ -1,4 +1,19 @@
 # panelexemys/Dockerfile
+FROM node:24.18.0-alpine AS frontend-builder
+
+WORKDIR /workspace/products/comunic-mon/lechuza-server/panelexemys/frontend
+
+COPY --from=frontend-foundation / /workspace/platform/frontend-foundation
+COPY panelexemys/frontend/package.json ./package.json
+COPY panelexemys/frontend/package-lock.json ./package-lock.json
+COPY panelexemys/frontend/tsconfig.json ./tsconfig.json
+COPY panelexemys/frontend/vite.config.ts ./vite.config.ts
+COPY panelexemys/frontend/index.html ./index.html
+COPY panelexemys/frontend/src ./src
+
+RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm run build
+
 FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -29,6 +44,7 @@ RUN groupadd --gid 1000 appgroup && \
 
 COPY panelexemys/src /app/src
 COPY panelexemys/config.py /app/config.py
+COPY --from=frontend-builder /workspace/products/comunic-mon/lechuza-server/panelexemys/frontend/dist /app/frontend
 
 RUN chown -R 1000:1000 /app
 

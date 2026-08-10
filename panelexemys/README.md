@@ -1,16 +1,12 @@
 # panelexemys
 
-## Migracion frontend
-
-La sustitucion progresiva de Dash por React y Vite se define en
-`FRONTEND_MIGRATION.md`. La politica de navegacion ya fue extraida a una fuente
-unica y se expone como contrato de solo lectura en `GET /dash/api/navigation`.
-
-Aplicacion Dash/Flask que presenta el tablero operativo y orquesta alarmas/mensajeria.
+Aplicacion React/Flask que presenta el tablero operativo y orquesta
+alarmas/mensajeria. La arquitectura frontend se detalla en `FRONTEND.md`.
 
 ## Componentes
 
-- Frontend Dash (`src/web/*`) con clientes HTTP en `src/web/clients` para Modbus, Proxmox, router, etc.
+- Frontend React y Vite (`frontend/src`) basado en `platform/frontend-foundation`.
+- API Flask (`src/web/react_api.py`) y clientes HTTP en `src/web/clients` para Modbus, Proxmox, router, etc.
 - Gestor de alarmas (`src/alarmas`) que usa Mensagelo para emails.
 - API interna autenticada `GET /internal/alarms` para que Alarmero consuma estados y eventos sin leer la base.
 - Solapa protegida `mensagelo` con los ultimos diez intentos de envio registrados en memoria del proceso.
@@ -25,9 +21,9 @@ Aplicacion Dash/Flask que presenta el tablero operativo y orquesta alarmas/mensa
 
 ## Variables principales
 
-Ver `config.py`: URLs base (`MODBUS_COLLECTOR_API_BASE`, `PVE_API_BASE`, `MODEM_LINK_MONITOR_URL`), credenciales MQTT (`MQTT_BROKER_*`), destinatarios de alarmas, links del dashboard y hosts del chequeo de correo. Todas deben estar presentes en `.env`.
+Ver `config.py`: URLs base (`MODBUS_COLLECTOR_API_BASE`, `PVE_API_BASE`, `MODEM_LINK_MONITOR_URL`), credenciales MQTT (`MQTT_BROKER_*`), destinatarios de alarmas, links del panel y hosts del chequeo de correo. Todas deben estar presentes en `.env`. El intervalo del frontend se define mediante `PANELEXEMYS_REFRESH_MS`.
 
-Los assets estaticos viven en `src/assets` y el javascript auxiliar en `src/assets/nav-toggle.js`.
+Los assets estaticos se generan desde `frontend/src` durante la construccion del contenedor y se sirven bajo `/panelexemys/`.
 
 ## Contratos vigentes
 

@@ -66,10 +66,10 @@ MODBUS_COLLECTOR_HTTP_TIMEOUT = _req_int("MODBUS_COLLECTOR_HTTP_TIMEOUT")
 MODBUS_HTTP_POLL_SECONDS = _req_int("MODBUS_HTTP_POLL_SECONDS")
 
 # ---------------------------------------------------------
-# --- Dashboard (dash_config) -----------------------------
+# --- Frontend operativo ----------------------------------
 # ---------------------------------------------------------
 PUBLIC_BASE_URL = _req("PUBLIC_BASE_URL").rstrip("/")
-DASH_REFRESH_SECONDS = _req_int("DASH_REFRESH_SECONDS")      # Intervalo unico (ms) para todos los dcc.Interval
+PANELEXEMYS_REFRESH_MS = _req_int("PANELEXEMYS_REFRESH_MS")
 GLOBAL_THRESHOLD_ROJO = _req_int("GLOBAL_THRESHOLD_ROJO")    # Porcentaje debajo del cual conectividad "roja" (0-39)
 GLOBAL_THRESHOLD_AMARILLO = _req_int("GLOBAL_THRESHOLD_AMARILLO")  # Porcentaje debajo del cual conectividad "amarilla" (40-89)
 

@@ -44,6 +44,8 @@
     build:
       context: .
       dockerfile: panelexemys/Dockerfile
+      additional_contexts:
+        frontend-foundation: ../../../platform/frontend-foundation
     image: comunic-mon-panelexemys:1.0.0
     container_name: comunic-mon-panelexemys
     depends_on:
