@@ -2,14 +2,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from timeauthority import get_time_authority
 
 from . import db, sync_worker
 
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
+TIME_AUTHORITY = get_time_authority()
 
 
 @asynccontextmanager
@@ -21,12 +22,6 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Alarmero Service", version="1.0.0", lifespan=lifespan)
-app.mount("/assets", StaticFiles(directory=FRONTEND), name="assets")
-
-
-@app.get("/")
-def index():
-    return FileResponse(FRONTEND / "index.html")
 
 
 @app.get("/api/incidents")
@@ -48,4 +43,11 @@ def dashboard():
 @app.get("/health")
 def health():
     sync = sync_worker.status()
-    return {"status": "ok" if sync["state"] == "ok" else "degraded", "sync": sync}
+    return {
+        "status": "ok" if sync["state"] == "ok" else "degraded",
+        "generated_at": TIME_AUTHORITY.utc_iso(),
+        "sync": sync,
+    }
+
+
+app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="frontend")

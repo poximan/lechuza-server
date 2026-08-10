@@ -1,7 +1,6 @@
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
-from flask import has_request_context, request
 from src.web.clients.modbus_client import modbus_client
 import config
 
@@ -21,37 +20,22 @@ from src.web.broker.broker_view import (
 )
 from src.web.proxmox import get_proxmox_layout, register_proxmox_callbacks
 from src.web.charito import get_charito_layout, register_charito_callbacks
+from src.web.navigation import panelexemys_navigation
 
 api_key = config.MENSAGELO_API_KEY
-BASE = "/dash"
-MODE_SECURE = "secure"
-MODE_PROTECTED = "protected"
-
-NAV_TABS = (
-    ("dash exemys", BASE, False),
-    ("charito", f"{BASE}/charito", False),
-    ("generadores", f"{BASE}/generadores", False),
-    ("proxmox", f"{BASE}/proxmox", False),
-    ("reles MiCOM", f"{BASE}/reles", True),
-    ("mantenimiento", f"{BASE}/mantenimiento", True),
-    ("mensagelo", f"{BASE}/mensagelo", True),
-    ("broker", f"{BASE}/broker", True),
-)
+BASE = panelexemys_navigation.base_path
+MODE_PROTECTED = panelexemys_navigation.protected_mode
 
 
 def _current_mode() -> str:
     """Lee el modo autenticado e inyectado por el gateway."""
-    if has_request_context() and request.headers.get("X-Edge-Mode") == MODE_PROTECTED:
-        return MODE_PROTECTED
-    return MODE_SECURE
+    return panelexemys_navigation.current_mode()
 
 
 def _build_nav_links(mode: str) -> list:
     """Construye la barra de navegacion segun el modo actual."""
     links = []
-    for label, href, protected in NAV_TABS:
-        if protected and mode != MODE_PROTECTED:
-            continue
+    for label, href, protected in panelexemys_navigation.visible_items(mode):
         class_name = "nav-link nav-link-protected" if protected else "nav-link"
         links.append(dcc.Link(label, href=href, className=class_name))
     links.append(html.A("Salir", href="/logout", className="nav-link nav-link-logout"))

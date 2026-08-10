@@ -23,3 +23,11 @@ El contenedor prepara el bind mount `/app/data` al iniciar y luego ejecuta Uvico
 como el usuario sin privilegios `appuser` (UID 1000). Esto permite que SQLite cree
 la base y sus archivos WAL aun cuando Docker haya creado inicialmente el directorio
 del host como `root`.
+
+## Frontend
+
+La interfaz usa React, TypeScript estricto y Vite. Consume
+`@servicoop/frontend-foundation` mediante un contexto Docker adicional limitado a
+`platform/frontend-foundation`; no duplica tokens ni componentes.
+El build genera archivos estáticos relativos para que funcionen detrás de
+`/alarmero/` con strip de prefijo en edge-gateway.

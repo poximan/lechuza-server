@@ -18,6 +18,7 @@ from src.alarmas.notif_manager import NotifManager
 from src.logger import Logosaurio
 from src.control.bounded_key_registry import BoundedKeyRegistry
 from src.dao.dao_alarm_incidents import alarm_incidents_dao
+from src.web.navigation import panelexemys_navigation
 import config
 
 
@@ -94,6 +95,12 @@ def alarm_lifecycle_snapshot():
     except ValueError:
         return jsonify({"error": "invalid_pagination"}), 400
     return jsonify(alarm_incidents_dao.snapshot(after_event_id, event_limit))
+
+
+@server.get("/dash/api/navigation")
+def navigation_contract():
+    mode = panelexemys_navigation.current_mode()
+    return jsonify(panelexemys_navigation.contract(mode))
 
 
 @server.before_request
@@ -230,5 +237,4 @@ if __name__ == "__main__":
         host=APP_HOST,
         port=APP_PORT,
     )
-
 

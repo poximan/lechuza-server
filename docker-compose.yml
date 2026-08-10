@@ -86,6 +86,8 @@
     build:
       context: .
       dockerfile: alarmero-service/Dockerfile
+      additional_contexts:
+        frontend-foundation: ../../../platform/frontend-foundation
     image: comunic-mon-alarmero-service:1.0.0
     container_name: comunic-mon-alarmero-service
     depends_on:

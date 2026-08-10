@@ -1,5 +1,11 @@
 # panelexemys
 
+## Migracion frontend
+
+La sustitucion progresiva de Dash por React y Vite se define en
+`FRONTEND_MIGRATION.md`. La politica de navegacion ya fue extraida a una fuente
+unica y se expone como contrato de solo lectura en `GET /dash/api/navigation`.
+
 Aplicacion Dash/Flask que presenta el tablero operativo y orquesta alarmas/mensajeria.
 
 ## Componentes

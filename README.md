@@ -18,7 +18,7 @@ Stack operativo de Lechuza desplegado desde `docker-compose.yml`.
 
 La frontera HTTP pertenece a `servicoop/platform/edge-platform`. El DNS externo de `comunicaciones.servicoop.com.ar` apunta al router frontera, que reenvia `80/443` al host Docker. `edge-gateway` selecciona los servicios de Lechuza por ruta.
 
-Los servicios publicables se conectan a `servicoop-edge-net`. Esta red pertenece a `edge-platform`; este Compose solo la consume como `external: true`. Desplegar primero `edge-platform` y no crear la red manualmente.
+Los servicios publicables se conectan a `servicoop-edge-net`. Esta red pertenece a `platform`; este Compose solo la consume como `external: true`. Desplegar primero `platform/docker-compose.yml` y no crear la red manualmente.
 
 ## Integraciones
 

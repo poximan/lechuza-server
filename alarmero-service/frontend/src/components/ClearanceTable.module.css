@@ -1,0 +1,46 @@
+.heading {
+  padding: var(--sc-space-4) var(--sc-space-5);
+  border-bottom: 1px solid var(--sc-color-border);
+}
+
+.heading h2,
+.heading p {
+  margin: 0;
+}
+
+.heading p {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.tableWrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableWrap th,
+.tableWrap td {
+  padding: var(--sc-space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--sc-color-border) 65%, transparent);
+  text-align: left;
+}
+
+.tableWrap th {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-xs);
+  text-transform: uppercase;
+}
+
+.tableWrap td {
+  font-size: var(--sc-font-size-sm);
+}
+
+.empty {
+  padding: var(--sc-space-5);
+  color: var(--sc-color-text-muted);
+  text-align: center;
+}

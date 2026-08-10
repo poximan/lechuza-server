@@ -1,70 +1,13 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
   <title>Alarmero</title>
-  <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <p class="eyebrow">lechuza-server</p>
-      <h1>Alarmero</h1>
-      <p class="subtitle">Seguimiento de incidencias y despachos de alarmas</p>
-    </div>
-    <div class="sync" id="sync-state">Sincronizando…</div>
-  </header>
-
-  <main>
-    <section class="kpis" aria-label="Resumen de alarmas">
-      <article><span>Potenciales</span><strong id="count-potential">0</strong></article>
-      <article><span>Activas</span><strong id="count-active">0</strong></article>
-      <article><span>En recuperación</span><strong id="count-recovering">0</strong></article>
-      <article><span>Resueltas</span><strong id="count-resolved">0</strong></article>
-    </section>
-
-    <section class="panel incidents-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Incidencias</h2>
-          <p>El estado pertenece a Panelexemys; el despacho pertenece a Mensagelo.</p>
-        </div>
-        <div class="filters" role="group" aria-label="Filtro de incidencias">
-          <button data-filter="potential">Potenciales</button>
-          <button data-filter="active" class="selected">Activas</button>
-          <button data-filter="all">Todas</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Estado</th><th>Alarma</th><th>Inicio</th><th>Antigüedad</th>
-            <th>Despeje esperado</th><th>Correo</th><th>Destinatarios</th>
-          </tr></thead>
-          <tbody id="incidents-body"></tbody>
-        </table>
-        <p class="empty hidden" id="incidents-empty">No hay incidencias para este filtro.</p>
-      </div>
-    </section>
-
-    <div class="dashboard-grid">
-      <section class="panel">
-        <div class="panel-heading"><div><h2>Más frecuentes</h2><p>Alarmas confirmadas, agrupadas por origen.</p></div></div>
-        <div id="frequent-list" class="ranking"></div>
-      </section>
-      <section class="panel">
-        <div class="panel-heading"><div><h2>Tiempos de despeje</h2><p>Estimación configurada frente a mediana y percentil 90 históricos.</p></div></div>
-        <div class="table-wrap compact">
-          <table>
-            <thead><tr><th>Alarma</th><th>Configurado</th><th>Mediana</th><th>P90</th><th>Muestras</th></tr></thead>
-            <tbody id="clearance-body"></tbody>
-          </table>
-          <p class="empty hidden" id="clearance-empty">Aún no hay incidencias resueltas suficientes.</p>
-        </div>
-      </section>
-    </div>
-  </main>
-  <script src="assets/app.js" defer></script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

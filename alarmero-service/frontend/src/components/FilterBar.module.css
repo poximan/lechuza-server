@@ -1,0 +1,14 @@
+.filters {
+  display: flex;
+  gap: var(--sc-space-2);
+}
+
+@media (max-width: 45rem) {
+  .filters {
+    width: 100%;
+  }
+
+  .filters button {
+    flex: 1;
+  }
+}

@@ -1,3 +1,16 @@
+FROM node:24.18.0-alpine AS frontend-builder
+
+WORKDIR /workspace/products/comunic-mon/lechuza-server/alarmero-service/frontend
+COPY --from=frontend-foundation / /workspace/platform/frontend-foundation
+COPY alarmero-service/frontend/package.json ./package.json
+COPY alarmero-service/frontend/package-lock.json ./package-lock.json
+COPY alarmero-service/frontend/tsconfig.json ./tsconfig.json
+COPY alarmero-service/frontend/vite.config.ts ./vite.config.ts
+COPY alarmero-service/frontend/index.html ./index.html
+COPY alarmero-service/frontend/src ./src
+RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm run build
+
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -18,7 +31,9 @@ RUN pip install --no-compile -r /app/requirements.txt
 RUN groupadd --gid 1000 appgroup && \
     useradd --uid 1000 --gid 1000 --create-home --shell /bin/sh appuser
 COPY alarmero-service/backend /app/backend
-COPY alarmero-service/frontend /app/frontend
+COPY --from=frontend-builder --chown=1000:1000 \
+    /workspace/products/comunic-mon/lechuza-server/alarmero-service/frontend/dist \
+    /app/frontend
 COPY alarmero-service/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chown -R 1000:1000 /app
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
