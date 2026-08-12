@@ -31,3 +31,17 @@ La interfaz usa React, TypeScript estricto y Vite. Consume
 `platform/frontend-foundation`; no duplica tokens ni componentes.
 El build genera archivos estáticos relativos para que funcionen detrás de
 `/alarmero/` con strip de prefijo en edge-gateway.
+
+## Mapa de la vista
+
+Alarmero tiene una sola vista operativa; resumen, incidencias, frecuencia y despejes son secciones del mismo agregado, no pestañas independientes.
+
+| Capa | Fuentes |
+|---|---|
+| Presentación | `frontend/src/App.tsx`, `frontend/src/components/*` |
+| Estado y contrato frontend | `useAlarmeroData.ts`, `AlarmeroApiClient.ts`, `AlarmeroContractParser.ts` |
+| API | `backend/alarm_api.py` |
+| Servicio | `backend/alarm_service.py`, `backend/sync_worker.py` |
+| DAO | `backend/db.py` |
+
+`backend/app.py` solo compone el proceso. La metodología general está en `../../../../metodologia.txt`.

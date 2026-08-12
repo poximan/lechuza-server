@@ -226,13 +226,6 @@
 .resourceGauge strong {
   font-size: var(--sc-font-size-xl);
 }
-.phoneList {
-  margin: 0;
-  padding-left: 1.25rem;
-}
-.phoneList li {
-  margin: 0.35rem 0;
-}
 .chart {
   width: 100%;
   min-height: 12rem;
@@ -482,25 +475,6 @@
 .generatorStateUnknown {
   border-color: var(--sc-color-text-muted);
 }
-.phoneGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sc-space-4);
-}
-.phoneGeneral {
-  margin-top: var(--sc-space-4);
-}
-.topologyViewport {
-  overflow: hidden;
-  cursor: zoom-in;
-}
-.topologyViewport svg {
-  transition: transform 0.18s ease;
-  transform-origin: center;
-}
-.topologyViewport:hover svg {
-  transform: scale(1.35);
-}
 @media (max-width: 70rem) {
   .gridThree {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -509,8 +483,7 @@
 @media (max-width: 46rem) {
   .grid,
   .gridThree,
-  .relayGrid,
-  .phoneGrid {
+  .relayGrid {
     grid-template-columns: 1fr;
   }
   .proxmoxGrid,

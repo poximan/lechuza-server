@@ -10,6 +10,7 @@ COPY panelexemys/frontend/tsconfig.json ./tsconfig.json
 COPY panelexemys/frontend/vite.config.ts ./vite.config.ts
 COPY panelexemys/frontend/index.html ./index.html
 COPY panelexemys/frontend/src ./src
+COPY panelexemys/src/assets ../src/assets
 
 RUN npm ci --ignore-scripts --no-audit --no-fund
 RUN npm run build

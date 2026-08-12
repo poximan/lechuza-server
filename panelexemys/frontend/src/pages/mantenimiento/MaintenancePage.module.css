@@ -1,0 +1,42 @@
+.phoneList {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.phoneList li {
+  margin: 0.35rem 0;
+}
+
+.phoneGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-space-4);
+}
+
+.phoneGeneral {
+  margin-top: var(--sc-space-4);
+}
+
+.topologyViewport {
+  overflow: auto;
+  padding: var(--sc-space-3);
+  border-top: 1px solid var(--sc-color-border);
+  background: var(--sc-color-surface-raised);
+}
+
+.topologyLink {
+  display: block;
+  cursor: zoom-in;
+}
+
+.topologyImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 46rem) {
+  .phoneGrid {
+    grid-template-columns: 1fr;
+  }
+}

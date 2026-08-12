@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "/panelexemys/",
+  publicDir: "../src/assets",
   build: {
     emptyOutDir: true,
     outDir: "dist",

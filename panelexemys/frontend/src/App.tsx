@@ -33,28 +33,7 @@ export function App() {
   const [data, setData] = useState<JsonRecord | null>(null);
   const [dataRevision, setDataRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const generatorAlarm =
-    page === "generadores" &&
-    data !== null &&
-    [data.estivariz, data.fontana].some((raw) => {
-      if (raw === null || typeof raw !== "object" || Array.isArray(raw))
-        return false;
-      const generator = raw as JsonRecord;
-      const line = generator.interruptor_linea;
-      const group = generator.interruptor_grupo;
-      if (
-        line === null ||
-        typeof line !== "object" ||
-        Array.isArray(line) ||
-        group === null ||
-        typeof group !== "object" ||
-        Array.isArray(group)
-      )
-        return false;
-      const lineBit = (line as JsonRecord).bit;
-      const groupBit = (group as JsonRecord).bit;
-      return (lineBit === 0 || lineBit === 1) && lineBit === groupBit;
-    });
+  const [pageAttention, setPageAttention] = useState(false);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -93,7 +72,7 @@ export function App() {
       <main className={styles.main}>
         <header className={styles.header}>
           <h1
-            className={generatorAlarm ? styles.generatorTitleAlarm : undefined}
+            className={pageAttention ? styles.pageTitleAttention : undefined}
           >
             {PAGE_TITLES[page] ?? "Panelexemys"}
           </h1>
@@ -135,6 +114,7 @@ export function App() {
               onChanged={() => load()}
               page={page}
               protectedMode={navigation?.mode === "protected"}
+              onAttentionChange={setPageAttention}
             />
           </PageErrorBoundary>
         )}

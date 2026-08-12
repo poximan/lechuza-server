@@ -13,15 +13,15 @@
   font-size: var(--sc-font-size-2xl);
   text-transform: lowercase;
 }
-.generatorTitleAlarm {
+.pageTitleAttention {
   width: fit-content;
   margin-inline: auto;
   padding: 0.5rem 1.125rem;
   border: 3px solid var(--sc-color-danger);
   border-radius: var(--sc-radius-md);
-  animation: generatorTitleAlert 0.85s infinite;
+  animation: pageTitleAlert 0.85s infinite;
 }
-@keyframes generatorTitleAlert {
+@keyframes pageTitleAlert {
   0%,
   100% {
     box-shadow: 0 0 0 0
@@ -31,9 +31,6 @@
     box-shadow: 0 0 0 0.5rem
       color-mix(in srgb, var(--sc-color-danger) 28%, transparent);
   }
-}
-.muted {
-  color: var(--sc-color-text-muted);
 }
 .navigation {
   display: flex;
@@ -56,128 +53,6 @@
   background: var(--sc-color-surface-raised);
   color: var(--sc-color-primary);
 }
-.overviewKpis {
-  display: grid;
-  grid-template-columns: 3fr 1fr 6fr;
-  align-items: stretch;
-  gap: var(--sc-space-4);
-}
-.overviewGauge,
-.overviewTraffic,
-.overviewDisconnected {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: var(--sc-space-2);
-  text-align: center;
-}
-.overviewGauge h3,
-.overviewTraffic h3,
-.overviewDisconnected h3 {
-  margin: 0;
-  font-size: var(--sc-font-size-lg);
-}
-.overviewFocus {
-  min-width: 0;
-}
-.overviewFocusHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--sc-space-4);
-  padding-bottom: var(--sc-space-3);
-  border-bottom: 1px solid var(--sc-color-border);
-}
-.overviewFocusHeader h2,
-.overviewFocusHeader p,
-.overviewGraphPanel h2 {
-  margin: 0;
-}
-.overviewFocusHeader p {
-  color: var(--sc-color-text-muted);
-}
-.overviewFocusHeader select {
-  width: min(100%, 26rem);
-  min-width: 18rem;
-}
-.overviewFocusBody {
-  display: grid;
-  grid-template-columns: 17.5rem minmax(0, 1fr);
-  gap: var(--sc-space-4);
-  margin-top: var(--sc-space-4);
-}
-.overviewControlsPanel,
-.overviewGraphPanel {
-  min-width: 0;
-  padding: var(--sc-space-4);
-  border: 1px solid var(--sc-color-border);
-  border-radius: var(--sc-radius-md);
-  background: var(--sc-color-surface);
-}
-.overviewControlsPanel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sc-space-3);
-}
-.overviewTimeButtons,
-.overviewPagination {
-  display: flex;
-  gap: var(--sc-space-2);
-}
-.overviewTimeButtons > *,
-.overviewPagination > * {
-  flex: 1;
-}
-.overviewGraphPanel h2 {
-  margin-bottom: var(--sc-space-3);
-  text-align: center;
-  font-size: var(--sc-font-size-lg);
-}
-.sectionHeading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sc-space-3);
-  margin-bottom: var(--sc-space-3);
-}
-.sectionHeading h2,
-.sectionHeading p {
-  margin: 0;
-}
-.sectionHeading p {
-  color: var(--sc-color-text-muted);
-}
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sc-space-2);
-  margin-bottom: var(--sc-space-3);
-}
-.controls select {
-  min-width: 18rem;
-}
-.modemBar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sc-space-4);
-}
-.modemBar > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sc-space-3);
-}
-.modemBar a {
-  color: var(--sc-color-info);
-  font-weight: 700;
-}
-.outages {
-  margin-top: var(--sc-space-4);
-}
-.outages h3 {
-  margin: 0 0 var(--sc-space-3);
-}
 .error {
   display: grid;
   gap: var(--sc-space-1);
@@ -189,34 +64,8 @@
 .loading {
   color: var(--sc-color-text-muted);
 }
-@media (max-width: 70rem) {
-  .overviewKpis {
-    grid-template-columns: 1fr 1fr;
-  }
-  .overviewDisconnected {
-    grid-column: 1 / -1;
-  }
-  .overviewFocusBody {
-    grid-template-columns: 1fr;
-  }
-}
 @media (max-width: 42rem) {
   .main {
     padding: var(--sc-space-2);
-  }
-  .modemBar,
-  .overviewFocusHeader {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .overviewKpis {
-    grid-template-columns: 1fr;
-  }
-  .overviewDisconnected {
-    grid-column: auto;
-  }
-  .overviewFocusHeader select {
-    min-width: 0;
-    width: 100%;
   }
 }

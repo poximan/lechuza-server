@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 import requests
 
-from src.servicios.email.mensagelo_attempt_log import record_mensagelo_attempt
+from src.dao.dao_mensagelo_attempts import record_mensagelo_attempt
 
 
 class MensageloError(Exception):

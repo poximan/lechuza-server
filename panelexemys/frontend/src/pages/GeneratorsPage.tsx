@@ -1,4 +1,5 @@
 import { Card } from "@servicoop/frontend-foundation";
+import { useEffect } from "react";
 
 import { JsonContractReader } from "../contracts/JsonContractReader";
 import type { JsonRecord } from "../models";
@@ -9,6 +10,14 @@ const reader = new JsonContractReader();
 interface BreakerState {
   bit: 0 | 1 | null;
   state: string;
+}
+
+interface GeneratorState {
+  alarm: boolean;
+  error: string | null;
+  group: BreakerState;
+  line: BreakerState;
+  summary: string;
 }
 
 function breaker(value: unknown, context: string): BreakerState {
@@ -173,27 +182,29 @@ function GeneratorDiagram({
   );
 }
 
-function GeneratorCard({ title, value }: { title: string; value: JsonRecord }) {
-  const line = breaker(value.interruptor_linea, `${title}.interruptor_linea`);
-  const group = breaker(value.interruptor_grupo, `${title}.interruptor_grupo`);
-  const alarm =
-    line.bit !== null && group.bit !== null && line.bit === group.bit;
-  const summary =
-    alarm && line.bit === 1
-      ? "Alarma: red externa y GE cerrados sobre la barra"
-      : alarm
-        ? "Alarma: barra sin alimentación"
-        : group.bit === null
-          ? `Red externa ${line.state}; lado grupo incierto`
-          : line.bit === 1 && group.bit === 0
-            ? "Carga alimentada desde red externa"
-            : "Carga alimentada desde grupo electrógeno";
+function generatorState(value: JsonRecord, title: string): GeneratorState {
+  return {
+    alarm: reader.boolean(value.alarm, `${title}.alarm`),
+    error: reader.optionalString(value.error, `${title}.error`),
+    line: breaker(value.interruptor_linea, `${title}.interruptor_linea`),
+    group: breaker(value.interruptor_grupo, `${title}.interruptor_grupo`),
+    summary: reader.string(value.summary, `${title}.summary`),
+  };
+}
+
+function GeneratorCard({
+  state: { alarm, error, group, line, summary },
+  title,
+}: {
+  state: GeneratorState;
+  title: string;
+}) {
   return (
     <Card className={`${styles.card} ${alarm ? styles.alarmCard : ""}`}>
       <div className={styles.cardHeader}>
         <h2>{title}</h2>
       </div>
-      {value.error && <p className={styles.error}>{String(value.error)}</p>}
+      {error && <p className={styles.error}>{error}</p>}
       <GeneratorDiagram alarm={alarm} group={group} line={line} />
       <div className={styles.statusRow}>
         <div
@@ -214,13 +225,34 @@ function GeneratorCard({ title, value }: { title: string; value: JsonRecord }) {
   );
 }
 
-export function GeneratorsPage({ data }: { data: JsonRecord }) {
+export function GeneratorsPage({
+  data,
+  onAttentionChange,
+}: {
+  data: JsonRecord;
+  onAttentionChange: (active: boolean) => void;
+}) {
   const estivariz = reader.record(data.estivariz, "generadores.estivariz");
   const fontana = reader.record(data.fontana, "generadores.fontana");
+  const estivarizState = generatorState(estivariz, "edificio estivariz");
+  const fontanaState = generatorState(fontana, "edificio fontana");
+  const hasGeneratorAlarm = estivarizState.alarm || fontanaState.alarm;
+
+  useEffect(() => {
+    onAttentionChange(hasGeneratorAlarm);
+    return () => onAttentionChange(false);
+  }, [hasGeneratorAlarm, onAttentionChange]);
+
   return (
     <div className={styles.generatorsGrid}>
-      <GeneratorCard title="edificio estivariz" value={estivariz} />
-      <GeneratorCard title="edificio fontana" value={fontana} />
+      <GeneratorCard
+        state={estivarizState}
+        title="edificio estivariz"
+      />
+      <GeneratorCard
+        state={fontanaState}
+        title="edificio fontana"
+      />
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import type { PanelexemysApiClient } from "../PanelexemysApiClient";
-import { OverviewPage } from "../components/OverviewPage";
+import { OverviewPage } from "./OverviewPage";
 import type { JsonRecord } from "../models";
 import { BrokerPage } from "./BrokerPage";
 import { CharitoPage } from "./CharitoPage";
 import { EmailPage } from "./EmailPage";
 import { GeneratorsPage } from "./GeneratorsPage";
-import { MaintenancePage } from "./MaintenancePage";
+import { MaintenancePage } from "./mantenimiento/MaintenancePage";
 import { MensageloPage } from "./MensageloPage";
 import { ProxmoxPage } from "./ProxmoxPage";
 import { RelaysPage } from "./RelaysPage";
@@ -14,6 +14,7 @@ export interface PageRendererProps {
   client: PanelexemysApiClient;
   data: JsonRecord;
   onChanged: () => Promise<void>;
+  onAttentionChange: (active: boolean) => void;
   page: string;
   protectedMode: boolean;
 }
@@ -22,6 +23,7 @@ export function PageRenderer({
   client,
   data,
   onChanged,
+  onAttentionChange,
   page,
   protectedMode,
 }: PageRendererProps) {
@@ -31,7 +33,9 @@ export function PageRenderer({
     case "charito":
       return <CharitoPage data={data} />;
     case "generadores":
-      return <GeneratorsPage data={data} />;
+      return (
+        <GeneratorsPage data={data} onAttentionChange={onAttentionChange} />
+      );
     case "proxmox":
       return <ProxmoxPage client={client} data={data} onChanged={onChanged} />;
     case "reles":

@@ -1,24 +1,27 @@
+from __future__ import annotations
+
 from collections import deque
 from threading import Lock
-from typing import Any, Dict, List
+from typing import Any
 
 from src.utils import timebox
 
+
 _MAX_ITEMS = 10
-_items = deque(maxlen=_MAX_ITEMS)
+_items: deque[dict[str, Any]] = deque(maxlen=_MAX_ITEMS)
 _lock = Lock()
 
 
 def record_mensagelo_attempt(
     *,
     ok: bool,
-    recipients: List[str],
+    recipients: list[str],
     subject: str,
     body: str,
     message_type: str | None,
     detail: str,
 ) -> None:
-    item: Dict[str, Any] = {
+    item: dict[str, Any] = {
         "ts": timebox.utc_iso(),
         "ok": bool(ok),
         "recipients": list(recipients or []),
@@ -31,6 +34,7 @@ def record_mensagelo_attempt(
         _items.appendleft(item)
 
 
-def get_mensagelo_attempts() -> List[Dict[str, Any]]:
-    with _lock:
-        return list(_items)
+class MensageloAttemptsDao:
+    def latest(self) -> list[dict[str, Any]]:
+        with _lock:
+            return list(_items)

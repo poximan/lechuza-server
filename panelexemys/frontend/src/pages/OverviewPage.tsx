@@ -3,12 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { PanelexemysApiClient } from "../PanelexemysApiClient";
 import type { JsonRecord, JsonValue } from "../models";
-import styles from "../App.module.css";
+import styles from "./OverviewPage.module.css";
 import { ConnectionHistoryChart } from "../history/ConnectionHistoryChart";
-import { ConnectivityGauge } from "./ConnectivityGauge";
-import { ConnectivityTrafficLight } from "./ConnectivityTrafficLight";
-import { DisconnectedEquipmentTable } from "./DisconnectedEquipmentTable";
-import { OutageCards } from "./OutageCards";
+import { ConnectivityGauge } from "../components/ConnectivityGauge";
+import { ConnectivityTrafficLight } from "../components/ConnectivityTrafficLight";
+import { DisconnectedEquipmentTable } from "../components/DisconnectedEquipmentTable";
+import { OutageCards } from "../components/OutageCards";
 
 function record(value: JsonValue | undefined): JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value)

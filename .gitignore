@@ -18,7 +18,6 @@ venv/
 
 # datos y temporales de runtime
 volumes/**/*
-/panelexemys/src/assets/topologia.png
 *.db
 *.db-journal
 *.log

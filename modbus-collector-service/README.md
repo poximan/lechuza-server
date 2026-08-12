@@ -27,3 +27,13 @@ Observa equipos via Modbus TCP, persiste eventos en SQLite y publica resumenes p
 
 ## Volumenes
 El contenedor usa `./volumes/modbus-collector-service:/app/data`. Panelexemys solo consume estas APIs; no accede a la base directamente.
+
+## Mapa de capacidades
+
+| Capacidad | API | Servicio/DAO |
+|---|---|---|
+| GRD | `src/api/grd_api.py` | `dao_grd.py`, `dao_historicos.py` |
+| Generadores | `src/api/generator_api.py` | `services/generator_state.py` |
+| Relés | `src/api/relay_api.py` | `dao_reles.py`, `dao_fallas_reles.py`, `state_store.py` |
+
+`src/app.py` solo compone el proceso. El orquestador y los drivers son compartidos porque cada conexión Modbus física debe tener un único dueño. La metodología general está en `../../../../metodologia.txt`.

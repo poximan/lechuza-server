@@ -23,7 +23,18 @@ alarmas/mensajeria. La arquitectura frontend se detalla en `FRONTEND.md`.
 
 Ver `config.py`: URLs base (`MODBUS_COLLECTOR_API_BASE`, `PVE_API_BASE`, `MODEM_LINK_MONITOR_URL`), credenciales MQTT (`MQTT_BROKER_*`), destinatarios de alarmas, links del panel y hosts del chequeo de correo. Todas deben estar presentes en `.env`. El intervalo del frontend se define mediante `PANELEXEMYS_REFRESH_MS`.
 
-Los assets estaticos se generan desde `frontend/src` durante la construccion del contenedor y se sirven bajo `/panelexemys/`.
+Los assets estaticos de interfaz se generan desde `frontend/src`. Los assets
+operativos versionados, como la topologia de Mantenimiento, viven en
+`src/assets`, Vite los incorpora de forma explicita y se sirven bajo
+`/panelexemys/`.
+
+## Fuentes por pestaña
+
+Cada pestaña tiene presentacion, controlador y servicio localizables por nombre.
+Las capas de negocio, DAO o adaptadores se agregan cuando la capacidad realmente
+contiene reglas, persistencia o integraciones. El mapa completo y las excepciones
+estan documentados en `FRONTEND.md`. `src/web/react_api.py` solamente registra
+rutas y conecta controladores.
 
 ## Contratos vigentes
 

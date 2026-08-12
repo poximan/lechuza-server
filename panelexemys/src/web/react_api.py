@@ -1,56 +1,167 @@
 from __future__ import annotations
 
-import json
-import threading
-import uuid
-from pathlib import Path
 from typing import Any, Callable
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 import config
-from src.servicios.email.mensagelo_attempt_log import get_mensagelo_attempts
-from src.servicios.email.mensagelo_client import MensageloClient
-from src.servicios.mqtt import mqtt_event_bus
-from src.utils import timebox
-from src.utils.paths import (
-    load_observar,
-    load_proxmox_view_preference,
-    update_proxmox_view_preference,
-)
+from src.dao.dao_email_health import EmailHealthDao
+from src.dao.dao_mantenimiento import MantenimientoDao
+from src.dao.dao_mensagelo_attempts import MensageloAttemptsDao
+from src.dao.dao_proxmox_view import ProxmoxViewDao
+from src.servicios.broker.broker_service import BrokerService
+from src.servicios.charito.charito_service import CharitoService
+from src.servicios.email.email_service import EmailService
+from src.servicios.generadores.generadores_service import GeneradoresService
+from src.servicios.mantenimiento.mantenimiento_service import MantenimientoService
+from src.servicios.mensagelo.mensagelo_service import MensageloService
+from src.servicios.overview.overview_service import OverviewService
+from src.servicios.proxmox.proxmox_service import ProxmoxService
+from src.servicios.reles.reles_service import RelesService
+from src.web.broker_api import BrokerApi
+from src.web.charito_api import CharitoApi
 from src.web.clients.charito_client import CharitoClient
 from src.web.clients.modbus_client import modbus_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 from src.web.clients.proxmox_client import ProxmoxClient
+from src.web.email_api import EmailApi
+from src.web.generadores_api import GeneradoresApi
+from src.web.mantenimiento_api import MantenimientoApi
+from src.web.mensagelo_api import MensageloApi
 from src.web.navigation import panelexemys_navigation
+from src.web.overview_api import OverviewApi
+from src.web.proxmox_api import ProxmoxApi
+from src.web.reles_api import RelesApi
 
 
 class ReactApi:
-    """Traduce las fuentes operativas a contratos HTTP para el frontend React."""
+    """Registra rutas generales y conecta cada vista con su controlador propio."""
 
     def __init__(self, mqtt_client_manager: Any):
-        self.mqtt_client_manager = mqtt_client_manager
-        self.charito = CharitoClient(config.CHARITO_API_BASE)
-        self.proxmox = ProxmoxClient(config.PVE_API_BASE)
-        self.blueprint = Blueprint("panelexemys-react-api", __name__, url_prefix="/panelexemys/api")
+        charito_client = CharitoClient(config.CHARITO_API_BASE)
+        proxmox_client = ProxmoxClient(config.PVE_API_BASE)
+        self.overview_api = OverviewApi(
+            service=OverviewService(
+                modbus_client=modbus_client,
+                modem_client=modem_link_monitor_client,
+            ),
+            response=self._response,
+        )
+        self.charito_api = CharitoApi(
+            service=CharitoService(charito_client),
+            response=self._response,
+        )
+        self.generadores_api = GeneradoresApi(
+            service=GeneradoresService(modbus_client),
+            response=self._response,
+        )
+        self.proxmox_api = ProxmoxApi(
+            service=ProxmoxService(
+                client=proxmox_client,
+                view_dao=ProxmoxViewDao(),
+            ),
+            response=self._response,
+        )
+        self.reles_api = RelesApi(
+            service=RelesService(modbus_client),
+            require_protected=self._require_protected,
+            response=self._response,
+        )
+        self.mantenimiento_api = MantenimientoApi(
+            service=MantenimientoService(
+                dao=MantenimientoDao(),
+                public_base_url=config.PUBLIC_BASE_URL,
+                topology_url="/panelexemys/topologia.png",
+            ),
+            require_protected=self._require_protected,
+            response=self._response,
+        )
+        self.mensagelo_api = MensageloApi(
+            service=MensageloService(MensageloAttemptsDao()),
+            require_protected=self._require_protected,
+            response=self._response,
+        )
+        self.broker_api = BrokerApi(
+            service=BrokerService(mqtt_client_manager),
+            require_protected=self._require_protected,
+            response=self._response,
+        )
+        self.email_api = EmailApi(
+            service=EmailService(EmailHealthDao()),
+            require_protected=self._require_protected,
+            response=self._response,
+        )
+        self.blueprint = Blueprint(
+            "panelexemys-react-api",
+            __name__,
+            url_prefix="/panelexemys/api",
+        )
         self._register_routes()
 
     def _register_routes(self) -> None:
-        self.blueprint.get("/navigation")(self.navigation)
-        self.blueprint.get("/overview")(self.overview)
-        self.blueprint.get("/grd")(self.grd_detail)
-        self.blueprint.get("/charito")(self.charito_state)
-        self.blueprint.get("/generadores")(self.generator_state)
-        self.blueprint.get("/proxmox")(self.proxmox_state)
-        self.blueprint.put("/proxmox/view")(self.set_proxmox_view)
-        self.blueprint.get("/reles")(self.reles_state)
-        self.blueprint.put("/reles/observer")(self.set_reles_observer)
-        self.blueprint.get("/mantenimiento")(self.maintenance)
-        self.blueprint.get("/mensagelo")(self.mensagelo_attempts)
-        self.blueprint.get("/broker")(self.broker_state)
-        self.blueprint.put("/broker/connection")(self.set_broker_connection)
-        self.blueprint.get("/email")(self.email_state)
-        self.blueprint.post("/email/test")(self.send_test_email)
+        self.blueprint.add_url_rule(
+            "/navigation", "navigation", self.navigation, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/overview", "overview", self.overview_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/grd", "grd", self.overview_api.get_grd_detail, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/charito", "charito", self.charito_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/generadores",
+            "generadores",
+            self.generadores_api.get,
+            methods=["GET"],
+        )
+        self.blueprint.add_url_rule(
+            "/proxmox", "proxmox", self.proxmox_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/proxmox/view",
+            "proxmox_view",
+            self.proxmox_api.set_view,
+            methods=["PUT"],
+        )
+        self.blueprint.add_url_rule(
+            "/reles", "reles", self.reles_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/reles/observer",
+            "reles_observer",
+            self.reles_api.set_observer,
+            methods=["PUT"],
+        )
+        self.blueprint.add_url_rule(
+            "/mantenimiento",
+            "mantenimiento",
+            self.mantenimiento_api.get,
+            methods=["GET"],
+        )
+        self.blueprint.add_url_rule(
+            "/mensagelo", "mensagelo", self.mensagelo_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/broker", "broker", self.broker_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/broker/connection",
+            "broker_connection",
+            self.broker_api.set_connection,
+            methods=["PUT"],
+        )
+        self.blueprint.add_url_rule(
+            "/email", "email", self.email_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/email/test",
+            "email_test",
+            self.email_api.send_test,
+            methods=["POST"],
+        )
 
     @staticmethod
     def _response(operation: Callable[[], dict[str, Any] | list[Any]]) -> Any:
@@ -68,238 +179,3 @@ class ReactApi:
     def navigation(self) -> Any:
         mode = panelexemys_navigation.current_mode()
         return jsonify(panelexemys_navigation.contract(mode))
-
-    def overview(self) -> Any:
-        def load() -> dict[str, Any]:
-            try:
-                modem = modem_link_monitor_client.get_status()
-            except Exception as exc:
-                modem = {
-                    "ip": None,
-                    "port": None,
-                    "state": "desconocido",
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            return {
-                "reference_now": timebox.utc_iso(),
-                "summary": modbus_client.get_summary(),
-                "descriptions": modbus_client.get_descriptions(),
-                "modem": modem,
-                "thresholds": {
-                    "red_below": config.GLOBAL_THRESHOLD_ROJO,
-                    "yellow_below": config.GLOBAL_THRESHOLD_AMARILLO,
-                },
-                "links": {
-                    "external_check": config.MODEM_EXTERNAL_CHECK_URL,
-                    "modem_admin": config.MODEM_ADMIN_URL,
-                },
-            }
-
-        return self._response(load)
-
-    def grd_detail(self) -> Any:
-        try:
-            grd_id = int(request.args["grd_id"])
-            window = str(request.args.get("window", "1sem"))
-            page = int(request.args.get("page", "0"))
-        except (KeyError, TypeError, ValueError):
-            return jsonify({"error": "grd_id, window y page deben ser validos"}), 400
-        if window not in {"1sem", "1mes", "todo"} or page < 0:
-            return jsonify({"error": "window o page fuera de contrato"}), 400
-
-        def load() -> dict[str, Any]:
-            descriptions = modbus_client.get_descriptions()
-            if grd_id not in descriptions:
-                raise ValueError(f"GRD {grd_id} no existe en el catalogo")
-            return {
-                "grd_id": grd_id,
-                "description": descriptions[grd_id],
-                "window": window,
-                "page": page,
-                "history": modbus_client.get_history(grd_id, window, page),
-                "outages": modbus_client.get_outages(grd_id, limit=10),
-            }
-
-        return self._response(load)
-
-    def charito_state(self) -> Any:
-        return self._response(self.charito.get_state)
-
-    def generator_state(self) -> Any:
-        def load_source(operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-            try:
-                return operation()
-            except Exception as exc:
-                return {
-                    "interruptor_linea": {"estado": "desconocido", "bit": None},
-                    "interruptor_grupo": {"estado": "desconocido", "bit": None},
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-
-        return jsonify(
-            {
-                "estivariz": load_source(modbus_client.get_ge_edif_estivariz_status),
-                "fontana": load_source(modbus_client.get_ge_edif_fontana_status),
-            }
-        )
-
-    def proxmox_state(self) -> Any:
-        state: dict[str, Any] | None = None
-        history: dict[str, Any] | None = None
-        state_error: str | None = None
-        history_error: str | None = None
-        try:
-            state = self.proxmox.get_state()
-        except Exception as exc:
-            state_error = f"{type(exc).__name__}: {exc}"
-        try:
-            history = self.proxmox.get_history()
-        except Exception as exc:
-            history_error = f"{type(exc).__name__}: {exc}"
-        return jsonify(
-            {
-                "state": state,
-                "state_error": state_error,
-                "history": history,
-                "history_error": history_error,
-                "view": load_proxmox_view_preference("historico"),
-            }
-        )
-
-    def set_proxmox_view(self) -> Any:
-        body = request.get_json(silent=True)
-        if not isinstance(body, dict) or body.get("view") not in {"vivo", "historico"}:
-            return jsonify({"error": "view debe ser 'vivo' o 'historico'"}), 400
-        view = str(body["view"])
-
-        def save() -> dict[str, Any]:
-            if not update_proxmox_view_preference(view):
-                raise RuntimeError("no se pudo persistir la vista de Proxmox")
-            return {"saved": True, "view": view}
-
-        return self._response(save)
-
-    def reles_state(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-        return self._response(
-            lambda: {
-                "observer_enabled": modbus_client.get_reles_observer(),
-                "faults": modbus_client.get_reles_faults(),
-            }
-        )
-
-    def set_reles_observer(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-        body = request.get_json(silent=True)
-        if not isinstance(body, dict) or not isinstance(body.get("enabled"), bool):
-            return jsonify({"error": "enabled debe ser booleano"}), 400
-        return self._response(lambda: {"enabled": modbus_client.set_reles_observer(body["enabled"])})
-
-    def maintenance(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-
-        def load() -> dict[str, Any]:
-            path = Path(__file__).resolve().parent / "mantenimiento_data.txt"
-            data = json.loads(path.read_text(encoding="utf-8"))
-            mappings = data["port_mappings"]
-            return {
-                "telefonos": data["telefonos"],
-                "port_mappings": [
-                    {
-                        **item,
-                        "externo": f"{config.PUBLIC_BASE_URL}{item['externo_path']}",
-                    }
-                    for item in mappings
-                ],
-            }
-
-        return self._response(load)
-
-    def mensagelo_attempts(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-        return jsonify({"items": get_mensagelo_attempts()})
-
-    def broker_state(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-        return jsonify(
-            {
-                "status": self.mqtt_client_manager.get_connection_status(),
-                "traffic": self.mqtt_client_manager.get_traffic_snapshot(),
-            }
-        )
-
-    def set_broker_connection(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-        body = request.get_json(silent=True)
-        if not isinstance(body, dict) or not isinstance(body.get("enabled"), bool):
-            return jsonify({"error": "enabled debe ser booleano"}), 400
-        if body["enabled"]:
-            if self.mqtt_client_manager.get_connection_status() == "desconectado":
-                threading.Thread(target=self.mqtt_client_manager.start, daemon=True).start()
-        else:
-            self.mqtt_client_manager.stop()
-        return jsonify({"enabled": body["enabled"]})
-
-    def email_state(self) -> Any:
-        data = load_observar()
-        return jsonify(
-            {
-                "health": data.get("server_email_estado", {}),
-                "smtp_host": config.EMAIL_HEALTH_SMTP_HOST,
-                "ping_local_host": config.EMAIL_HEALTH_PING_LOCAL_HOST,
-                "ping_remote_host": config.EMAIL_HEALTH_PING_REMOTE_HOST,
-            }
-        )
-
-    def send_test_email(self) -> Any:
-        denied = self._require_protected()
-        if denied is not None:
-            return denied
-        recipient = config.ALARM_EMAIL_RECIPIENT
-        subject = f"{config.ALARM_EMAIL_SUBJECT_PREFIX}Email de Prueba (Panelexemys - backend)"
-        body = (
-            "Este es un email de prueba enviado desde Panelexemys - backend. "
-            f"Fecha y Hora: {timebox.format_local(timebox.utc_now())}"
-        )
-
-        def send() -> dict[str, Any]:
-            client = MensageloClient(
-                base_url=config.MENSAGELO_BASE_URL,
-                api_key=config.MENSAGELO_API_KEY,
-                timeout_seconds=int(config.MENSAGELO_TIMEOUT_SECONDS),
-                max_retries=int(config.MENSAGELO_MAX_RETRIES),
-                backoff_initial=float(config.MENSAGELO_BACKOFF_INITIAL),
-                backoff_max=float(config.MENSAGELO_BACKOFF_MAX),
-            )
-            ok, detail = client.enqueue_email(
-                recipients=recipient,
-                subject=subject,
-                body=body,
-                message_type="maintenance_test",
-                idempotency_key=str(uuid.uuid4()),
-            )
-            event_error = None
-            try:
-                mqtt_event_bus.publish_email_event(subject=subject, ok=ok)
-            except Exception as exc:
-                event_error = f"{type(exc).__name__}: {exc}"
-            return {
-                "ok": ok,
-                "recipients": recipient,
-                "detail": detail,
-                "event_error": event_error,
-            }
-
-        return self._response(send)
