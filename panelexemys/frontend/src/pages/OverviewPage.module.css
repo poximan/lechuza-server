@@ -119,6 +119,20 @@
   color: var(--sc-color-text-muted);
 }
 
+.unavailable {
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-warning);
+  border-radius: var(--sc-radius-md);
+  background: color-mix(in srgb, var(--sc-color-warning) 12%, transparent);
+  color: var(--sc-color-text);
+  text-align: left;
+}
+
+.unavailable ul {
+  margin: var(--sc-space-2) 0 0;
+  padding-left: var(--sc-space-4);
+}
+
 .error {
   display: grid;
   gap: var(--sc-space-1);

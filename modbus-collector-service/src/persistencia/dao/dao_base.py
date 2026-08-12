@@ -1,19 +1,23 @@
-import sqlite3
 import os
-import threading
-from src import config  # Importa la configuracion
+import sqlite3
 
-# Rutas de la base de datos usando config.py
-DATABASE_DIR = config.DATABASE_DIR
-DATABASE_FILE = os.path.join(DATABASE_DIR, config.DATABASE_NAME)
+from src.persistencia.configuracion_base_datos import DATABASE_FILE
 
-# Bloqueo para asegurar la seguridad de los hilos al escribir/leer en la base de datos.
-db_lock = threading.RLock()                     # Usar RLock para permitir bloqueos anidados
 
-def get_db_connection():
-    """Crea y retorna una conexion a la base de datos."""
-    os.makedirs(DATABASE_DIR, exist_ok=True)
-    conn = sqlite3.connect(DATABASE_FILE)
-    conn.row_factory = sqlite3.Row              # Permite acceder a columnas por nombre
-    conn.execute("PRAGMA foreign_keys = ON;")   # Asegura que las FK esten habilitadas en cada conexion
+SQLITE_TIMEOUT_SECONDS = 10
+
+
+def get_db_connection() -> sqlite3.Connection:
+    """Abre la base operativa existente sin crearla implicitamente."""
+    if not os.path.isfile(DATABASE_FILE):
+        raise FileNotFoundError(
+            f"No existe la base operativa {DATABASE_FILE}. "
+            "Debe aprovisionarse antes de iniciar el servicio."
+        )
+
+    conn = sqlite3.connect(DATABASE_FILE, timeout=SQLITE_TIMEOUT_SECONDS)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute(f"PRAGMA busy_timeout = {SQLITE_TIMEOUT_SECONDS * 1000};")
+    conn.execute("PRAGMA temp_store = MEMORY;")
     return conn

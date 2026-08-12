@@ -1,4 +1,5 @@
-import time
+import threading
+from collections.abc import Callable
 from typing import Optional
 
 from src import config
@@ -73,37 +74,44 @@ class EdifEstivarizGeneratorClient:
             "ts": payload["ts"],
         }
 
-    def start_monitoring_loop(self) -> None:
+    def _run_cycle(self) -> None:
+        registers = self.driver.read_input_registers(
+            address_offset=self._address_offset,
+            count=1,
+            unit_id=self.unit_id,
+        )
+        if registers is None or not registers:
+            self.logger.log("Lectura edif-estivariz sin registros.", origin="OBS/GE")
+            return
+
+        raw_value = int(registers[0])
+        payload = self._build_payload(raw_value)
+        self.state_cache.update(self._name, payload)
+        line_bit = int(payload["interruptor_linea"]["bit"])
+        if line_bit != self._last_line_bit and self.publisher.publish_ge_status(
+            self._topic,
+            self._build_line_payload(payload),
+        ):
+            self._last_line_bit = line_bit
+            self.logger.log(
+                "edif-estivariz linea: "
+                f"{payload['interruptor_linea']['estado']} "
+                f"/ grupo: {payload['interruptor_grupo']['estado']} "
+                f"(valor {raw_value})",
+                origin="OBS/GE",
+            )
+
+    def start_monitoring_loop(
+        self,
+        stop_event: threading.Event,
+        heartbeat: Callable[[], None],
+    ) -> None:
         self.logger.log(
             f"Iniciando monitor edif-estivariz (GRD {self._grd_id}, offset {self._address_offset}, bits linea/grupo {self._line_bit_index}/{self._generator_bit_index})...",
             origin="OBS/GE",
         )
 
-        while True:
-            try:
-                registers = self.driver.read_input_registers(
-                    address_offset=self._address_offset,
-                    count=1,
-                    unit_id=self.unit_id,
-                )
-                if registers is None or not registers:
-                    self.logger.log("Lectura edif-estivariz sin registros.", origin="OBS/GE")
-                else:
-                    raw_value = int(registers[0])
-                    payload = self._build_payload(raw_value)
-                    self.state_cache.update(self._name, payload)
-                    line_bit = int(payload["interruptor_linea"]["bit"])
-                    if line_bit != self._last_line_bit:
-                        self.publisher.publish_ge_status(self._topic, self._build_line_payload(payload))
-                        self._last_line_bit = line_bit
-                        self.logger.log(
-                            "edif-estivariz linea: "
-                            f"{payload['interruptor_linea']['estado']} "
-                            f"/ grupo: {payload['interruptor_grupo']['estado']} "
-                            f"(valor {raw_value})",
-                            origin="OBS/GE",
-                        )
-            except Exception as exc:
-                self.logger.log(f"Error en monitoreo edif-estivariz: {exc}", origin="OBS/GE")
-
-            time.sleep(self.refresh_interval)
+        while not stop_event.is_set():
+            self._run_cycle()
+            heartbeat()
+            stop_event.wait(self.refresh_interval)

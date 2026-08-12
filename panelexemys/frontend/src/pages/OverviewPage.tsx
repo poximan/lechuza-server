@@ -20,6 +20,28 @@ function array(value: JsonValue | undefined): JsonValue[] {
   return Array.isArray(value) ? value : [];
 }
 
+function unavailableDescription(item: JsonRecord): string {
+  if (item.reason === "sin_estado_confirmado")
+    return "sin estado confirmado en la base nueva";
+  if (item.reason === "gateway_no_disponible")
+    return "gateway Modbus no disponible; se conserva el último estado";
+  const failures = Number(item.confirmable_failures);
+  const threshold = Number(item.failure_threshold);
+  if (item.disconnect_confirmed === true)
+    return (
+      failures +
+      "/" +
+      threshold +
+      " fallos individuales; desconexión confirmada"
+    );
+  return (
+    failures +
+    "/" +
+    threshold +
+    " fallos individuales; pendiente de confirmación"
+  );
+}
+
 export function OverviewPage({
   client,
   data,
@@ -34,6 +56,7 @@ export function OverviewPage({
   const thresholds = record(data.thresholds);
   const links = record(data.links);
   const disconnected = array(summaryEnvelope.disconnected);
+  const unavailable = array(summaryEnvelope.unavailable);
   const referenceNow =
     typeof data.reference_now === "string" ? data.reference_now : null;
   const states = record(summaryEnvelope.states);
@@ -139,8 +162,28 @@ export function OverviewPage({
         </Card>
         <Card className={styles.overviewDisconnected}>
           <h3>Actualmente desconectados</h3>
+          {unavailable.length > 0 && (
+            <div className={styles.unavailable} role="status">
+              <strong>Problemas de lectura Modbus</strong>
+              <ul>
+                {unavailable.map((item, index) => {
+                  const current = record(item);
+                  return (
+                    <li key={`${String(current.id_grd)}-${index}`}>
+                      {String(current.description)}:{" "}
+                      {unavailableDescription(current)}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {disconnected.length === 0 ? (
-            <p className={styles.muted}>Todos los equipos conectados.</p>
+            <p className={styles.muted}>
+              {unavailable.length > 0
+                ? "No hay nuevas desconexiones confirmadas."
+                : "Todos los equipos conectados."}
+            </p>
           ) : referenceNow === null ? (
             <p className={styles.error}>
               Contrato inválido: falta reference_now

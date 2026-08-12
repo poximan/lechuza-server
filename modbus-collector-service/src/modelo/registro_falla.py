@@ -48,7 +48,7 @@ class RegistroFalla:
         self._parse_remaining_registers()
 
     def _parse_year(self, word: int):
-        """Decodifica el aÃ±o de la palabra Modbus 0x0800."""
+        """Decodifica el anio de la palabra Modbus 0x0800."""
         year_hi_byte = (word >> 8) & 0xFF
         year_lo_byte = word & 0xFF
         
@@ -59,7 +59,7 @@ class RegistroFalla:
             self.fault_year = 2000 + (year_lo_byte & 0x7F)
         else:
             self.logger.log(
-                f"Formato de aÃ±o no reconocido en Word 0x0800 ({word}).",
+                f"Formato de año no reconocido en Word 0x0800 ({word}).",
                 origin="MODELO"
             )
 
@@ -89,7 +89,7 @@ class RegistroFalla:
     def _validate_and_create_datetime(self):
         """Valida los componentes de fecha y crea el objeto datetime."""
         validations = [
-            (self.fault_year, "AÃ±o", 1994, 2093),
+            (self.fault_year, "Año", 1994, 2093),
             (self.fault_month, "Mes", 1, 12),
             (self.fault_day, "Dia del mes", 1, 31),
             (self.fault_day_of_week, "Dia de la semana", 1, 7),
@@ -109,6 +109,13 @@ class RegistroFalla:
                     origin="MODELO"
                 )
                 is_date_components_valid = False
+
+        if self.fault_date_validity != 0:
+            self.logger.log(
+                "El rele marco como invalida la fecha de la falla.",
+                origin="MODELO",
+            )
+            is_date_components_valid = False
 
         self.fault_datetime: Optional[datetime] = None
         if not is_date_components_valid or self.fault_year is None:
@@ -131,7 +138,7 @@ class RegistroFalla:
             self.fault_datetime = timebox.parse(naive_dt, legacy=True)
         except ValueError as e:
             self.logger.log(
-                f"Error al crear datetime: {e}. Valores: AÃ±o={self.fault_year}, Mes={self.fault_month}, "
+                f"Error al crear datetime: {e}. Valores: Año={self.fault_year}, Mes={self.fault_month}, "
                 f"Dia={self.fault_day}, Hora={self.fault_hour}, Minuto={self.fault_minute}, "
                 f"Segundo={self.fault_seconds}, Microsegundo={self.fault_microseconds}",
                 origin="MODELO"

@@ -20,12 +20,12 @@ function segments(history: ConnectionHistory): ConnectionSegment[] {
   for (const event of history.events) {
     if (event.instant < history.rangeStart || event.instant > history.rangeEnd)
       continue;
-    if (event.instant > cursor)
+    if (event.instant > cursor && connected !== null)
       result.push({ connected, end: event.instant, start: cursor });
     cursor = event.instant;
     connected = event.connected;
   }
-  if (cursor < history.rangeEnd)
+  if (cursor < history.rangeEnd && connected !== null)
     result.push({ connected, end: history.rangeEnd, start: cursor });
   return result;
 }
@@ -78,18 +78,18 @@ export function ConnectionHistoryChart({ value }: { value: JsonRecord }) {
   const y = (connected: 0 | 1) =>
     connected === 1 ? TOP + plotHeight * 0.25 : TOP + plotHeight * 0.75;
   const historySegments = segments(viewHistory);
-  const points: string[] = [
-    `${x(viewHistory.rangeStart)},${y(viewHistory.connectedBefore)}`,
-  ];
+  const points: string[] = [];
   let state = viewHistory.connectedBefore;
+  if (state !== null)
+    points.push(`${x(viewHistory.rangeStart)},${y(state)}`);
   for (const event of viewHistory.events) {
-    points.push(
-      `${x(event.instant)},${y(state)}`,
-      `${x(event.instant)},${y(event.connected)}`,
-    );
+    if (state !== null)
+      points.push(`${x(event.instant)},${y(state)}`);
+    points.push(`${x(event.instant)},${y(event.connected)}`);
     state = event.connected;
   }
-  points.push(`${x(viewHistory.rangeEnd)},${y(state)}`);
+  if (state !== null)
+    points.push(`${x(viewHistory.rangeEnd)},${y(state)}`);
   const ticks = Array.from({ length: 5 }, (_, index) => {
     const ratio = index / 4;
     const instant = new Date(viewStartMs + rangeMs * ratio);

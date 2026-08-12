@@ -90,8 +90,24 @@ class NotifManager:
         else:
             summary_data = summary.get("summary") if isinstance(summary, dict) else None
             disconnected = summary.get("disconnected") if isinstance(summary, dict) else None
+            unavailable = summary.get("unavailable") if isinstance(summary, dict) else None
             percentage = summary_data.get("porcentaje") if isinstance(summary_data, dict) else None
-            if isinstance(percentage, (int, float)) and isinstance(disconnected, list):
+            pending_reads = (
+                [
+                    item
+                    for item in unavailable
+                    if isinstance(item, dict) and item.get("disconnect_confirmed") is not True
+                ]
+                if isinstance(unavailable, list)
+                else []
+            )
+            if pending_reads:
+                self.logger.log(
+                    f"Resumen Modbus con {len(pending_reads)} lecturas no disponibles sin confirmar. "
+                    "Se conservan las incidencias actuales.",
+                    origin="ALRM/MODBUS",
+                )
+            elif isinstance(percentage, (int, float)) and isinstance(disconnected, list):
                 self._process_alarms(float(percentage), disconnected)
             else:
                 self.logger.log(

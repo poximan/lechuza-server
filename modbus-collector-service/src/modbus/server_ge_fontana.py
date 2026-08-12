@@ -1,7 +1,7 @@
-import time
+import threading
+from collections.abc import Callable
 
 from logosaurio import Logosaurio
-from src import config
 from src.modbus.modbus_driver import ModbusTcpDriver
 from src.services.generator_state import GeneratorStateCache
 from src.services.mqtt_publisher import ModbusMqttPublisher
@@ -67,39 +67,47 @@ class EdifFontanaGeneratorClient:
             "ts": payload["ts"],
         }
 
-    def start_monitoring_loop(self) -> None:
+    def _run_cycle(self) -> None:
+        registers = self.driver.read_holding_registers(
+            address_offset=self.register_offset,
+            count=self.register_count,
+            unit_id=self.unit_id,
+        )
+        if registers is None or not registers:
+            self.logger.log("Lectura edif-fontana sin registros.", origin="OBS/GE")
+            return
+
+        raw_value = int(registers[0])
+        payload = self._build_payload(raw_value)
+        self.state_cache.update(self.name, payload)
+        current_bits = (
+            int(payload["interruptor_linea"]["bit"]),
+            int(payload["interruptor_grupo"]["bit"]),
+        )
+        if current_bits != self._last_bits and self.publisher.publish_ge_status(
+            self.topic,
+            self._build_line_payload(payload),
+        ):
+            self._last_bits = current_bits
+            self.logger.log(
+                "edif-fontana linea: "
+                f"{payload['interruptor_linea']['estado']} "
+                f"/ grupo: {payload['interruptor_grupo']['estado']} "
+                f"(valor {raw_value})",
+                origin="OBS/GE",
+            )
+
+    def start_monitoring_loop(
+        self,
+        stop_event: threading.Event,
+        heartbeat: Callable[[], None],
+    ) -> None:
         self.logger.log(
             f"Iniciando monitor edif-fontana ({self.driver.endpoint}, HR offset {self.register_offset}, bits linea/grupo {self.line_bit_index}/{self.generator_bit_index})...",
             origin="OBS/GE",
         )
 
-        while True:
-            try:
-                registers = self.driver.read_holding_registers(
-                    address_offset=self.register_offset,
-                    count=self.register_count,
-                    unit_id=self.unit_id,
-                )
-                if registers is None or not registers:
-                    self.logger.log("Lectura edif-fontana sin registros.", origin="OBS/GE")
-                else:
-                    raw_value = int(registers[0])
-                    payload = self._build_payload(raw_value)
-                    self.state_cache.update(self.name, payload)
-                    line_bit = int(payload["interruptor_linea"]["bit"])
-                    generator_bit = int(payload["interruptor_grupo"]["bit"])
-                    current_bits = (line_bit, generator_bit)
-                    if current_bits != self._last_bits:
-                        self.publisher.publish_ge_status(self.topic, self._build_line_payload(payload))
-                        self._last_bits = current_bits
-                        self.logger.log(
-                            "edif-fontana linea: "
-                            f"{payload['interruptor_linea']['estado']} "
-                            f"/ grupo: {payload['interruptor_grupo']['estado']} "
-                            f"(valor {raw_value})",
-                            origin="OBS/GE",
-                        )
-            except Exception as exc:
-                self.logger.log(f"Error en monitoreo edif-fontana: {exc}", origin="OBS/GE")
-
-            time.sleep(self.refresh_interval)
+        while not stop_event.is_set():
+            self._run_cycle()
+            heartbeat()
+            stop_event.wait(self.refresh_interval)

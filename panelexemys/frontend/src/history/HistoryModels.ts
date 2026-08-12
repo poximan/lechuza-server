@@ -5,7 +5,7 @@ export interface ConnectionHistoryEvent {
 }
 
 export interface ConnectionHistory {
-  connectedBefore: 0 | 1;
+  connectedBefore: 0 | 1 | null;
   events: ConnectionHistoryEvent[];
   rangeEnd: Date;
   rangeEndIso: string;

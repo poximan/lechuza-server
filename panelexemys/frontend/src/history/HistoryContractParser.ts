@@ -19,7 +19,7 @@ export class HistoryContractParser {
     if (rangeEnd.getTime() <= rangeStart.getTime()) {
       throw new Error("Contrato inválido: el rango histórico no es creciente");
     }
-    const connectedBefore = this.connected(
+    const connectedBefore = this.connectedOrNull(
       value.connected_before,
       "history.connected_before",
     );
@@ -69,6 +69,14 @@ export class HistoryContractParser {
     if (value !== 0 && value !== 1)
       throw new Error(`Contrato inválido: ${context} debe ser 0 o 1`);
     return value;
+  }
+
+  private connectedOrNull(
+    value: JsonValue | undefined,
+    context: string,
+  ): 0 | 1 | null {
+    if (value === null) return null;
+    return this.connected(value, context);
   }
 
   private instant(value: string, context: string): Date {

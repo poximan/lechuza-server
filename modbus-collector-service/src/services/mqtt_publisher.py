@@ -45,15 +45,16 @@ class ModbusMqttPublisher:
                     context.check_hostname = False
                     context.verify_mode = ssl.CERT_NONE
                 client.tls_set_context(context)
-            client.loop_start()
             try:
                 client.connect_async(
                     config.MQTT_BROKER_HOST,
                     config.MQTT_BROKER_PORT,
                     keepalive=config.MQTT_KEEPALIVE,
                 )
+                client.loop_start()
             except Exception as exc:
                 self.log.log(f"Error iniciando conexion MQTT: {exc}", origin="MW/MQTT")
+                return
             self._client = client
 
     def _on_connect(self, _client, _userdata, _flags, reason_code, _properties=None):
@@ -78,7 +79,7 @@ class ModbusMqttPublisher:
             return args[0]
         return args[1]
 
-    def _publish(self, topic: str, payload: Any, qos: int, retain: bool) -> None:
+    def _publish(self, topic: str, payload: Any, qos: int, retain: bool) -> bool:
         body = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         with self._lock:
             if self._client is None:
@@ -87,17 +88,20 @@ class ModbusMqttPublisher:
             connected = self._connected
 
         if not client or not connected:
-            try:
-                if client:
-                    client.reconnect()
-            except Exception as exc:
-                self.log.log(f"MQTT no conectado. Reconexion fallida: {exc}", origin="MW/MQTT")
-            return
+            self.log.log(
+                f"MQTT no conectado; publicacion pendiente para {topic}.",
+                origin="MW/MQTT",
+            )
+            return False
         try:
             info = client.publish(topic, payload=body, qos=qos, retain=retain)
-            info.wait_for_publish()
-            if info.rc != mqtt.MQTT_ERR_SUCCESS:
-                raise RuntimeError(f"MQTT rc={info.rc}")
+            info.wait_for_publish(timeout=config.MQTT_PUBLISH_TIMEOUT_SECONDS)
+            if info.rc != mqtt.MQTT_ERR_SUCCESS or not info.is_published():
+                raise RuntimeError(
+                    f"MQTT no confirmo publicacion en {config.MQTT_PUBLISH_TIMEOUT_SECONDS}s "
+                    f"(rc={info.rc})"
+                )
+            return True
         except Exception as exc:
             self.log.log(f"Error publicando en {topic}: {exc}", origin="MW/MQTT")
             with self._lock:
@@ -111,27 +115,44 @@ class ModbusMqttPublisher:
                     pass
                 self._client = None
                 self._connected = False
+            return False
 
-    def publish_grado(self, payload: dict) -> None:
-        self._publish(
+    def publish_grado(self, payload: dict) -> bool:
+        return self._publish(
             config.MQTT_TOPIC_GRADO,
             payload,
             qos=config.MQTT_PUBLISH_QOS_STATE,
             retain=config.MQTT_PUBLISH_RETAIN_STATE,
         )
 
-    def publish_grds(self, payload: dict) -> None:
-        self._publish(
+    def publish_grds(self, payload: dict) -> bool:
+        return self._publish(
             config.MQTT_TOPIC_GRDS,
             payload,
             qos=config.MQTT_PUBLISH_QOS_STATE,
             retain=config.MQTT_PUBLISH_RETAIN_STATE,
         )
 
-    def publish_ge_status(self, topic: str, payload: dict) -> None:
-        self._publish(
+    def publish_ge_status(self, topic: str, payload: dict) -> bool:
+        return self._publish(
             topic,
             payload,
             qos=config.MQTT_PUBLISH_QOS_STATE,
             retain=config.MQTT_PUBLISH_RETAIN_STATE,
         )
+
+    def is_connected(self) -> bool:
+        with self._lock:
+            return self._connected
+
+    def close(self) -> None:
+        with self._lock:
+            client = self._client
+            self._client = None
+            self._connected = False
+        if client is None:
+            return
+        try:
+            client.disconnect()
+        finally:
+            client.loop_stop()

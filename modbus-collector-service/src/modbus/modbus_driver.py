@@ -35,6 +35,7 @@ class ModbusTcpDriver:
         self.name = name
         self._client = None
         self._is_connected = False
+        self._shutdown = False
         self._io_lock = threading.RLock()
 
     @classmethod
@@ -50,6 +51,8 @@ class ModbusTcpDriver:
         Intenta establecer una conexion con el servidor Modbus TCP.
         """
         with self._io_lock:
+            if self._shutdown:
+                return False
             if self._is_connected and self._client:
                 self.logger.log(f"Ya conectado a {self.endpoint}. No se necesita reconectar.", origin="OBS/DRV")
                 return True
@@ -78,13 +81,22 @@ class ModbusTcpDriver:
         Cierra la conexion Modbus TCP.
         """
         with self._io_lock:
-            if self._client and self._is_connected:
+            if self._client:
                 try:
                     self._client.close()
                 except Exception:
                     pass
+                self._client = None
+                was_connected = self._is_connected
                 self._is_connected = False
-                self.logger.log(f"Desconectado de {self.endpoint}", origin="OBS/DRV")
+                if was_connected:
+                    self.logger.log(f"Desconectado de {self.endpoint}", origin="OBS/DRV")
+
+    def shutdown(self) -> None:
+        """Cierra el driver e impide reconexiones durante el apagado."""
+        with self._io_lock:
+            self._shutdown = True
+            self.disconnect()
 
     def read_input_registers(self, address_offset: int, count: int, unit_id: int):
         """
@@ -194,5 +206,4 @@ class ModbusTcpDriver:
         """
         Retorna el estado actual de la conexion.
         """
-        with self._io_lock:
-            return self._is_connected
+        return bool(self._is_connected)

@@ -1,94 +1,115 @@
+from __future__ import annotations
+
+import argparse
 import os
 import sqlite3
-from .dao.dao_base import db_lock, get_db_connection, DATABASE_DIR, DATABASE_FILE
-from logosaurio import logger
 
-def create_database_schema():
-    """
-    Asegura directorio y tablas SQLite:
-    - grd
-    - historicos
-    - mensajes_enviados
-    - reles
-    - fallas_reles
-    Usa el mismo RLock (db_lock) y get_db_connection() de dao_base.
-    """
-    if not os.path.exists(DATABASE_DIR):
-        os.makedirs(DATABASE_DIR, exist_ok=True)
-        logger.info("Directorio '%s' creado.", DATABASE_DIR, origin="MODBUS/DB")
+from src.persistencia.configuracion_base_datos import DATABASE_FILE
 
-    with db_lock:
-        conn = None
+
+SCHEMA_VERSION = 2
+
+SCHEMA_SQL = f"""
+PRAGMA foreign_keys = ON;
+BEGIN IMMEDIATE;
+
+CREATE TABLE grd (
+    id INTEGER PRIMARY KEY,
+    descripcion TEXT NOT NULL CHECK (length(trim(descripcion)) > 0),
+    activo INTEGER NOT NULL CHECK (activo IN (0, 1))
+);
+
+CREATE TABLE historicos (
+    id_grd INTEGER NOT NULL,
+    timestamp TEXT NOT NULL CHECK (
+        length(timestamp) = 20
+        AND timestamp GLOB '????-??-??T??:??:??Z'
+        AND datetime(timestamp) IS NOT NULL
+    ),
+    conectado INTEGER NOT NULL CHECK (conectado IN (0, 1)),
+    PRIMARY KEY (id_grd, timestamp),
+    FOREIGN KEY (id_grd) REFERENCES grd(id)
+) WITHOUT ROWID;
+
+CREATE TABLE grd_estado_actual (
+    id_grd INTEGER PRIMARY KEY,
+    timestamp TEXT NOT NULL CHECK (
+        length(timestamp) = 20
+        AND timestamp GLOB '????-??-??T??:??:??Z'
+        AND datetime(timestamp) IS NOT NULL
+    ),
+    conectado INTEGER NOT NULL CHECK (conectado IN (0, 1)),
+    FOREIGN KEY (id_grd) REFERENCES grd(id)
+);
+
+CREATE TABLE reles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_modbus INTEGER NOT NULL UNIQUE,
+    descripcion TEXT NOT NULL CHECK (length(trim(descripcion)) > 0)
+);
+
+CREATE TABLE fallas_reles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_rele INTEGER NOT NULL,
+    numero_falla INTEGER NOT NULL,
+    timestamp TEXT NOT NULL CHECK (
+        length(timestamp) = 20
+        AND timestamp GLOB '????-??-??T??:??:??Z'
+        AND datetime(timestamp) IS NOT NULL
+    ),
+    fasea_corr INTEGER,
+    faseb_corr INTEGER,
+    fasec_corr INTEGER,
+    tierra_corr INTEGER,
+    FOREIGN KEY (id_rele) REFERENCES reles(id)
+);
+
+PRAGMA user_version = {SCHEMA_VERSION};
+COMMIT;
+"""
+
+
+def create_new_database(database_file: str = DATABASE_FILE) -> None:
+    """Crea una base nueva y se niega a tocar un archivo existente."""
+    target = os.path.abspath(database_file)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+
+    try:
+        descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+    except FileExistsError as exc:
+        raise FileExistsError(
+            f"El DDL se niega a sobrescribir la base existente: {target}"
+        ) from exc
+    os.close(descriptor)
+
+    conn: sqlite3.Connection | None = None
+    try:
+        conn = sqlite3.connect(target)
+        conn.executescript(SCHEMA_SQL)
+        result = conn.execute("PRAGMA integrity_check;").fetchone()
+        if result is None or result[0] != "ok":
+            raise RuntimeError(f"SQLite integrity_check fallo para {target}: {result}")
+    except Exception:
+        if conn is not None:
+            conn.close()
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            os.remove(target)
+        except OSError:
+            pass
+        raise
+    else:
+        conn.close()
 
-            # 1) Tabla 'grd'
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS grd (
-                    id INTEGER PRIMARY KEY,
-                    descripcion TEXT,
-                    activo INTEGER NOT NULL DEFAULT 1
-                )
-            """)
-            logger.info("Tabla 'grd' asegurada.", origin="MODBUS/DB")
 
-            # 2) Tabla 'historicos'
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS historicos (
-                    timestamp TEXT NOT NULL,
-                    id_grd INTEGER NOT NULL,
-                    conectado INTEGER,
-                    PRIMARY KEY (timestamp, id_grd),
-                    FOREIGN KEY (id_grd) REFERENCES grd(id)
-                )
-            """)
-            logger.info("Tabla 'historicos' asegurada.", origin="MODBUS/DB")
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Crea desde cero la base operativa de modbus-collector-service."
+    )
+    parser.add_argument("--database", default=DATABASE_FILE, help="Ruta de la base nueva")
+    args = parser.parse_args()
+    create_new_database(args.database)
+    print(f"Base nueva creada con esquema {SCHEMA_VERSION}: {os.path.abspath(args.database)}")
 
-            # 3) Tabla 'mensajes_enviados'
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS mensajes_enviados (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    subject TEXT NOT NULL,
-                    body TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    message_type TEXT,
-                    recipient TEXT,
-                    success INTEGER NOT NULL
-                )
-            """)
-            logger.info("Tabla 'mensajes_enviados' asegurada.", origin="MODBUS/DB")
 
-            # 4) Tabla 'reles'
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS reles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    id_modbus INTEGER UNIQUE,
-                    descripcion TEXT
-                )
-            """)
-            logger.info("Tabla 'reles' asegurada.", origin="MODBUS/DB")
-
-            # 5) Tabla 'fallas_reles'
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS fallas_reles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    id_rele INTEGER NOT NULL,
-                    numero_falla INTEGER NOT NULL,
-                    timestamp DATETIME NOT NULL,
-                    fasea_corr INTEGER,
-                    faseb_corr INTEGER,
-                    fasec_corr INTEGER,
-                    tierra_corr INTEGER,
-                    FOREIGN KEY (id_rele) REFERENCES reles(id)
-                )
-            """)
-            logger.info("Tabla 'fallas_reles' asegurada.", origin="MODBUS/DB")
-
-            conn.commit()
-            logger.info("Esquema de base de datos en %s creado/asegurado.", DATABASE_FILE, origin="MODBUS/DB")
-        except sqlite3.Error as e:
-            logger.error("Error al configurar el esquema de la base de datos: %s", e, origin="MODBUS/DB")
-        finally:
-            if conn:
-                conn.close()
+if __name__ == "__main__":
+    main()

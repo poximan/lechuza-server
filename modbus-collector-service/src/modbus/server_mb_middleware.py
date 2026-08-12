@@ -1,19 +1,24 @@
-import time
-from src.persistencia.dao.dao_historicos import historicos_dao as dao
-from src.persistencia.dao.dao_grd import grd_dao
-from .modbus_driver import ModbusTcpDriver
+import threading
+from collections.abc import Callable
+
 from logosaurio import Logosaurio
-from src.services.mqtt_publisher import ModbusMqttPublisher
+
 from src import config
-from src.utils import timebox
 from src.control.latest_state_registry import LatestStateRegistry
+from src.persistencia.dao.dao_estado_grd import grd_state_dao
+from src.persistencia.dao.dao_grd import grd_dao
+from src.services.grd_service import GrdService
+from src.services.mqtt_publisher import ModbusMqttPublisher
+from src.utils import timebox
+
+from .modbus_driver import ModbusTcpDriver
+
 
 class GrdMiddlewareClient:
-    """
-    Cliente para monitorear GRDs via Modbus y publicar snapshots a MQTT:
-      - Grado global:   config.MQTT_TOPIC_GRADO
-      - GRDs down:      config.MQTT_TOPIC_GRDS
-    """
+    """Monitorea GRD, persiste transiciones y publica snapshots MQTT."""
+
+    CATALOG_REFRESH_SECONDS = 300
+
     def __init__(
         self,
         modbus_driver: ModbusTcpDriver,
@@ -22,165 +27,183 @@ class GrdMiddlewareClient:
         refresh_interval: int,
         logger: Logosaurio,
         mqtt_publisher: ModbusMqttPublisher,
+        state_registry: LatestStateRegistry,
+        grd_service: GrdService,
     ):
         self.driver = modbus_driver
         self.default_unit_id = default_unit_id
         self.register_count = register_count
         self.refresh_interval = refresh_interval
         self.logger = logger
-        self._active_grd_data = None
-        self._last_grd_data_refresh = None
-
         self.publisher = mqtt_publisher
+        self.state_registry = state_registry
+        self.grd_service = grd_service
+        self.failure_threshold = config.GRD_FAILURE_THRESHOLD
 
-        self._last_payload_grado = None
-        self._last_payload_down = None
-        self._latest_states = LatestStateRegistry(
-            dao.get_latest_states_for_all_grds()
-        )
+        self._active_grd_data: dict[int, str] | None = None
+        self._last_grd_data_refresh: float | None = None
+        self._last_payload_grado: dict | None = None
+        self._last_payload_down: dict | None = None
 
-    def _refresh_grd_data(self):
-        """Refresca la lista de GRDs activos desde la base de datos."""
+    def _refresh_grd_data(self) -> None:
         now = timebox.monotonic()
-        if self._last_grd_data_refresh is None or now - self._last_grd_data_refresh > 2000:
+        if (
+            self._last_grd_data_refresh is None
+            or now - self._last_grd_data_refresh > self.CATALOG_REFRESH_SECONDS
+        ):
             self._active_grd_data = grd_dao.get_all_grds_with_descriptions(only_active=True)
             self._last_grd_data_refresh = now
             if not self._active_grd_data:
                 self.logger.log(
-                    "No se encontraron GRDs activos en la base de datos para monitorear.",
-                    origin="OBS/MW"
+                    "No hay GRD activos en el catalogo operativo.",
+                    origin="OBS/MW",
                 )
             else:
-                self.logger.log(f"GRDs activos: {list(self._active_grd_data.keys())}", origin="OBS/MW")
+                self.logger.log(
+                    f"GRD activos: {list(self._active_grd_data.keys())}",
+                    origin="OBS/MW",
+                )
 
     @staticmethod
     def get_bit(value: int, bit_index: int) -> int:
-        """Retorna el estado de un bit especifico en un entero."""
         return (value >> bit_index) & 1
 
-    def _publish_snapshots_if_changed(self):
-        """
-        Calcula grado global y lista de desconectados; publica si hay cambios
-        (y la primera vez siempre publica).
-        """
-        latest_states = dao.get_latest_states_for_all_grds()
-        total = len(latest_states)
-        conectados = sum(1 for v in latest_states.values() if v == 1)
-        porcentaje = round((conectados / total) * 100, 2) if total else 0.0
-
+    def _publish_snapshots_if_changed(self) -> None:
+        contract = self.grd_service.summary()
+        summary = contract["summary"]
         grado_state = {
-            "porcentaje": porcentaje,
-            "total": total,
-            "conectados": conectados,
+            "porcentaje": summary["porcentaje"],
+            "total": summary["total"],
+            "conectados": summary["conectados"],
+            "no_disponibles": summary["no_disponibles"],
         }
-
-        down = []
-        for item in dao.get_all_disconnected_grds():
-            last_down = item.get("last_disconnected_timestamp")
-            if last_down:
-                try:
-                    parsed = timebox.parse(last_down, legacy=True)
-                    ultima_caida = timebox.utc_iso(parsed)
-                except Exception:
-                    ultima_caida = str(last_down)
-            else:
-                ultima_caida = ""
-            down.append({
-                "id": item["id_grd"],
-                "nombre": item["description"],
-                "ultima_caida": ultima_caida
-            })
-
         down_state = {
-            "items": down,
+            "items": [
+                {
+                    "id": item["id_grd"],
+                    "nombre": item["description"],
+                    "ultima_caida": item["last_disconnected_timestamp"],
+                }
+                for item in contract["disconnected"]
+            ]
         }
 
-        # Publicar grado si cambiÃ³
         if grado_state != self._last_payload_grado:
-            grado_payload = {**grado_state, "ts": timebox.utc_iso()}
-            self.publisher.publish_grado(grado_payload)
-            self._last_payload_grado = grado_state
-            self.logger.log(f"Publicado grado global en {config.MQTT_TOPIC_GRADO}: {grado_payload}", origin="OBS/MW")
-
-        # Publicar desconectados si cambiÃ³
-        if down_state != self._last_payload_down:
-            down_payload = {**down_state, "ts": timebox.utc_iso()}
-            self.publisher.publish_grds(down_payload)
-            self._last_payload_down = down_state
-            self.logger.log(f"Publicado snapshot de desconectados en {config.MQTT_TOPIC_GRDS}: {down_payload}", origin="OBS/MW")
-
-    def start_observer_loop(self):
-        """
-        Loop principal: lee estados Modbus, persiste cambios y publica snapshots normalizados.
-        """
-        self.logger.log(
-            f"Iniciando observador de GRD Middleware (Unit ID: {self.default_unit_id}, Intervalo: {self.refresh_interval}s)...",
-            origin="OBS/MW"
-        )
-
-        # Primera publicaciÃ³n (si ya hay datos en DB)
-        try:
-            self._publish_snapshots_if_changed()
-        except Exception:
-            pass
-
-        while True:
-            self._refresh_grd_data()
-            grd_ids_to_monitor = list(self._active_grd_data.keys()) if self._active_grd_data else []
-
-            if not grd_ids_to_monitor:
-                self.logger.log("No hay GRDs para monitorear. Esperando...", origin="OBS/MW")
-                time.sleep(self.refresh_interval)
-                continue
-
-            timestamp_now = timebox.format_utc(timebox.utc_now(), '%Y-%m-%d %H:%M:%S')
-
-            if not self.driver.is_connected() and not self.driver.connect():
+            payload = {**grado_state, "ts": timebox.utc_iso()}
+            if self.publisher.publish_grado(payload):
+                self._last_payload_grado = grado_state
                 self.logger.log(
-                    "No se pudo establecer conexion con el servidor Modbus. Reintentando en el proximo ciclo.",
-                    origin="OBS/MW"
-                )
-                time.sleep(self.refresh_interval)
-                continue
-
-            hubo_cambios = False
-
-            for grd_id in grd_ids_to_monitor:
-                if grd_id == 4:
-                    self.logger.log(f"Omitiendo GRD_ID {grd_id} del monitoreo.", origin="OBS/MW")
-                    continue
-
-                grd_description = self._active_grd_data.get(grd_id, "Desconocido")
-                modbus_start_address_offset = (grd_id - 1) * self.register_count
-
-                registers_data = self.driver.read_input_registers(
-                    modbus_start_address_offset,
-                    self.register_count,
-                    unit_id=self.default_unit_id
+                    f"Publicado grado global en {config.MQTT_TOPIC_GRADO}: {payload}",
+                    origin="OBS/MW",
                 )
 
-                if registers_data is not None and len(registers_data) >= self.register_count:
-                    reg_16_value = registers_data[15]
-                    current_connected_value = self.get_bit(reg_16_value, 0)
-                else:
-                    self.logger.log(
-                        f"Fallo al leer registros para GRD_ID {grd_id} ({grd_description}). Asumiendo estado DESCONECTADO.",
-                        origin="OBS/MW"
-                    )
-                    current_connected_value = 0
+        if down_state != self._last_payload_down:
+            payload = {**down_state, "ts": timebox.utc_iso()}
+            if self.publisher.publish_grds(payload):
+                self._last_payload_down = down_state
+                self.logger.log(
+                    f"Publicado snapshot de desconectados en {config.MQTT_TOPIC_GRDS}: {payload}",
+                    origin="OBS/MW",
+                )
 
-                latest_value_in_db_for_grd = self._latest_states.get(grd_id)
+    def _read_grd_state(self, grd_id: int, description: str, timestamp: str) -> int | None:
+        address = (grd_id - 1) * self.register_count
+        registers = self.driver.read_input_registers(
+            address,
+            self.register_count,
+            unit_id=self.default_unit_id,
+        )
+        if registers is not None and len(registers) >= 16:
+            self.state_registry.mark_read_success(grd_id)
+            return self.get_bit(int(registers[15]), 0)
 
-                if current_connected_value != latest_value_in_db_for_grd:
-                    self.logger.log(
-                        f"Cambio detectado en ({grd_description}): MB={current_connected_value}, DB={latest_value_in_db_for_grd}",
-                        origin="OBS/MW"
-                    )
-                    dao.insert_historico_reading(grd_id, timestamp_now, current_connected_value)
-                    self._latest_states.update(grd_id, current_connected_value)
-                    hubo_cambios = True
+        failures = self.state_registry.mark_read_failure(grd_id, timestamp)
+        self.logger.log(
+            f"Lectura no disponible para GRD {grd_id} ({description}); "
+            f"fallos consecutivos={failures}/{self.failure_threshold}.",
+            origin="OBS/MW",
+        )
+        if failures < self.failure_threshold:
+            return None
 
-            if hubo_cambios:
+        self.logger.log(
+            f"GRD {grd_id} ({description}) declarado desconectado luego de "
+            f"{failures} fallos consecutivos.",
+            origin="OBS/MW",
+        )
+        return 0
+
+    def _run_cycle(self, stop_event: threading.Event) -> None:
+        unavailable_before = self.state_registry.unavailable_snapshot()
+        self._refresh_grd_data()
+        grd_data = self._active_grd_data or {}
+        if not grd_data:
+            if self._last_payload_grado is None or self._last_payload_down is None:
                 self._publish_snapshots_if_changed()
+            return
 
-            time.sleep(self.refresh_interval)
+        timestamp = timebox.utc_iso()
+        if not self.driver.is_connected() and not self.driver.connect():
+            for grd_id in grd_data:
+                if grd_id != 4:
+                    self.state_registry.mark_read_failure(
+                        grd_id,
+                        timestamp,
+                        confirmable=False,
+                    )
+            self.logger.log(
+                "Servidor Modbus no disponible; se conserva el ultimo estado confirmado.",
+                origin="OBS/MW",
+            )
+            if unavailable_before != self.state_registry.unavailable_snapshot():
+                self._publish_snapshots_if_changed()
+            return
+
+        changed = False
+        monitored = [item for item in grd_data.items() if item[0] != 4]
+        for index, (grd_id, description) in enumerate(monitored):
+            if stop_event.is_set():
+                break
+            current = self._read_grd_state(grd_id, description, timestamp)
+            if current is not None and current != self.state_registry.get(grd_id):
+                grd_state_dao.record_transition(grd_id, timestamp, current)
+                self.state_registry.update(grd_id, current)
+                changed = True
+                self.logger.log(
+                    f"Transicion confirmada en {description}: conectado={current}",
+                    origin="OBS/MW",
+                )
+
+            if not self.driver.is_connected():
+                for pending_id, _pending_description in monitored[index + 1:]:
+                    self.state_registry.mark_read_failure(
+                        pending_id,
+                        timestamp,
+                        confirmable=False,
+                    )
+                break
+
+        if (
+            changed
+            or unavailable_before != self.state_registry.unavailable_snapshot()
+            or self._last_payload_grado is None
+            or self._last_payload_down is None
+        ):
+            self._publish_snapshots_if_changed()
+
+    def start_observer_loop(
+        self,
+        stop_event: threading.Event,
+        heartbeat: Callable[[], None],
+    ) -> None:
+        self.logger.log(
+            f"Iniciando observador GRD (Unit ID: {self.default_unit_id}, "
+            f"intervalo: {self.refresh_interval}s).",
+            origin="OBS/MW",
+        )
+        self._publish_snapshots_if_changed()
+
+        while not stop_event.is_set():
+            self._run_cycle(stop_event)
+            heartbeat()
+            stop_event.wait(self.refresh_interval)
