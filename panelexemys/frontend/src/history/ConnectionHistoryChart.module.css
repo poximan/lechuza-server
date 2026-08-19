@@ -9,6 +9,14 @@
   width: 100%;
   min-width: 52rem;
   height: auto;
+  touch-action: pan-y;
+  user-select: none;
+}
+.pannable {
+  cursor: grab;
+}
+.dragging {
+  cursor: grabbing;
 }
 .zoomToolbar {
   display: flex;
@@ -19,10 +27,19 @@
   color: var(--sc-color-text-muted);
   font-size: var(--sc-font-size-sm);
 }
-.zoomToolbar > div {
+.zoomToolbar > div:last-child {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sc-space-1);
+}
+.rangeSummary {
+  display: grid;
+  gap: var(--sc-space-1);
+}
+.rangeSummary small {
+  max-width: 32rem;
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-xs);
 }
 .plotBackground {
   fill: var(--sc-color-surface);
@@ -42,6 +59,54 @@
   stroke: var(--sc-color-text);
   stroke-linejoin: round;
   stroke-width: 2.5;
+}
+.changePoint {
+  outline: none;
+}
+.changeGuide {
+  stroke: color-mix(in srgb, var(--sc-color-text) 32%, transparent);
+  stroke-dasharray: 4 4;
+  stroke-width: 1;
+}
+.changePoint:hover .changeGuide,
+.changePoint:focus .changeGuide {
+  stroke: color-mix(in srgb, var(--sc-color-text) 72%, transparent);
+  stroke-width: 1.5;
+}
+.connectedChange,
+.disconnectedChange {
+  stroke: var(--sc-color-background);
+  stroke-width: 3;
+}
+.connectedChange {
+  fill: var(--sc-color-success);
+}
+.disconnectedChange {
+  fill: var(--sc-color-danger);
+}
+.changeTarget {
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 22;
+}
+.changeTooltip {
+  pointer-events: none;
+}
+.changeTooltip rect {
+  fill: var(--sc-color-text);
+  filter: drop-shadow(0 3px 6px rgb(0 0 0 / 22%));
+  stroke: var(--sc-color-border);
+  stroke-width: 1;
+}
+.changeTooltip text {
+  fill: var(--sc-color-background);
+  font-family: var(--sc-font-sans);
+  font-size: 14px;
+  font-weight: 700;
+}
+.changeTooltip .tooltipInstant {
+  font-size: 13px;
+  font-weight: 500;
 }
 .stateLabel,
 .tickLabel {

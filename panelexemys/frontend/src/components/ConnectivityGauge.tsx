@@ -22,7 +22,7 @@ export function ConnectivityGauge({
       aria-valuemin={0}
       aria-valuenow={value}
     >
-      <svg viewBox="0 0 220 132">
+      <svg aria-hidden="true" viewBox="0 0 220 126">
         <path
           className={styles.base}
           d="M20 112 A90 90 0 0 1 200 112"
@@ -48,17 +48,18 @@ export function ConnectivityGauge({
           strokeDasharray={`${100 - yellowBelow} ${yellowBelow}`}
           strokeDashoffset={-yellowBelow}
         />
-        <line
+        <path
           className={styles.needle}
+          d="M106 111 L108.5 43 Q110 36 111.5 43 L114 111 Z"
           transform={`rotate(${angle} 110 112)`}
-          x1="110"
-          x2="110"
-          y1="112"
-          y2="40"
         />
-        <circle className={styles.hub} cx="110" cy="112" r="8" />
+        <circle className={styles.hub} cx="110" cy="112" r="9" />
+        <circle className={styles.hubCenter} cx="110" cy="112" r="3" />
       </svg>
-      <strong>{value.toFixed(1)}%</strong>
+      <div className={styles.value}>
+        <strong>{value.toFixed(1)}%</strong>
+        <span>conectividad</span>
+      </div>
     </div>
   );
 }

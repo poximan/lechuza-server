@@ -7,6 +7,7 @@ Microservicio FastAPI que releva el estado de instancias remotas de `charo-daemo
 - Cargar el inventario de instancias desde `CHARITO_TARGETS_JSON`.
 - Consultar periodicamente el endpoint remoto de metricas.
 - Persistir el ultimo estado observado en `CHARITO_STATE_FILE`.
+- Eliminar del estado consolidado las instancias que ya no figuran en el inventario al iniciar el servicio.
 - Exponer una API HTTP interna para que `panelexemys` consulte estado agregado o por instancia.
 - Publicar por MQTT el snapshot consolidado en `CHARITO_MQTT_STATE_TOPIC` para consumidores externos como `panelito`.
 
@@ -40,6 +41,7 @@ Contrato MQTT:
 - `CHARITO_MQTT_STATE_TOPIC`, por defecto recomendado `charito/state`.
 - Payload retenido: objeto JSON con `ts` e `items`.
 - `charito-service` es la unica fuente de verdad del estado `charo-daemon`; los consumidores no deben suscribirse directo a `charodaemon/host/*`.
+- La ausencia de una instancia en un snapshot completo significa que fue retirada del inventario; `panelexemys` usa esa señal para recuperar cualquier alarma activa asociada.
 - Estados validos por instancia: `online`, `offline`, `error` y `desconocido`.
 - Un daemon alcanzable pero sin metricas validas se publica como `status: "error"` con `hostReachable: true`.
 

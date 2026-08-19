@@ -245,6 +245,19 @@ class NotifManager:
         if not isinstance(snapshot, dict):
             snapshot = {}
 
+        items = snapshot.get("items")
+        if isinstance(items, list):
+            current_instance_ids = {
+                str(item.get("instanceId") or item.get("alias") or "").strip()
+                for item in items
+                if isinstance(item, dict)
+                and str(item.get("instanceId") or item.get("alias") or "").strip()
+            }
+            for active_key in alarm_incidents_dao.active_keys("charito:"):
+                instance_id = active_key.split(":", 1)[1]
+                if instance_id not in current_instance_ids:
+                    self._observe_alarm_condition(active_key, False)
+
         for daemon in self.charito_notifier.evaluate_condition(snapshot):
             alias = daemon.get("alias") or daemon.get("instance_id") or "charo-daemon"
             instance_id = daemon.get("instance_id") or alias

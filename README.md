@@ -29,6 +29,8 @@ Compose.
 - `panelexemys` consume las APIs internas de los demas servicios.
 - `modbus-collector-service`, `pve-service` y `modem-link-monitor` publican estado por MQTT.
 - `charito-service` consulta `/metrics` de las instancias declaradas en `CHARITO_TARGETS_JSON` y publica el consolidado para `panelito`.
+- El inventario operativo de Charito usa `pc0092-sca-wiz` como nombre vigente; `pc0043-sca-wiz` es un identificador retirado y `pc-hugo` ya no forma parte del seguimiento.
+- `pve-service` releva las VMs `100`, `102`, `107`, `108` y `110`; `panelexemys` usa el mismo `PVE_VHOST_IDS` para generar sus alarmas por VM.
 - `alarmero-service` consume por HTTP el ciclo de alarmas de `panelexemys` y los despachos de `mensagelo`; no accede a sus bases.
 - La persistencia local vive bajo `volumes/`.
 
@@ -53,5 +55,7 @@ y estado SMTP por el identificador de incidencia y calcula frecuencias, mediana 
 percentil 90 de despeje. Las estimaciones iniciales se declaran en
 `ALARM_CLEARANCE_ESTIMATES_MINUTES`. El acceso publico es protegido en `/alarmero/`.
 
-Snapshots ausentes o invalidos no resuelven alarmas. Para `charito-service`, la
-desaparicion temporal de una instancia tampoco se interpreta como recuperacion.
+Snapshots ausentes o invalidos no resuelven alarmas. Cuando `charito-service`
+entrega un snapshot completo valido, `panelexemys` contrasta sus instancias contra
+las incidencias activas: una instancia retirada del inventario inicia el ciclo
+normal de recuperacion y el cambio se replica a `alarmero-service`.

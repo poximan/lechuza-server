@@ -5,6 +5,11 @@ el unico responsable de detectar y resolver incidencias; Mensagelo es el unico
 responsable del despacho de correo. Alarmero consume ambos contratos por HTTP y
 mantiene su propio historial append-only en SQLite.
 
+El endpoint `/internal/alarms` pertenece a `panelexemys` y es exclusivamente el
+contrato privado de sincronizacion que consume este servicio. No es una pagina ni
+un endpoint publico para operadores. Las nuevas claves de VM o Charito se incorporan
+automaticamente cuando `panelexemys` publica sus eventos de ciclo de vida.
+
 Estados visibles:
 
 - `potential`: condicion detectada que aun no cumplio el tiempo de activacion.
