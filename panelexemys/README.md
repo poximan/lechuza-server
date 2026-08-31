@@ -41,6 +41,16 @@ rutas y conecta controladores.
 - `panelito` consume por MQTT los topicos normalizados `lechuza-server/router/status`, `lechuza-server/modbus/grd/summary`, `lechuza-server/modbus/grd/disconnected`, `lechuza-server/email/status`, `lechuza-server/email/event`, `lechuza-server/pve/status`, `lechuza-server/modbus/ge/edif-estivariz/status`, `lechuza-server/modbus/ge/edif-fontana/status`, `charito/state` y `panelexemys/status`.
 - `panelito` dispara pedidos RPC por `lechuza-server/rpc/req/{accion}` y recibe respuestas en `lechuza-server/rpc/res/{clientId}/{corr}`. Las acciones vigentes son `get_global_status`, `get_modem_status` y `send_email_test`.
 - `panelexemys` consume por HTTP a `modbus-collector-service`, `pve-service`, `modem-link-monitor`, `charito-service` y `mensagelo`; `alarmero-service` consume a `panelexemys` por HTTP.
+- La capacidad Relés calcula para presentación las corrientes en amperes a partir
+  de las muestras crudas y la escala entregadas por el colector, y solicita
+  por un endpoint separado la perturbación más reciente almacenada por el relé,
+  para no transferir las muestras con cada actualización general de la pantalla.
+  La lectura no depende del bloque de última falla. La gráfica muestra el número
+  real del registro y el pretiempo y post-tiempo informados por su cabecera, porque
+  el relé no admite una ventana simétrica de ±7,5 segundos.
+- La misma capacidad muestra la cuenta regresiva real hasta la próxima ronda y
+  las cuatro consultas Modbus más recientes de cada relé con su resultado. Todas
+  las estampas visibles usan UTC−3 y reloj de 24 horas.
 - El seguimiento Proxmox y sus alarmas usan la misma lista `PVE_VHOST_IDS`; actualmente comprende las VMs `100`, `102`, `107`, `108` y `110`.
 - Un snapshot Charito completo y valido tambien permite cerrar, mediante la recuperacion normal, incidencias de instancias retiradas del inventario. Los errores o snapshots invalidos conservan las incidencias existentes.
 - `panelexemys` envia email a `ALARM_EMAIL_RECIPIENT` cuando cambia el interruptor lado grupo de Estivariz o Fontana. Mantiene ademas la alarma sostenida historica para Estivariz cuando el lado grupo permanece cerrado.

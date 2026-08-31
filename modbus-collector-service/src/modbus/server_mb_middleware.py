@@ -11,7 +11,7 @@ from src.services.grd_service import GrdService
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.utils import timebox
 
-from .modbus_driver import ModbusTcpDriver
+from .modbus_driver import ModbusTcpReadOnlyDriver
 
 
 class GrdMiddlewareClient:
@@ -21,7 +21,7 @@ class GrdMiddlewareClient:
 
     def __init__(
         self,
-        modbus_driver: ModbusTcpDriver,
+        modbus_driver: ModbusTcpReadOnlyDriver,
         default_unit_id: int,
         register_count: int,
         refresh_interval: int,

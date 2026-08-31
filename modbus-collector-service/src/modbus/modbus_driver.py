@@ -13,7 +13,7 @@ class ModbusTcpConnectionConfig:
     timeout: int = 10
 
 
-class ModbusTcpDriver:
+class ModbusTcpReadOnlyDriver:
     """
     Driver generico para la conexion y comunicacion con un servidor Modbus TCP.
     Encapsula la logica de conexion, reintento y manejo de errores basicos.
@@ -39,7 +39,11 @@ class ModbusTcpDriver:
         self._io_lock = threading.RLock()
 
     @classmethod
-    def from_config(cls, cfg: ModbusTcpConnectionConfig, logger: Logosaurio) -> "ModbusTcpDriver":
+    def from_config(
+        cls,
+        cfg: ModbusTcpConnectionConfig,
+        logger: Logosaurio,
+    ) -> "ModbusTcpReadOnlyDriver":
         return cls(host=cfg.host, port=cfg.port, timeout=cfg.timeout, logger=logger, name=cfg.name)
 
     @property
@@ -173,34 +177,6 @@ class ModbusTcpDriver:
                 )
                 self.disconnect()
                 return None
-
-    def write_single_register(self, address_offset: int, value: int, unit_id: int):
-        """
-        Escribe un unico registro de retencion (Holding Register) en el esclavo Modbus.
-        """
-        with self._io_lock:
-            if not self._is_connected and not self.connect():
-                self.logger.log(f"Fallo al conectar para escribir registro (Unit ID {unit_id})", origin="OBS/DRV")
-                return False
-
-            try:
-                result = self._client.write_register(address_offset, value, slave=unit_id)
-                if result is None or (hasattr(result, 'isError') and result.isError()):
-                    self.logger.log(
-                        f"Error al escribir registro para Unit ID {unit_id}, Addr {address_offset}, Value {value}: {result}",
-                        origin="OBS/DRV"
-                    )
-                    return False
-
-                self.logger.log(f"Escritura exitosa: Unit ID {unit_id}, Addr {address_offset}, Value {value}", origin="OBS/DRV")
-                return True
-            except Exception as e:
-                self.logger.log(
-                    f"Excepcion al escribir registro para Unit ID {unit_id}, Addr {address_offset}, Value {value}: {e}",
-                    origin="OBS/DRV"
-                )
-                self.disconnect()
-                return False
 
     def is_connected(self) -> bool:
         """

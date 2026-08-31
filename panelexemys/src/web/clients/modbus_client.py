@@ -63,6 +63,9 @@ class ModbusMiddlewareHttpClient:
     def get_reles_faults(self) -> Dict[str, Any]:
         return self._request("GET", "/api/reles/faults")
 
+    def get_rele_latest_disturbance(self, relay_id: int) -> Dict[str, Any]:
+        return self._request("GET", f"/api/reles/{relay_id}/latest-disturbance")
+
     def get_reles_observer(self) -> bool:
         data = self._request("GET", "/api/reles/observer")
         return bool(data.get("enabled", False))

@@ -11,15 +11,23 @@ class OverviewApi:
     def __init__(
         self,
         service: OverviewService,
+        require_protected: Callable[[], Any | None],
         response: Callable[[Callable[[], dict[str, Any]]], Any],
     ):
         self.service = service
+        self.require_protected = require_protected
         self.response = response
 
     def get(self) -> Any:
+        denied = self.require_protected()
+        if denied is not None:
+            return denied
         return self.response(self.service.get_contract)
 
     def get_grd_detail(self) -> Any:
+        denied = self.require_protected()
+        if denied is not None:
+            return denied
         try:
             grd_id = int(request.args["grd_id"])
             window = str(request.args.get("window", "1sem"))

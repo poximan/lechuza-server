@@ -1,0 +1,55 @@
+.container {
+  display: grid;
+  gap: var(--sc-space-2);
+  margin-top: var(--sc-space-4);
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sc-space-2);
+}
+.header span,
+.message {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sc-space-3);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc-space-1);
+  font-size: var(--sc-font-size-sm);
+  font-weight: 700;
+}
+.legend i {
+  width: 1.25rem;
+  height: 0.18rem;
+}
+.chart {
+  width: 100%;
+  min-height: 15rem;
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+.axis {
+  stroke: var(--sc-color-border);
+  stroke-width: 1;
+}
+.trigger {
+  stroke: var(--sc-color-danger);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.5;
+}
+.label {
+  fill: var(--sc-color-text-muted);
+  font-size: 12px;
+}
+.message {
+  margin: var(--sc-space-3) 0 0;
+}

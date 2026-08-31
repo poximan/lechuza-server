@@ -45,10 +45,12 @@ class ReactApi:
                 modbus_client=modbus_client,
                 modem_client=modem_link_monitor_client,
             ),
+            require_protected=self._require_protected,
             response=self._response,
         )
         self.charito_api = CharitoApi(
             service=CharitoService(charito_client),
+            require_protected=self._require_protected,
             response=self._response,
         )
         self.generadores_api = GeneradoresApi(
@@ -60,6 +62,7 @@ class ReactApi:
                 client=proxmox_client,
                 view_dao=ProxmoxViewDao(),
             ),
+            require_protected=self._require_protected,
             response=self._response,
         )
         self.reles_api = RelesApi(
@@ -134,6 +137,12 @@ class ReactApi:
             "reles_observer",
             self.reles_api.set_observer,
             methods=["PUT"],
+        )
+        self.blueprint.add_url_rule(
+            "/reles/<int:relay_id>/latest-disturbance",
+            "rele_latest_disturbance",
+            self.reles_api.latest_disturbance,
+            methods=["GET"],
         )
         self.blueprint.add_url_rule(
             "/mantenimiento",

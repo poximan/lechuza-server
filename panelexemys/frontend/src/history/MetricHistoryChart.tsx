@@ -130,6 +130,7 @@ export function MetricHistoryChart({
           >
             <title>
               {new Date(point.iso).toLocaleString("es-AR", {
+                hour12: false,
                 timeZone: "Etc/GMT+3",
               })}
               : {point.value.toFixed(2)}%

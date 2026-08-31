@@ -20,6 +20,7 @@ def create_relay_router(context: Callable[[], ApplicationContext]) -> APIRouter:
 
     @router.get("/faults")
     def faults() -> Dict[str, Any]:
+        application = context()
         items: List[dict] = []
         for modbus_id, description in reles_dao.get_all_reles_with_descriptions().items():
             internal_id = reles_dao.get_internal_id_by_modbus_id(modbus_id)
@@ -32,8 +33,29 @@ def create_relay_router(context: Callable[[], ApplicationContext]) -> APIRouter:
                 timestamp = latest["timestamp"]
                 value = timestamp if isinstance(timestamp, datetime) else timebox.parse(timestamp, legacy=True)
                 latest["timestamp"] = timebox.utc_iso(value)
-            items.append({"id_modbus": modbus_id, "description": description, "latest": latest})
-        return {"items": items}
+                latest["phase_a_raw"] = latest.pop("fasea_corr")
+                latest["phase_b_raw"] = latest.pop("faseb_corr")
+                latest["phase_c_raw"] = latest.pop("fasec_corr")
+                latest["earth_raw"] = latest.pop("tierra_corr")
+                latest["current_calculation"] = (
+                    application.orchestrator.relay_current_calculation_snapshot(modbus_id)
+                )
+            items.append(
+                {
+                    "id_modbus": modbus_id,
+                    "description": description,
+                    "latest": latest,
+                    "modbus_queries": application.orchestrator.relay_query_snapshot(
+                        modbus_id
+                    ),
+                }
+            )
+        return {
+            "items": items,
+            "observer_runtime": (
+                application.orchestrator.relay_observer_runtime_snapshot()
+            ),
+        }
 
     @router.get("/observer")
     def get_observer() -> Dict[str, Any]:
@@ -43,5 +65,14 @@ def create_relay_router(context: Callable[[], ApplicationContext]) -> APIRouter:
     def set_observer(payload: RelayObserverRequest) -> JSONResponse:
         context().state_store.set_reles_enabled(bool(payload.enabled))
         return JSONResponse({"enabled": bool(payload.enabled)})
+
+    @router.get("/{relay_id}/latest-disturbance")
+    def latest_disturbance(relay_id: int) -> Any:
+        if reles_dao.get_internal_id_by_modbus_id(relay_id) is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"No existe el rele Modbus {relay_id}"},
+            )
+        return context().orchestrator.relay_disturbance_snapshot(relay_id)
 
     return router

@@ -2,7 +2,7 @@ import threading
 from collections.abc import Callable
 
 from logosaurio import Logosaurio
-from src.modbus.modbus_driver import ModbusTcpDriver
+from src.modbus.modbus_driver import ModbusTcpReadOnlyDriver
 from src.services.generator_state import GeneratorStateCache
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.utils import timebox
@@ -15,7 +15,7 @@ class EdifFontanaGeneratorClient:
 
     def __init__(
         self,
-        modbus_driver: ModbusTcpDriver,
+        modbus_driver: ModbusTcpReadOnlyDriver,
         unit_id: int,
         register_offset: int,
         register_count: int,

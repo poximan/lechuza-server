@@ -38,6 +38,16 @@ export class PanelexemysApiClient {
     );
   }
 
+  public async relayLatestDisturbance(
+    relayId: number,
+    signal?: AbortSignal,
+  ): Promise<JsonRecord> {
+    return this.parser.record(
+      await this.get(`reles/${relayId}/latest-disturbance`, signal),
+      "rele latest disturbance",
+    );
+  }
+
   public async setProxmoxView(view: "vivo" | "historico"): Promise<JsonRecord> {
     return this.parser.record(
       await this.send("proxmox/view", "PUT", { view }),

@@ -38,10 +38,20 @@ export function App() {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        const [nextNavigation, nextData] = await Promise.all([
-          client.navigation(signal),
-          client.page(page, signal),
-        ]);
+        const nextNavigation = await client.navigation(signal);
+        const currentPath = window.location.pathname.replace(/\/$/, "");
+        const visiblePage = nextNavigation.items.some(
+          (item) => item.href === currentPath,
+        );
+        if (!visiblePage) {
+          const firstVisible = nextNavigation.items[0];
+          if (firstVisible === undefined) {
+            throw new Error("El modo actual no tiene solapas habilitadas");
+          }
+          window.location.replace(`${firstVisible.href}/`);
+          return;
+        }
+        const nextData = await client.page(page, signal);
         setNavigation(nextNavigation);
         setData(nextData);
         setDataRevision((current) => current + 1);

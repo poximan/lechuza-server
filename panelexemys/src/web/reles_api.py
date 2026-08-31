@@ -19,9 +19,6 @@ class RelesApi:
         self.response = response
 
     def get(self) -> Any:
-        denied = self.require_protected()
-        if denied is not None:
-            return denied
         return self.response(self.service.get_contract)
 
     def set_observer(self) -> Any:
@@ -34,3 +31,6 @@ class RelesApi:
         return self.response(
             lambda: self.service.set_observer(bool(body["enabled"]))
         )
+
+    def latest_disturbance(self, relay_id: int) -> Any:
+        return self.response(lambda: self.service.get_latest_disturbance(relay_id))

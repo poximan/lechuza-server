@@ -6,7 +6,7 @@ from logosaurio import Logosaurio
 
 from src import config
 from src.control.latest_state_registry import LatestStateRegistry
-from src.modbus.modbus_driver import ModbusTcpConnectionConfig, ModbusTcpDriver
+from src.modbus.modbus_driver import ModbusTcpConnectionConfig, ModbusTcpReadOnlyDriver
 from src.modbus.server_ge_estivariz import EdifEstivarizGeneratorClient
 from src.modbus.server_ge_fontana import EdifFontanaGeneratorClient
 from src.modbus.server_mb_middleware import GrdMiddlewareClient
@@ -46,7 +46,8 @@ class ModbusOrchestrator:
         self._lock = threading.RLock()
         self._threads: dict[str, threading.Thread] = {}
         self._workers: dict[str, dict[str, Any]] = {}
-        self._drivers: dict[str, ModbusTcpDriver] = {}
+        self._drivers: dict[str, ModbusTcpReadOnlyDriver] = {}
+        self._relay_client: ProtectionRelayClient | None = None
         self._started = False
 
     def start(self) -> None:
@@ -55,7 +56,7 @@ class ModbusOrchestrator:
                 raise RuntimeError("El orquestador Modbus ya fue iniciado")
             self._started = True
 
-        mw_driver = ModbusTcpDriver.from_config(
+        mw_driver = ModbusTcpReadOnlyDriver.from_config(
             ModbusTcpConnectionConfig(
                 name=str(config.MW_EXEMYS["name"]),
                 host=str(config.MW_EXEMYS["host"]),
@@ -64,7 +65,7 @@ class ModbusOrchestrator:
             ),
             self.logger,
         )
-        fontana_driver = ModbusTcpDriver.from_config(
+        fontana_driver = ModbusTcpReadOnlyDriver.from_config(
             ModbusTcpConnectionConfig(
                 name=str(config.EDIF_FONTANA_GE["name"]),
                 host=str(config.EDIF_FONTANA_GE["host"]),
@@ -77,6 +78,12 @@ class ModbusOrchestrator:
 
         mw_interval = int(config.MW_EXEMYS["interval_seconds"])
         fontana_interval = int(config.EDIF_FONTANA_GE["interval_seconds"])
+        self._relay_client = ProtectionRelayClient(
+            modbus_driver=mw_driver,
+            refresh_interval=mw_interval,
+            logger=self.logger,
+            observer_store=self.observer_store,
+        )
         targets: dict[str, WorkerSpec] = {
             "grd-monitor": (
                 GrdMiddlewareClient(
@@ -92,12 +99,7 @@ class ModbusOrchestrator:
                 mw_interval,
             ),
             "rele-monitor": (
-                ProtectionRelayClient(
-                    modbus_driver=mw_driver,
-                    refresh_interval=mw_interval,
-                    logger=self.logger,
-                    observer_store=self.observer_store,
-                ).start_monitoring_loop,
+                self._relay_client.start_monitoring_loop,
                 mw_interval,
             ),
             "ge-estivariz-monitor": (
@@ -238,6 +240,26 @@ class ModbusOrchestrator:
             "drivers": drivers,
             "mqtt_connected": mqtt_connected,
         }
+
+    def relay_disturbance_snapshot(self, relay_id: int) -> dict[str, Any]:
+        if self._relay_client is None:
+            raise RuntimeError("El observador de reles todavia no fue iniciado")
+        return self._relay_client.get_disturbance_snapshot(relay_id)
+
+    def relay_current_calculation_snapshot(self, relay_id: int) -> dict[str, Any]:
+        if self._relay_client is None:
+            raise RuntimeError("El observador de reles todavia no fue iniciado")
+        return self._relay_client.get_current_calculation_snapshot(relay_id)
+
+    def relay_query_snapshot(self, relay_id: int) -> list[dict]:
+        if self._relay_client is None:
+            raise RuntimeError("El observador de reles todavia no fue iniciado")
+        return self._relay_client.get_query_snapshot(relay_id)
+
+    def relay_observer_runtime_snapshot(self) -> dict[str, Any]:
+        if self._relay_client is None:
+            raise RuntimeError("El observador de reles todavia no fue iniciado")
+        return self._relay_client.get_observer_runtime_snapshot()
 
     def stop(self) -> None:
         self._stop_event.set()

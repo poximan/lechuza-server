@@ -17,6 +17,9 @@ resultado estatico a la imagen Python final.
 La navegacion tiene una fuente unica en `src/web/navigation.py`. El contrato
 `GET /panelexemys/api/navigation` informa el modo autenticado y solamente las entradas
 visibles para ese modo, ademas del intervalo de actualizacion obligatorio.
+En modo seguro se publican solamente Generadores y Reles MiCOM. En modo protegido
+se publican todas las vistas, incluidas esas dos. Las lecturas de Reles MiCOM son
+seguras; cambiar el estado de su observador sigue siendo una operacion protegida.
 
 ## Responsabilidades
 

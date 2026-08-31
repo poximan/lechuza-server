@@ -4,7 +4,7 @@ from typing import Optional
 
 from src import config
 from logosaurio import Logosaurio
-from src.modbus.modbus_driver import ModbusTcpDriver
+from src.modbus.modbus_driver import ModbusTcpReadOnlyDriver
 from src.services.generator_state import GeneratorStateCache
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.utils import timebox
@@ -18,7 +18,7 @@ class EdifEstivarizGeneratorClient:
 
     def __init__(
         self,
-        modbus_driver: ModbusTcpDriver,
+        modbus_driver: ModbusTcpReadOnlyDriver,
         default_unit_id: int,
         refresh_interval: int,
         logger: Logosaurio,

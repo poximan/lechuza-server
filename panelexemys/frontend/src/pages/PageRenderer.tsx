@@ -39,7 +39,14 @@ export function PageRenderer({
     case "proxmox":
       return <ProxmoxPage client={client} data={data} onChanged={onChanged} />;
     case "reles":
-      return <RelaysPage client={client} data={data} onChanged={onChanged} />;
+      return (
+        <RelaysPage
+          client={client}
+          data={data}
+          onChanged={onChanged}
+          protectedMode={protectedMode}
+        />
+      );
     case "mantenimiento":
       return <MaintenancePage data={data} />;
     case "mensagelo":
