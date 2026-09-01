@@ -27,7 +27,8 @@ class ProtectionRelayClient:
     """Monitorea la ultima falla y la perturbacion mas reciente de cada rele."""
 
     CATALOG_REFRESH_SECONDS = 300
-    DISTURBANCE_RETRY_SECONDS = 300
+    DISTURBANCE_RETRY_SECONDS = 60
+    DISTURBANCE_READ_ATTEMPTS = 2
     FAULT_RECOGNITION_INTERVAL_SECONDS = 3600
 
     def __init__(
@@ -117,37 +118,31 @@ class ProtectionRelayClient:
             return None
         with self._state_lock:
             self._last_fault_recognitions[relay_id] = timebox.monotonic()
-        if record.fault_datetime is None or record.fault_date_validity != 0:
-            self.logger.log(
-                f"Rele {relay_id} devolvio una falla sin timestamp valido; no se persiste.",
-                origin="OBS/RELE",
-            )
-            self._get_current_profile(relay_id)
-            return None
-
         internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
         if internal_id is None:
             raise RuntimeError(
                 f"El rele Modbus {relay_id} no tiene ID interno en el catalogo migrado"
             )
 
-        timestamp = timebox.utc_iso(record.fault_datetime)
+        timestamp = timebox.utc_iso_milliseconds(record.fault_datetime)
         signature = (record.fault_number, timestamp)
 
         if self._last_fault_signatures.get(relay_id) != signature:
-            inserted = fallas_reles_dao.insert_if_absent(
+            replaced = fallas_reles_dao.replace_if_newer(
                 id_rele=internal_id,
                 numero_falla=record.fault_number,
                 timestamp=timestamp,
+                formato_timestamp=record.timestamp_format,
                 fasea_corr=record.current_phase_a,
                 faseb_corr=record.current_phase_b,
                 fasec_corr=record.current_phase_c,
                 tierra_corr=record.earth_current,
             )
             self._last_fault_signatures[relay_id] = signature
-            if inserted:
+            if replaced:
                 self.logger.log(
-                    f"Falla {record.fault_number} del rele {relay_id} persistida.",
+                    f"Falla actual del rele {relay_id} reemplazada por "
+                    f"la numero {record.fault_number}.",
                     origin="OBS/RELE",
                 )
 
@@ -184,25 +179,34 @@ class ProtectionRelayClient:
         signature = reference.signature
         if not self._disturbance_due(relay_id, signature):
             return
-        try:
-            disturbance = self.reader.read_disturbance(
-                relay_id,
-                configuration,
-                reference,
-            )
+        last_error: MicomReadError | ValueError | None = None
+        for attempt in range(self.DISTURBANCE_READ_ATTEMPTS):
+            try:
+                disturbance = self.reader.read_disturbance(
+                    relay_id,
+                    configuration,
+                    reference,
+                )
+            except (MicomReadError, ValueError) as exc:
+                last_error = exc
+                self.driver.disconnect()
+                if attempt + 1 < self.DISTURBANCE_READ_ATTEMPTS:
+                    continue
+                break
             disturbance["signature"] = list(signature)
             with self._state_lock:
                 self._disturbances[relay_id] = disturbance
-        except (MicomReadError, ValueError) as exc:
+            last_error = None
+            break
+        if last_error is not None:
             self._set_disturbance_error(
                 relay_id,
-                str(exc),
+                str(last_error),
                 record_number=reference.record_number,
                 signature=signature,
             )
-        finally:
-            with self._state_lock:
-                self._disturbance_attempts[relay_id] = timebox.monotonic()
+        with self._state_lock:
+            self._disturbance_attempts[relay_id] = timebox.monotonic()
 
     def _get_current_profile(self, relay_id: int) -> MicomCurrentProfile | None:
         with self._state_lock:
@@ -423,6 +427,11 @@ class ProtectionRelayClient:
         signature: tuple | None = None,
     ) -> None:
         with self._state_lock:
+            cached = self._disturbances.get(relay_id)
+            if cached is not None and cached.get("status") == "available":
+                cached["refresh_error"] = message
+                cached["refresh_error_timestamp"] = timebox.utc_iso()
+                return
             self._disturbances[relay_id] = {
                 "status": "unavailable",
                 "message": message,

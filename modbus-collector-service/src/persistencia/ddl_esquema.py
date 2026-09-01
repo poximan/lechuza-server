@@ -7,7 +7,7 @@ import sqlite3
 from src.persistencia.configuracion_base_datos import DATABASE_FILE
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 5
 
 SCHEMA_SQL = f"""
 PRAGMA foreign_keys = ON;
@@ -49,13 +49,15 @@ CREATE TABLE reles (
 );
 
 CREATE TABLE fallas_reles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_rele INTEGER NOT NULL,
+    id_rele INTEGER PRIMARY KEY NOT NULL,
     numero_falla INTEGER NOT NULL,
     timestamp TEXT NOT NULL CHECK (
-        length(timestamp) = 20
-        AND timestamp GLOB '????-??-??T??:??:??Z'
+        length(timestamp) = 24
+        AND timestamp GLOB '????-??-??T??:??:??.???Z'
         AND datetime(timestamp) IS NOT NULL
+    ),
+    formato_timestamp TEXT NOT NULL CHECK (
+        formato_timestamp IN ('private', 'iec870')
     ),
     fasea_corr INTEGER,
     faseb_corr INTEGER,

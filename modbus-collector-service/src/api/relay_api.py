@@ -28,11 +28,19 @@ def create_relay_router(context: Callable[[], ApplicationContext]) -> APIRouter:
                 raise RuntimeError(
                     f"El rele Modbus {modbus_id} no tiene ID interno en el catalogo"
                 )
-            latest = fallas_reles_dao.get_latest_falla_for_rele(internal_id)
+            latest = fallas_reles_dao.get_current_falla_for_rele(internal_id)
             if latest and latest.get("timestamp"):
                 timestamp = latest["timestamp"]
-                value = timestamp if isinstance(timestamp, datetime) else timebox.parse(timestamp, legacy=True)
-                latest["timestamp"] = timebox.utc_iso(value)
+                value = (
+                    timestamp
+                    if isinstance(timestamp, datetime)
+                    else timebox.parse_preserving_subseconds(
+                        timestamp,
+                        legacy=True,
+                    )
+                )
+                latest["timestamp"] = timebox.utc_iso_milliseconds(value)
+                latest["timestamp_format"] = latest.pop("formato_timestamp")
                 latest["phase_a_raw"] = latest.pop("fasea_corr")
                 latest["phase_b_raw"] = latest.pop("faseb_corr")
                 latest["phase_c_raw"] = latest.pop("fasec_corr")

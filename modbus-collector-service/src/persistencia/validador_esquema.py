@@ -12,10 +12,10 @@ EXPECTED_COLUMNS = {
     "grd_estado_actual": {"id_grd", "timestamp", "conectado"},
     "reles": {"id", "id_modbus", "descripcion"},
     "fallas_reles": {
-        "id",
         "id_rele",
         "numero_falla",
         "timestamp",
+        "formato_timestamp",
         "fasea_corr",
         "faseb_corr",
         "fasec_corr",
@@ -28,7 +28,7 @@ EXPECTED_PRIMARY_KEYS = {
     "historicos": ["id_grd", "timestamp"],
     "grd_estado_actual": ["id_grd"],
     "reles": ["id"],
-    "fallas_reles": ["id"],
+    "fallas_reles": ["id_rele"],
 }
 
 EXPECTED_NOT_NULL = {
@@ -36,7 +36,12 @@ EXPECTED_NOT_NULL = {
     "historicos": {"id_grd", "timestamp", "conectado"},
     "grd_estado_actual": {"timestamp", "conectado"},
     "reles": {"id_modbus", "descripcion"},
-    "fallas_reles": {"id_rele", "numero_falla", "timestamp"},
+    "fallas_reles": {
+        "id_rele",
+        "numero_falla",
+        "timestamp",
+        "formato_timestamp",
+    },
 }
 
 EXPECTED_FOREIGN_KEYS = {

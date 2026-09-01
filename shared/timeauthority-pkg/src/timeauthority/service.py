@@ -37,6 +37,12 @@ class TimeAuthority:
         normalized = self.ensure_utc(value or self.utc_now())
         return normalized.isoformat().replace("+00:00", "Z")
 
+    def utc_iso_milliseconds(self, value: datetime) -> str:
+        if value.tzinfo is None:
+            raise ValueError("datetime sin zona horaria")
+        normalized = value.astimezone(UTC)
+        return normalized.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
     def ensure_utc(self, value: datetime) -> datetime:
         if value.tzinfo is None:
             raise ValueError("datetime sin zona horaria")
@@ -48,13 +54,38 @@ class TimeAuthority:
         *,
         assume_utc_on_naive: bool = False,
     ) -> datetime:
+        parsed = self._parse_value(
+            value,
+            assume_utc_on_naive=assume_utc_on_naive,
+        )
+        return self.ensure_utc(parsed)
+
+    def parse_preserving_subseconds(
+        self,
+        value: TimestampLike,
+        *,
+        assume_utc_on_naive: bool = False,
+    ) -> datetime:
+        parsed = self._parse_value(
+            value,
+            assume_utc_on_naive=assume_utc_on_naive,
+        )
+        return parsed.astimezone(UTC)
+
+    @staticmethod
+    def _parse_value(
+        value: TimestampLike,
+        *,
+        assume_utc_on_naive: bool,
+    ) -> datetime:
         if isinstance(value, datetime):
             parsed = value
         elif isinstance(value, str):
             text = value.strip()
             if not text:
                 raise ValueError("timestamp vacio")
-            parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
+            normalized_text = text[:-1] + "+00:00" if text.endswith("Z") else text
+            parsed = datetime.fromisoformat(normalized_text)
         else:
             raise TypeError("tipo no soportado para parsear timestamp")
 
@@ -62,7 +93,7 @@ class TimeAuthority:
             if not assume_utc_on_naive:
                 raise ValueError("timestamp sin informacion de zona horaria")
             parsed = parsed.replace(tzinfo=UTC)
-        return self.ensure_utc(parsed)
+        return parsed
 
     def parse_format(self, value: str, pattern: str) -> datetime:
         parsed = datetime.strptime(value, pattern).replace(tzinfo=UTC)

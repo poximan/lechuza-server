@@ -9,11 +9,14 @@
   width: 100%;
   min-width: 52rem;
   height: auto;
-  touch-action: pan-y;
+  touch-action: none;
   user-select: none;
 }
 .pannable {
   cursor: grab;
+}
+.zoomMode {
+  cursor: crosshair;
 }
 .dragging {
   cursor: grabbing;
@@ -31,6 +34,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sc-space-1);
+}
+.zoomToolbar > div:last-child small {
+  align-self: center;
+  padding-inline: var(--sc-space-2);
 }
 .rangeSummary {
   display: grid;
@@ -67,6 +74,19 @@
   stroke: color-mix(in srgb, var(--sc-color-text) 32%, transparent);
   stroke-dasharray: 4 4;
   stroke-width: 1;
+}
+.hoverGuide {
+  pointer-events: none;
+  stroke: color-mix(in srgb, var(--sc-color-text) 72%, transparent);
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+.zoomSelection {
+  pointer-events: none;
+  fill: color-mix(in srgb, var(--sc-color-primary) 18%, transparent);
+  stroke: var(--sc-color-primary);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.5;
 }
 .changePoint:hover .changeGuide,
 .changePoint:focus .changeGuide {

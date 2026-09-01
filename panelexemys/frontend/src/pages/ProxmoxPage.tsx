@@ -257,6 +257,10 @@ export function ProxmoxPage({
   const missing =
     state && Array.isArray(state.missing) ? state.missing.map(String) : [];
   const stateError = data.state_error ?? state?.error ?? null;
+  const refreshing = Array.isArray(data.refreshing)
+    ? data.refreshing.map(String)
+    : [];
+  const statePending = state === null && stateError === null;
   const lastUpdate =
     state && typeof state.ts === "string"
       ? state.ts
@@ -268,10 +272,14 @@ export function ProxmoxPage({
           Última actualización:{" "}
           {lastUpdate ? time.formatInstant(lastUpdate) : "N/D"}
         </p>
-        <p className={stateError ? styles.healthBad : styles.healthOk}>
+        <p className={stateError ? styles.healthBad : statePending ? styles.muted : styles.healthOk}>
           {stateError
             ? "Hipervisor Proxmox no responde"
-            : "Hipervisor Proxmox en línea"}
+            : statePending
+              ? refreshing.includes("state")
+                ? "Consultando hipervisor Proxmox"
+                : "Estado Proxmox no disponible"
+              : "Hipervisor Proxmox en línea"}
         </p>
         <div className={styles.proxmoxViewControl}>
           <span>Vista</span>

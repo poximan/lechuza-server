@@ -23,6 +23,22 @@ class TimeAuthorityTest(unittest.TestCase):
         parsed = self.authority.parse("2026-07-27 02:30:00", assume_utc_on_naive=True)
         self.assertEqual("2026-07-27T02:30:00Z", self.authority.utc_iso(parsed))
 
+    def test_utc_iso_milliseconds_preserves_three_digits(self) -> None:
+        value = datetime(2026, 7, 27, 2, 30, 0, 163000, tzinfo=timezone.utc)
+        self.assertEqual(
+            "2026-07-27T02:30:00.163Z",
+            self.authority.utc_iso_milliseconds(value),
+        )
+
+    def test_precise_parse_preserves_subseconds(self) -> None:
+        parsed = self.authority.parse_preserving_subseconds(
+            "2026-07-27T02:30:00.163Z"
+        )
+        self.assertEqual(
+            "2026-07-27T02:30:00.163Z",
+            self.authority.utc_iso_milliseconds(parsed),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

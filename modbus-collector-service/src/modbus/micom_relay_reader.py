@@ -39,6 +39,7 @@ class MicomRelayReader:
         ("phase_c", 2, "phase"),
         ("earth", 3, "earth"),
     )
+    READ_ATTEMPTS = 2
 
     START_ORIGINS = {
         1: "disparo RL1",
@@ -58,56 +59,53 @@ class MicomRelayReader:
         self.query_observer = query_observer
 
     def _read(self, relay_id: int, address: int, count: int) -> list[int]:
-        started = timebox.monotonic()
-        registers = self.driver.read_holding_registers(address, count, relay_id)
-        if registers is None:
+        last_error = "lectura no disponible"
+        for attempt in range(self.READ_ATTEMPTS):
+            started = timebox.monotonic()
+            registers = self.driver.read_holding_registers(address, count, relay_id)
+            if registers is None:
+                status = "sin_respuesta"
+                received_count = None
+                last_error = "lectura no disponible"
+            elif len(registers) != count:
+                status = "cantidad_invalida"
+                received_count = len(registers)
+                last_error = (
+                    f"se esperaban {count} palabras y llegaron {len(registers)}"
+                )
+            else:
+                try:
+                    values = [int(value) for value in registers]
+                except (TypeError, ValueError):
+                    status = "datos_invalidos"
+                    received_count = len(registers)
+                    last_error = "datos invalidos"
+                else:
+                    self._report_query(
+                        relay_id,
+                        address,
+                        count,
+                        "ok",
+                        started,
+                        received_count=len(values),
+                    )
+                    return values
+
             self._report_query(
                 relay_id,
                 address,
                 count,
-                "sin_respuesta",
+                status,
                 started,
-                received_count=None,
+                received_count=received_count,
             )
-            raise MicomReadError(
-                f"Rele {relay_id}: lectura no disponible en {hex(address)} ({count} palabras)"
-            )
-        if len(registers) != count:
-            self._report_query(
-                relay_id,
-                address,
-                count,
-                "cantidad_invalida",
-                started,
-                received_count=len(registers),
-            )
-            raise MicomReadError(
-                f"Rele {relay_id}: se esperaban {count} palabras en {hex(address)} "
-                f"y llegaron {len(registers)}"
-            )
-        try:
-            values = [int(value) for value in registers]
-        except (TypeError, ValueError) as exc:
-            self._report_query(
-                relay_id,
-                address,
-                count,
-                "datos_invalidos",
-                started,
-                received_count=len(registers),
-            )
-            raise MicomReadError(
-                f"Rele {relay_id}: datos invalidos en {hex(address)}"
-            ) from exc
-        self._report_query(
-            relay_id,
-            address,
-            count,
-            "ok",
-            started,
-            received_count=len(values),
+            self.driver.disconnect()
+            if attempt + 1 == self.READ_ATTEMPTS:
+                break
+
+        raise MicomReadError(
+            f"Rele {relay_id}: {last_error} en {hex(address)} ({count} palabras)"
         )
-        return values
 
     def _report_query(
         self,
@@ -174,27 +172,21 @@ class MicomRelayReader:
             )
         return frequency
 
-    def read_latest_fault(self, relay_id: int, date_format: int) -> RegistroFalla:
-        if date_format == 0:
-            raise MicomReadError(
-                "El rele usa fecha privada; este formato no se interpreta sin "
-                "confirmar el orden de sus palabras"
-            )
-        candidates: list[tuple[int, int]] = []
+    def read_latest_fault(
+        self,
+        relay_id: int,
+        date_format: int,
+    ) -> RegistroFalla:
+        candidates: list[tuple[int, int, list[int]]] = []
         for offset in range(self.FAULT_RECORD_COUNT):
             address = self.FAULT_ADDRESS + offset
-            fault_number = self._read(relay_id, address, 1)[0]
-            candidates.append((fault_number, address))
+            words = self._read(relay_id, address, self.FAULT_WORDS)
+            candidates.append((words[0], address, words))
 
-        fault_number, address = max(candidates, key=lambda candidate: candidate[0])
-        words = self._read(relay_id, address, self.FAULT_WORDS)
-        if words[0] != fault_number:
-            raise MicomReadError(
-                f"Rele {relay_id}: la falla en {hex(address)} cambio durante "
-                "la rafaga de reconocimiento"
-            )
+        _, _, words = max(candidates, key=lambda candidate: candidate[0])
         return RegistroFalla(
             words,
+            date_format,
             self.logger,
         )
 

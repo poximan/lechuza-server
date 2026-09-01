@@ -1,4 +1,4 @@
-import { Card, UtcMinusThreePresenter } from "@servicoop/frontend-foundation";
+import { Card } from "@servicoop/frontend-foundation";
 import { useState } from "react";
 
 import { JsonContractReader } from "../contracts/JsonContractReader";
@@ -15,7 +15,27 @@ import styles from "./Pages.module.css";
 
 const reader = new JsonContractReader();
 const formatter = new OperationalFormatter();
-const time = new UtcMinusThreePresenter();
+
+function formatRelayTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    throw new Error(`Estampa MiCOM inválida: ${value}`);
+  }
+  const day = String(timestamp.getUTCDate()).padStart(2, "0");
+  const month = String(timestamp.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(timestamp.getUTCFullYear()).slice(-2);
+  const hour = String(timestamp.getUTCHours()).padStart(2, "0");
+  const minute = String(timestamp.getUTCMinutes()).padStart(2, "0");
+  const second = String(timestamp.getUTCSeconds()).padStart(2, "0");
+  const millisecond = String(timestamp.getUTCMilliseconds()).padStart(3, "0");
+  return `${day}/${month}/${year}, ${hour}:${minute}:${second}.${millisecond}`;
+}
+
+function relayTimestampFormat(value: unknown): string {
+  if (value === "private") return "privado";
+  if (value === "iec870") return "IEC 870";
+  throw new Error(`Formato de estampa MiCOM inválido: ${String(value)}`);
+}
 
 function current(
   rawValue: unknown,
@@ -178,9 +198,11 @@ export function RelaysPage({
               ["Descripción", item.description],
               ["Número de falla", latest.numero_falla],
               [
-                "Fecha/Hora",
+                "TS",
                 typeof latest.timestamp === "string"
-                  ? time.formatInstantWithMilliseconds(latest.timestamp)
+                  ? `${formatRelayTimestamp(latest.timestamp)} (${relayTimestampFormat(
+                      latest.timestamp_format,
+                    )})`
                   : "N/D",
               ],
               ["Escala de corriente", calculationDescription],

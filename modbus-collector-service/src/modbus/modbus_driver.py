@@ -168,8 +168,16 @@ class ModbusTcpReadOnlyDriver:
                         f"Error al leer holding registers para Unit ID {unit_id}, Addr {address_offset}: {result}",
                         origin="OBS/DRV"
                     )
+                    # Una excepcion del gateway puede dejar una respuesta tardia en
+                    # la conexion. Se descarta para que la proxima consulta no la
+                    # confunda con la respuesta de otro esclavo.
+                    self.disconnect()
                     return None
-                return getattr(result, 'registers', None)
+                registers = getattr(result, 'registers', None)
+                if registers is None:
+                    self.disconnect()
+                    return None
+                return registers
             except Exception as e:
                 self.logger.log(
                     f"Excepcion en lectura de holding registers para Unit ID {unit_id}, Addr {address_offset}: {e}",

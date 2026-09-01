@@ -14,7 +14,7 @@ Observa equipos mediante Modbus TCP, persiste transiciones en SQLite y publica e
 
 ## Esquema nuevo
 
-El runtime no crea ni modifica tablas. Antes de iniciar debe existir una base `grdconectados.db` con versión de esquema `2`.
+El runtime no crea ni modifica tablas. Antes de iniciar debe existir una base `grdconectados.db` con versión de esquema `5`.
 
 El DDL está en `src/persistencia/ddl_esquema.py` y crea únicamente:
 
@@ -32,18 +32,29 @@ El DDL se niega a sobrescribir archivos existentes. El catálogo y los datos ope
 
 ## Relés MiCOM
 
-Una vez por hora y por relé se reconocen los 25 registros de fallas
-(`0x3700` a `0x3718`) leyendo únicamente su primera palabra. Luego se elige el
-mayor número de falla y se leen las 15 palabras de esa posición. Si la ráfaga no
-se completa, se reintenta en el siguiente ciclo; después de una lectura completa
-no se vuelve a consultar la página `37h` hasta la próxima hora. Las cuatro
-muestras de corriente se guardan crudas en SQLite. Al pasar el observador de OFF
+Cada relé declara en `0x0135` si sus fallas usan fecha privada MiCOM o IEC 870.
+Ese dato se lee una vez al encender el observador, se mantiene en memoria y solo
+se reintenta si no pudo obtenerse. La fecha privada usa dos palabras para los
+segundos transcurridos desde `1994-01-01T00:00:00Z` y dos para los milisegundos;
+la fecha IEC 870 usa sus cuatro palabras empaquetadas. Ninguna recibe corrección
+horaria. Una vez por hora y por relé se reconocen los 25 registros de fallas
+(`0x3700` a `0x3718`). Como el equipo rechaza la lectura parcial, se solicitan
+las 15 palabras de cada posición y se conserva la que tenga el mayor número de
+falla. Si la ráfaga no se completa, se reintenta en el siguiente ciclo; después
+de una lectura completa no se vuelve a consultar la página `37h` hasta la próxima hora. Las cuatro
+muestras de corriente se guardan crudas en SQLite y el timestamp conserva tres
+decimales junto con el formato que se usó para decodificarlo. Panelexemys presenta
+esa estampa tal como la entrega el relé, sin desplazamiento horario. Al pasar el observador de OFF
 a ON se leen una sola vez las relaciones internas y los TC primarios de cada
 relé. Los valores cargados se
 mantienen en memoria durante toda esa sesión. Si falla un bloque, se conserva lo
 que ya fue leído y se reintenta únicamente el bloque ausente. Panelexemys recibe
 las muestras y la escala por HTTP y calcula los amperes exclusivamente para
 presentarlos.
+
+`fallas_reles` conserva una sola fila por relé. Una falla con número mayor
+reemplaza en esa misma fila el número, la estampa y las cuatro corrientes; no se
+mantiene un histórico de fallas.
 
 El contrato de fallas incluye el estado de la ronda del observador, el instante
 UTC de la próxima encuesta y las cuatro consultas Modbus más recientes de cada

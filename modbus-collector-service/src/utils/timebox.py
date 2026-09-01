@@ -22,6 +22,10 @@ def utc_iso(value: datetime | None = None) -> str:
     return _AUTH.utc_iso(value)
 
 
+def utc_iso_milliseconds(value: datetime) -> str:
+    return _AUTH.utc_iso_milliseconds(value)
+
+
 def utc_today_iso() -> str:
     return _AUTH.utc_today().isoformat()
 
@@ -44,6 +48,17 @@ def utc_series(values):
 
 def parse(value: TimestampLike, *, legacy: bool = False) -> datetime:
     return _AUTH.parse(value, assume_utc_on_naive=legacy)
+
+
+def parse_preserving_subseconds(
+    value: TimestampLike,
+    *,
+    legacy: bool = False,
+) -> datetime:
+    return _AUTH.parse_preserving_subseconds(
+        value,
+        assume_utc_on_naive=legacy,
+    )
 
 
 def format_local(value: TimestampLike, fmt: str = "%Y-%m-%d %H:%M:%S", *, legacy: bool = False) -> str:
