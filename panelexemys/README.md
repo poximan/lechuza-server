@@ -41,6 +41,9 @@ rutas y conecta controladores.
 - `panelito` consume por MQTT los topicos normalizados `lechuza-server/router/status`, `lechuza-server/modbus/grd/summary`, `lechuza-server/modbus/grd/disconnected`, `lechuza-server/email/status`, `lechuza-server/email/event`, `lechuza-server/pve/status`, `lechuza-server/modbus/ge/edif-estivariz/status`, `lechuza-server/modbus/ge/edif-fontana/status`, `charito/state` y `panelexemys/status`.
 - `panelito` dispara pedidos RPC por `lechuza-server/rpc/req/{accion}` y recibe respuestas en `lechuza-server/rpc/res/{clientId}/{corr}`. Las acciones vigentes son `get_global_status`, `get_modem_status` y `send_email_test`.
 - `panelexemys` consume por HTTP a `modbus-collector-service`, `pve-service`, `modem-link-monitor`, `charito-service` y `mensagelo`; `alarmero-service` consume a `panelexemys` por HTTP.
+- Las consultas normales al collector mantienen su timeout breve. La lectura
+  manual `Sincro` usa `MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT=35` para cubrir los
+  tres intentos MiCOM sin cortar antes la respuesta.
 - La capacidad Relés calcula para presentación las corrientes en amperes a partir
   de las muestras crudas y la escala entregadas por el colector, y solicita
   por un endpoint separado la perturbación más reciente almacenada por el relé,

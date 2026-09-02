@@ -7,7 +7,7 @@ import sqlite3
 from src.persistencia.configuracion_base_datos import DATABASE_FILE
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = f"""
 PRAGMA foreign_keys = ON;
@@ -45,7 +45,37 @@ CREATE TABLE grd_estado_actual (
 CREATE TABLE reles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     id_modbus INTEGER NOT NULL UNIQUE,
-    descripcion TEXT NOT NULL CHECK (length(trim(descripcion)) > 0)
+    descripcion TEXT NOT NULL CHECK (length(trim(descripcion)) > 0),
+    producto TEXT CHECK (producto IS NULL OR length(trim(producto)) > 0),
+    formato_fecha INTEGER CHECK (formato_fecha IN (0, 1)),
+    fase_tc_primario INTEGER CHECK (fase_tc_primario > 0),
+    fase_tc_secundario INTEGER CHECK (fase_tc_secundario > 0),
+    tierra_tc_primario INTEGER CHECK (tierra_tc_primario > 0),
+    tierra_tc_secundario INTEGER CHECK (tierra_tc_secundario > 0),
+    fase_relacion_interna INTEGER CHECK (fase_relacion_interna > 0),
+    tierra_relacion_interna INTEGER CHECK (tierra_relacion_interna > 0),
+    frecuencia_nominal INTEGER CHECK (frecuencia_nominal IN (50, 60)),
+    CHECK (
+        (
+            producto IS NULL
+            AND fase_tc_primario IS NULL
+            AND fase_tc_secundario IS NULL
+            AND tierra_tc_primario IS NULL
+            AND tierra_tc_secundario IS NULL
+            AND fase_relacion_interna IS NULL
+            AND tierra_relacion_interna IS NULL
+        )
+        OR
+        (
+            producto IS NOT NULL
+            AND fase_tc_primario IS NOT NULL
+            AND fase_tc_secundario IS NOT NULL
+            AND tierra_tc_primario IS NOT NULL
+            AND tierra_tc_secundario IS NOT NULL
+            AND fase_relacion_interna IS NOT NULL
+            AND tierra_relacion_interna IS NOT NULL
+        )
+    )
 );
 
 CREATE TABLE fallas_reles (
@@ -63,6 +93,19 @@ CREATE TABLE fallas_reles (
     faseb_corr INTEGER,
     fasec_corr INTEGER,
     tierra_corr INTEGER,
+    perturbacion_registro INTEGER CHECK (
+        perturbacion_registro IS NULL
+        OR perturbacion_registro BETWEEN 1 AND 5
+    ),
+    perturbacion_json TEXT CHECK (
+        perturbacion_json IS NULL
+        OR length(trim(perturbacion_json)) > 0
+    ),
+    CHECK (
+        (perturbacion_registro IS NULL AND perturbacion_json IS NULL)
+        OR
+        (perturbacion_registro IS NOT NULL AND perturbacion_json IS NOT NULL)
+    ),
     FOREIGN KEY (id_rele) REFERENCES reles(id)
 );
 

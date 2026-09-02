@@ -4,7 +4,6 @@ import math
 from datetime import datetime, timedelta
 from typing import Any, Callable
 
-from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, HTTPException
 
 from src import config
@@ -70,9 +69,15 @@ def _history_payload(
         total_periods = historicos_dao.get_total_weeks_for_grd(grd_id, today)
         plot_start, plot_end = _compute_range(window, page)
     elif window == "1mes":
-        frame = historicos_dao.get_monthly_data_for_grd(grd_id, today, page)
-        total_periods = historicos_dao.get_total_months_for_grd(grd_id, today)
         plot_start, plot_end = _compute_range(window, page)
+        frame = historicos_dao.get_data_for_grd_range(
+            grd_id,
+            plot_start,
+            plot_end,
+        )
+        total_periods = historicos_dao.get_total_thirty_day_periods_for_grd(
+            grd_id,
+        )
     else:
         frame, total_rows = historicos_dao.get_data_page_for_grd(
             grd_id,
@@ -141,10 +146,8 @@ def _compute_range(window: str, page: int):
             range_end,
         )
     if window == "1mes":
-        reference = now - relativedelta(months=max(page, 0))
-        start = reference.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        month_end = (start + relativedelta(months=1)) - timedelta(microseconds=1)
-        return start, now if page == 0 else month_end
+        range_end = now - timedelta(days=30 * max(page, 0))
+        return range_end - timedelta(days=30), range_end
     raise ValueError(f"Ventana de historico invalida: {window}")
 
 

@@ -11,6 +11,7 @@ from src.modelo.rele_micom import (
     MicomDisturbanceConfiguration,
     MicomDisturbanceReference,
     MicomDisturbanceScale,
+    MicomRelayClock,
     signed_word,
 )
 from src.utils import timebox
@@ -39,8 +40,6 @@ class MicomRelayReader:
         ("phase_c", 2, "phase"),
         ("earth", 3, "earth"),
     )
-    READ_ATTEMPTS = 2
-
     START_ORIGINS = {
         1: "disparo RL1",
         2: "arranque instantaneo",
@@ -59,52 +58,46 @@ class MicomRelayReader:
         self.query_observer = query_observer
 
     def _read(self, relay_id: int, address: int, count: int) -> list[int]:
-        last_error = "lectura no disponible"
-        for attempt in range(self.READ_ATTEMPTS):
-            started = timebox.monotonic()
-            registers = self.driver.read_holding_registers(address, count, relay_id)
-            if registers is None:
-                status = "sin_respuesta"
-                received_count = None
-                last_error = "lectura no disponible"
-            elif len(registers) != count:
-                status = "cantidad_invalida"
+        started = timebox.monotonic()
+        registers = self.driver.read_holding_registers(address, count, relay_id)
+        if registers is None:
+            status = "sin_respuesta"
+            received_count = None
+            error = "lectura no disponible"
+        elif len(registers) != count:
+            status = "cantidad_invalida"
+            received_count = len(registers)
+            error = f"se esperaban {count} palabras y llegaron {len(registers)}"
+        else:
+            try:
+                values = [int(value) for value in registers]
+            except (TypeError, ValueError):
+                status = "datos_invalidos"
                 received_count = len(registers)
-                last_error = (
-                    f"se esperaban {count} palabras y llegaron {len(registers)}"
-                )
+                error = "datos invalidos"
             else:
-                try:
-                    values = [int(value) for value in registers]
-                except (TypeError, ValueError):
-                    status = "datos_invalidos"
-                    received_count = len(registers)
-                    last_error = "datos invalidos"
-                else:
-                    self._report_query(
-                        relay_id,
-                        address,
-                        count,
-                        "ok",
-                        started,
-                        received_count=len(values),
-                    )
-                    return values
+                self._report_query(
+                    relay_id,
+                    address,
+                    count,
+                    "ok",
+                    started,
+                    received_count=len(values),
+                )
+                return values
 
-            self._report_query(
-                relay_id,
-                address,
-                count,
-                status,
-                started,
-                received_count=received_count,
-            )
-            self.driver.disconnect()
-            if attempt + 1 == self.READ_ATTEMPTS:
-                break
+        self._report_query(
+            relay_id,
+            address,
+            count,
+            status,
+            started,
+            received_count=received_count,
+        )
+        self.driver.disconnect()
 
         raise MicomReadError(
-            f"Rele {relay_id}: {last_error} en {hex(address)} ({count} palabras)"
+            f"Rele {relay_id}: {error} en {hex(address)} ({count} palabras)"
         )
 
     def _report_query(
@@ -164,6 +157,12 @@ class MicomRelayReader:
     def read_date_format(self, relay_id: int) -> int:
         return self._read(relay_id, 0x0135, 1)[0]
 
+    def read_relay_clock(self, relay_id: int, date_format: int) -> MicomRelayClock:
+        return MicomRelayClock.from_words(
+            self._read(relay_id, 0x0800, 4),
+            date_format,
+        )
+
     def read_nominal_frequency(self, relay_id: int) -> int:
         frequency = self._read(relay_id, 0x0104, 1)[0]
         if frequency not in {50, 60}:
@@ -177,23 +176,24 @@ class MicomRelayReader:
         relay_id: int,
         date_format: int,
     ) -> RegistroFalla:
-        candidates: list[tuple[int, int, list[int]]] = []
+        candidates: list[list[int]] = []
         for offset in range(self.FAULT_RECORD_COUNT):
             address = self.FAULT_ADDRESS + offset
-            words = self._read(relay_id, address, self.FAULT_WORDS)
-            candidates.append((words[0], address, words))
+            candidates.append(
+                self._read(relay_id, address, self.FAULT_WORDS)
+            )
 
-        _, _, words = max(candidates, key=lambda candidate: candidate[0])
+        words = max(candidates, key=lambda candidate: candidate[0])
         return RegistroFalla(
             words,
             date_format,
             self.logger,
         )
 
-    def read_latest_disturbance_reference(
+    def read_disturbance_references(
         self,
         relay_id: int,
-    ) -> MicomDisturbanceReference:
+    ) -> list[MicomDisturbanceReference]:
         directory = self._read(
             relay_id,
             self.DISTURBANCE_AVAILABLE_ADDRESS,
@@ -239,7 +239,7 @@ class MicomRelayReader:
             )
 
         # El manual ordena el directorio desde el registro mas antiguo.
-        return references[-1]
+        return references
 
     def read_disturbance(
         self,

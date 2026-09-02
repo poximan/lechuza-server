@@ -16,6 +16,7 @@ class ModbusMiddlewareHttpClient:
     def __init__(self) -> None:
         self.base_url = config.MODBUS_COLLECTOR_API_BASE.rstrip("/")
         self.timeout = int(config.MODBUS_COLLECTOR_HTTP_TIMEOUT)
+        self.relay_timeout = int(config.MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT)
         self._session = requests.Session()
         self._lock = threading.RLock()
         self._descriptions_cache: Dict[int, str] | None = None
@@ -28,9 +29,16 @@ class ModbusMiddlewareHttpClient:
         path: str,
         json_body: Dict[str, Any] | None = None,
         params: Dict[str, Any] | None = None,
+        timeout: int | None = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
-        resp = self._session.request(method, url, timeout=self.timeout, json=json_body, params=params)
+        resp = self._session.request(
+            method,
+            url,
+            timeout=self.timeout if timeout is None else timeout,
+            json=json_body,
+            params=params,
+        )
         resp.raise_for_status()
         data = resp.json()
         if not isinstance(data, dict):
@@ -65,6 +73,13 @@ class ModbusMiddlewareHttpClient:
 
     def get_rele_latest_disturbance(self, relay_id: int) -> Dict[str, Any]:
         return self._request("GET", f"/api/reles/{relay_id}/latest-disturbance")
+
+    def read_rele_clock(self, relay_id: int) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/api/reles/{relay_id}/clock-snapshot",
+            timeout=self.relay_timeout,
+        )
 
     def get_reles_observer(self) -> bool:
         data = self._request("GET", "/api/reles/observer")

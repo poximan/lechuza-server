@@ -63,6 +63,9 @@ PANELEXEMYS_DATA_DIR = _req("PANELEXEMYS_DATA_DIR")
 # ---------------------------------------------------------
 MODBUS_COLLECTOR_API_BASE = _req("MODBUS_COLLECTOR_API_BASE")
 MODBUS_COLLECTOR_HTTP_TIMEOUT = _req_int("MODBUS_COLLECTOR_HTTP_TIMEOUT")
+MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT = _req_int(
+    "MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT"
+)
 MODBUS_HTTP_POLL_SECONDS = _req_int("MODBUS_HTTP_POLL_SECONDS")
 
 # ---------------------------------------------------------

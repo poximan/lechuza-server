@@ -1,41 +1,22 @@
-import { Card } from "@servicoop/frontend-foundation";
+import { Button, Card } from "@servicoop/frontend-foundation";
 import { useState } from "react";
 
 import { JsonContractReader } from "../contracts/JsonContractReader";
 import { OperationalFormatter } from "../contracts/OperationalFormatter";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { RelayDisturbanceChart } from "../components/RelayDisturbanceChart";
+import { RelaySynchronizationModal } from "../components/RelaySynchronizationModal";
 import {
   RelayModbusQueries,
   RelayPollCountdown,
 } from "../components/RelayModbusDiagnostics";
 import type { PanelexemysApiClient } from "../PanelexemysApiClient";
 import type { JsonRecord } from "../models";
+import { formatRelayTimestamp, relayTimestampFormat } from "../relayTime";
 import styles from "./Pages.module.css";
 
 const reader = new JsonContractReader();
 const formatter = new OperationalFormatter();
-
-function formatRelayTimestamp(value: string): string {
-  const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) {
-    throw new Error(`Estampa MiCOM inválida: ${value}`);
-  }
-  const day = String(timestamp.getUTCDate()).padStart(2, "0");
-  const month = String(timestamp.getUTCMonth() + 1).padStart(2, "0");
-  const year = String(timestamp.getUTCFullYear()).slice(-2);
-  const hour = String(timestamp.getUTCHours()).padStart(2, "0");
-  const minute = String(timestamp.getUTCMinutes()).padStart(2, "0");
-  const second = String(timestamp.getUTCSeconds()).padStart(2, "0");
-  const millisecond = String(timestamp.getUTCMilliseconds()).padStart(3, "0");
-  return `${day}/${month}/${year}, ${hour}:${minute}:${second}.${millisecond}`;
-}
-
-function relayTimestampFormat(value: unknown): string {
-  if (value === "private") return "privado";
-  if (value === "iec870") return "IEC 870";
-  throw new Error(`Formato de estampa MiCOM inválido: ${String(value)}`);
-}
 
 function current(
   rawValue: unknown,
@@ -88,6 +69,11 @@ export function RelaysPage({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [synchronizingRelay, setSynchronizingRelay] = useState<{
+    description: string;
+    id: number;
+    request: Promise<JsonRecord>;
+  } | null>(null);
   async function toggle(): Promise<void> {
     setPending(true);
     try {
@@ -135,6 +121,10 @@ export function RelaysPage({
               item.id_modbus,
               `reles.faults.items[${index}].id_modbus`,
             );
+            const description = reader.string(
+              item.description,
+              `reles.faults.items[${index}].description`,
+            );
             const queries = reader.records(
               item.modbus_queries,
               `reles.faults.items[${index}].modbus_queries`,
@@ -142,6 +132,10 @@ export function RelaysPage({
             const latest = reader.record(
               item.latest ?? {},
               `reles.faults.items[${index}].latest`,
+            );
+            const faultNumber = reader.optionalNumber(
+              latest.numero_falla,
+              `reles.faults.items[${index}].latest.numero_falla`,
             );
             const calculation = reader.optionalRecord(
               latest.current_calculation,
@@ -248,6 +242,19 @@ export function RelaysPage({
                 className={styles.card}
                 key={String(relayId)}
               >
+                <div className={styles.cardHeader}>
+                  <h3>Relé MiCOM · {relayId}</h3>
+                  <Button
+                    onClick={() => setSynchronizingRelay({
+                      description,
+                      id: relayId,
+                      request: client.readRelayClock(relayId),
+                    })}
+                    variant="ghost"
+                  >
+                    Sincro
+                  </Button>
+                </div>
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <thead>
@@ -269,11 +276,23 @@ export function RelaysPage({
                   </table>
                 </div>
                 <RelayModbusQueries queries={queries} />
-                <RelayDisturbanceChart client={client} relayId={relayId} />
+                <RelayDisturbanceChart
+                  client={client}
+                  faultNumber={faultNumber}
+                  relayId={relayId}
+                />
               </Card>
             );
           })}
         </div>
+      )}
+      {synchronizingRelay !== null && (
+        <RelaySynchronizationModal
+          description={synchronizingRelay.description}
+          onClose={() => setSynchronizingRelay(null)}
+          relayId={synchronizingRelay.id}
+          request={synchronizingRelay.request}
+        />
       )}
     </div>
   );

@@ -13,7 +13,10 @@ from src.modelo.rele_micom import (
     MicomCurrentProfile,
     MicomCurrentTransformers,
     MicomDisturbanceConfiguration,
+    MicomDisturbanceReference,
+    MicomRelayClock,
 )
+from src.modelo.registro_falla import RegistroFalla
 from src.persistencia.dao.dao_fallas_reles import fallas_reles_dao
 from src.persistencia.dao.dao_reles import reles_dao
 from src.services.state_store import ObserverStateStore
@@ -27,8 +30,7 @@ class ProtectionRelayClient:
     """Monitorea la ultima falla y la perturbacion mas reciente de cada rele."""
 
     CATALOG_REFRESH_SECONDS = 300
-    DISTURBANCE_RETRY_SECONDS = 60
-    DISTURBANCE_READ_ATTEMPTS = 2
+    DISTURBANCE_MAX_DURATION_SECONDS = 3.0
     FAULT_RECOGNITION_INTERVAL_SECONDS = 3600
 
     def __init__(
@@ -60,24 +62,64 @@ class ProtectionRelayClient:
         self._last_fault_signatures: dict[int, tuple] = {}
         self._last_fault_recognitions: dict[int, float] = {}
         self._current_profiles: dict[int, MicomCurrentProfile] = {}
+        self._current_profiles_refreshed: set[int] = set()
         self._current_profile_parts: dict[int, dict[str, object]] = {}
         self._current_profile_errors: dict[int, dict[str, str]] = {}
         self._date_formats: dict[int, int] = {}
+        self._date_formats_refreshed: set[int] = set()
         self._date_format_errors: dict[int, str] = {}
         self._disturbance_configurations: dict[
             int,
             MicomDisturbanceConfiguration,
         ] = {}
+        self._disturbance_configurations_refreshed: set[int] = set()
         self._disturbance_configuration_parts: dict[int, dict[str, int]] = {}
         self._disturbance_configuration_errors: dict[int, dict[str, str]] = {}
         self._disturbances: dict[int, dict] = {}
-        self._disturbance_attempts: dict[int, float] = {}
         self._recent_queries: dict[int, deque[dict]] = {}
         self._next_poll_datetime: datetime | None = None
         self._poll_in_progress = False
         self._state_lock = threading.RLock()
         self._last_catalog_refresh: float | None = None
         self._last_observing_status: bool | None = None
+        self._load_persisted_relay_metadata()
+
+    def _load_persisted_relay_metadata(self) -> None:
+        for relay_id, metadata in reles_dao.get_all_relay_metadata().items():
+            date_format = metadata.get("formato_fecha")
+            if date_format is not None:
+                if date_format not in {0, 1}:
+                    raise ValueError(
+                        f"Formato de fecha persistido invalido para rele {relay_id}"
+                    )
+                self._date_formats[relay_id] = int(date_format)
+
+            stored_profile = (
+                metadata.get("producto"),
+                metadata.get("fase_tc_primario"),
+                metadata.get("fase_tc_secundario"),
+                metadata.get("tierra_tc_primario"),
+                metadata.get("tierra_tc_secundario"),
+                metadata.get("fase_relacion_interna"),
+                metadata.get("tierra_relacion_interna"),
+            )
+            if all(value is not None for value in stored_profile):
+                self._current_profiles[relay_id] = MicomCurrentProfile(
+                    phase_primary_ct=int(stored_profile[1]),
+                    earth_primary_ct=int(stored_profile[3]),
+                    phase_internal_ratio=int(stored_profile[5]),
+                    earth_internal_ratio=int(stored_profile[6]),
+                )
+            elif any(value is not None for value in stored_profile):
+                raise ValueError(
+                    f"Perfil de corriente persistido incompleto para rele {relay_id}"
+                )
+
+            frequency = metadata.get("frecuencia_nominal")
+            if frequency is not None:
+                self._disturbance_configurations[relay_id] = (
+                    MicomDisturbanceConfiguration(int(frequency))
+                )
 
     def _refresh_relay_ids(self) -> None:
         now = timebox.monotonic()
@@ -99,13 +141,11 @@ class ProtectionRelayClient:
             history.appendleft(deepcopy(event))
 
     def read_relay_status(self, relay_id: int) -> dict | None:
-        self._refresh_latest_disturbance(relay_id)
-        if not self._fault_recognition_due(relay_id):
-            self._get_current_profile(relay_id)
-            return None
+        self._get_current_profile(relay_id)
         date_format = self._get_date_format(relay_id)
+        if not self._fault_recognition_due(relay_id):
+            return None
         if date_format is None:
-            self._get_current_profile(relay_id)
             return None
         try:
             record = self.reader.read_latest_fault(relay_id, date_format)
@@ -114,10 +154,7 @@ class ProtectionRelayClient:
                 f"No se pudo reconocer la ultima falla del rele {relay_id}: {exc}",
                 origin="OBS/RELE",
             )
-            self._get_current_profile(relay_id)
             return None
-        with self._state_lock:
-            self._last_fault_recognitions[relay_id] = timebox.monotonic()
         internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
         if internal_id is None:
             raise RuntimeError(
@@ -146,7 +183,27 @@ class ProtectionRelayClient:
                     origin="OBS/RELE",
                 )
 
-        self._get_current_profile(relay_id)
+        current_fault = fallas_reles_dao.get_current_falla_for_rele(internal_id)
+        if (
+            current_fault is not None
+            and current_fault["numero_falla"] == record.fault_number
+            and current_fault["timestamp"] == timestamp
+        ):
+            self._refresh_latest_disturbance(
+                relay_id,
+                internal_id,
+                record,
+                date_format,
+            )
+        else:
+            self.logger.log(
+                f"No se vinculo una perturbacion al rele {relay_id}: "
+                "la falla reconocida no coincide con la falla actual almacenada.",
+                origin="OBS/RELE",
+            )
+
+        with self._state_lock:
+            self._last_fault_recognitions[relay_id] = timebox.monotonic()
         return record.to_dict()
 
     def _fault_recognition_due(self, relay_id: int) -> bool:
@@ -158,7 +215,29 @@ class ProtectionRelayClient:
             >= self.FAULT_RECOGNITION_INTERVAL_SECONDS
         )
 
-    def _refresh_latest_disturbance(self, relay_id: int) -> None:
+    def _refresh_latest_disturbance(
+        self,
+        relay_id: int,
+        internal_id: int,
+        fault: RegistroFalla,
+        date_format: int,
+    ) -> None:
+        with self._state_lock:
+            cached = self._disturbances.get(relay_id)
+            if (
+                cached is not None
+                and cached.get("status") == "available"
+                and cached.get("fault_number") == fault.fault_number
+            ):
+                return
+
+        persisted = fallas_reles_dao.get_current_disturbance_for_rele(internal_id)
+        if persisted is not None:
+            with self._state_lock:
+                self._disturbances[relay_id] = persisted
+            if persisted.get("fault_number") == fault.fault_number:
+                return
+
         configuration = self._get_disturbance_configuration(relay_id)
         if configuration is None:
             with self._state_lock:
@@ -171,48 +250,170 @@ class ProtectionRelayClient:
             return
 
         try:
-            reference = self.reader.read_latest_disturbance_reference(relay_id)
+            references = self.reader.read_disturbance_references(relay_id)
+            reference = self._select_disturbance_reference(
+                references,
+                fault,
+                date_format,
+            )
         except (MicomReadError, ValueError) as exc:
             self._set_disturbance_error(relay_id, str(exc))
             return
 
         signature = reference.signature
-        if not self._disturbance_due(relay_id, signature):
-            return
-        last_error: MicomReadError | ValueError | None = None
-        for attempt in range(self.DISTURBANCE_READ_ATTEMPTS):
-            try:
-                disturbance = self.reader.read_disturbance(
-                    relay_id,
-                    configuration,
-                    reference,
-                )
-            except (MicomReadError, ValueError) as exc:
-                last_error = exc
-                self.driver.disconnect()
-                if attempt + 1 < self.DISTURBANCE_READ_ATTEMPTS:
-                    continue
-                break
+        try:
+            disturbance = self.reader.read_disturbance(
+                relay_id,
+                configuration,
+                reference,
+            )
+            self._associate_disturbance_with_fault(
+                disturbance,
+                fault,
+                date_format,
+            )
             disturbance["signature"] = list(signature)
-            with self._state_lock:
-                self._disturbances[relay_id] = disturbance
-            last_error = None
-            break
-        if last_error is not None:
+            if not fallas_reles_dao.save_current_disturbance(
+                internal_id,
+                fault.fault_number,
+                disturbance,
+            ):
+                raise ValueError(
+                    "La falla actual cambio antes de guardar la perturbacion"
+                )
+        except (MicomReadError, ValueError) as exc:
+            self.driver.disconnect()
             self._set_disturbance_error(
                 relay_id,
-                str(last_error),
+                str(exc),
                 record_number=reference.record_number,
                 signature=signature,
             )
+            return
         with self._state_lock:
-            self._disturbance_attempts[relay_id] = timebox.monotonic()
+            self._disturbances[relay_id] = disturbance
+
+    def _associate_disturbance_with_fault(
+        self,
+        disturbance: dict,
+        fault: RegistroFalla,
+        date_format: int,
+    ) -> None:
+        metadata = disturbance.get("metadata")
+        if not isinstance(metadata, dict):
+            raise ValueError("La perturbacion no contiene metadatos validos")
+        finish_words = metadata.get("finish_words")
+        if (
+            not isinstance(finish_words, list)
+            or len(finish_words) != 4
+            or any(not isinstance(word, int) for word in finish_words)
+        ):
+            raise ValueError("La perturbacion no contiene una estampa final valida")
+        if metadata.get("start_origin_code") not in {1, 2}:
+            raise ValueError(
+                "La perturbacion mas reciente no fue iniciada por disparo "
+                "ni por un umbral instantaneo"
+            )
+
+        finish_datetime = self._decode_disturbance_finish(
+            finish_words,
+            date_format,
+        )
+        post_seconds = disturbance.get("post_seconds")
+        sample_rate = disturbance.get("sample_rate_hz")
+        if (
+            not isinstance(post_seconds, (int, float))
+            or not isinstance(sample_rate, (int, float))
+            or post_seconds < 0
+            or sample_rate <= 0
+        ):
+            raise ValueError("La perturbacion contiene una ventana temporal invalida")
+
+        trigger_datetime = finish_datetime - timedelta(
+            seconds=float(post_seconds)
+        )
+        offset_seconds = abs(
+            (trigger_datetime - fault.fault_datetime).total_seconds()
+        )
+        tolerance_seconds = max(0.050, 2.0 / float(sample_rate))
+        if offset_seconds > tolerance_seconds:
+            raise ValueError(
+                "La perturbacion mas reciente no corresponde a la falla actual: "
+                f"diferencia={offset_seconds:.3f}s, "
+                f"tolerancia={tolerance_seconds:.3f}s"
+            )
+
+        disturbance["fault_number"] = fault.fault_number
+        metadata["finish_timestamp"] = timebox.utc_iso_milliseconds(
+            finish_datetime
+        )
+        metadata["trigger_timestamp"] = timebox.utc_iso_milliseconds(
+            trigger_datetime
+        )
+        metadata["fault_timestamp"] = timebox.utc_iso_milliseconds(
+            fault.fault_datetime
+        )
+        metadata["fault_offset_ms"] = round(offset_seconds * 1000, 3)
+
+    def _select_disturbance_reference(
+        self,
+        references: list[MicomDisturbanceReference],
+        fault: RegistroFalla,
+        date_format: int,
+    ) -> MicomDisturbanceReference:
+        tolerance_seconds = 0.050
+        for reference in reversed(references):
+            if reference.start_origin_code not in {1, 2}:
+                continue
+            finish_datetime = self._decode_disturbance_finish(
+                list(reference.finish_words),
+                date_format,
+            )
+            elapsed = (finish_datetime - fault.fault_datetime).total_seconds()
+            if (
+                -tolerance_seconds
+                <= elapsed
+                <= self.DISTURBANCE_MAX_DURATION_SECONDS + tolerance_seconds
+            ):
+                return reference
+        raise ValueError(
+            "Ninguna perturbacion almacenada corresponde temporalmente "
+            f"a la falla {fault.fault_number}"
+        )
+
+    def _decode_disturbance_finish(
+        self,
+        finish_words: list[int],
+        date_format: int,
+    ) -> datetime:
+        if len(finish_words) != 4:
+            raise ValueError(
+                "La fecha de perturbacion requiere cuatro palabras"
+            )
+        if date_format == RegistroFalla.DATE_FORMAT_PRIVATE:
+            seconds_since_epoch = (finish_words[0] << 16) | finish_words[1]
+            milliseconds = (finish_words[2] << 16) | finish_words[3]
+            if milliseconds > 999:
+                raise ValueError(
+                    "Milisegundos privados de perturbacion fuera de rango: "
+                    f"{milliseconds}"
+                )
+            return RegistroFalla.PRIVATE_EPOCH + timedelta(
+                seconds=seconds_since_epoch,
+                milliseconds=milliseconds,
+            )
+        if date_format == RegistroFalla.DATE_FORMAT_IEC_870:
+            return MicomRelayClock.from_words(
+                finish_words,
+                date_format,
+            ).timestamp
+        raise ValueError(f"Formato de fecha MiCOM desconocido: {date_format}")
 
     def _get_current_profile(self, relay_id: int) -> MicomCurrentProfile | None:
         with self._state_lock:
             cached = self._current_profiles.get(relay_id)
-        if cached is not None:
-            return cached
+            if relay_id in self._current_profiles_refreshed:
+                return cached
 
         operations = {
             "identidad": self.reader.read_current_identity,
@@ -243,7 +444,7 @@ class ProtectionRelayClient:
                 errors.pop(part_name, None)
 
         if any(part_name not in parts for part_name in operations):
-            return None
+            return cached
 
         try:
             profile = MicomCurrentProfile.from_parts(
@@ -253,9 +454,22 @@ class ProtectionRelayClient:
         except ValueError as exc:
             with self._state_lock:
                 errors["validacion"] = str(exc)
-            return None
+            return cached
+        identity = cast(MicomCurrentIdentity, parts["identidad"])
+        transformers = cast(MicomCurrentTransformers, parts["transformadores"])
+        reles_dao.save_current_profile(
+            relay_id,
+            product=identity.product,
+            phase_primary_ct=transformers.phase_primary_ct,
+            phase_secondary_ct=transformers.phase_secondary_ct,
+            earth_primary_ct=transformers.earth_primary_ct,
+            earth_secondary_ct=transformers.earth_secondary_ct,
+            phase_internal_ratio=identity.phase_internal_ratio,
+            earth_internal_ratio=identity.earth_internal_ratio,
+        )
         with self._state_lock:
             self._current_profiles[relay_id] = profile
+            self._current_profiles_refreshed.add(relay_id)
             self._current_profile_errors.pop(relay_id, None)
         self.logger.log(
             f"Escala del rele {relay_id} cargada para la sesion del observador.",
@@ -265,7 +479,8 @@ class ProtectionRelayClient:
 
     def _get_date_format(self, relay_id: int) -> int | None:
         with self._state_lock:
-            if relay_id in self._date_formats:
+            cached = self._date_formats.get(relay_id)
+            if relay_id in self._date_formats_refreshed:
                 return self._date_formats[relay_id]
         try:
             date_format = self.reader.read_date_format(relay_id)
@@ -284,9 +499,11 @@ class ProtectionRelayClient:
                     f"se reintentara: {message}",
                     origin="OBS/RELE",
                 )
-            return None
+            return cached
+        reles_dao.save_date_format(relay_id, date_format)
         with self._state_lock:
             self._date_formats[relay_id] = date_format
+            self._date_formats_refreshed.add(relay_id)
             self._date_format_errors.pop(relay_id, None)
         return date_format
 
@@ -296,8 +513,8 @@ class ProtectionRelayClient:
     ) -> MicomDisturbanceConfiguration | None:
         with self._state_lock:
             cached = self._disturbance_configurations.get(relay_id)
-        if cached is not None:
-            return cached
+            if relay_id in self._disturbance_configurations_refreshed:
+                return cached
 
         operations = {
             "frecuencia": self.reader.read_nominal_frequency,
@@ -327,27 +544,31 @@ class ProtectionRelayClient:
                 errors.pop(part_name, None)
 
         if any(part_name not in parts for part_name in operations):
-            return None
+            return cached
         configuration = MicomDisturbanceConfiguration(
             nominal_frequency_hz=parts["frecuencia"],
         )
+        reles_dao.save_nominal_frequency(
+            relay_id,
+            configuration.nominal_frequency_hz,
+        )
         with self._state_lock:
             self._disturbance_configurations[relay_id] = configuration
+            self._disturbance_configurations_refreshed.add(relay_id)
             self._disturbance_configuration_errors.pop(relay_id, None)
         return configuration
 
     def _start_observer_session(self) -> None:
         with self._state_lock:
-            self._current_profiles.clear()
+            self._current_profiles_refreshed.clear()
             self._current_profile_parts.clear()
             self._current_profile_errors.clear()
-            self._date_formats.clear()
+            self._date_formats_refreshed.clear()
             self._date_format_errors.clear()
-            self._disturbance_configurations.clear()
+            self._disturbance_configurations_refreshed.clear()
             self._disturbance_configuration_parts.clear()
             self._disturbance_configuration_errors.clear()
             self._disturbances.clear()
-            self._disturbance_attempts.clear()
             self._recent_queries.clear()
             self._last_fault_signatures.clear()
             self._last_fault_recognitions.clear()
@@ -360,14 +581,6 @@ class ProtectionRelayClient:
         )
 
     def get_current_calculation_snapshot(self, relay_id: int) -> dict:
-        if (
-            self.observer_store.get_reles_enabled()
-            and self._last_observing_status is not True
-        ):
-            return {
-                "status": "pending",
-                "message": "La nueva sesion del observador aun no cargo la escala.",
-            }
         with self._state_lock:
             profile = self._current_profiles.get(relay_id)
             errors = self._current_profile_errors.get(relay_id, {})
@@ -381,6 +594,29 @@ class ProtectionRelayClient:
                     else "La escala aun no fue leida del rele."
                 ),
             }
+
+    def read_clock_on_demand(self, relay_id: int) -> dict:
+        with self._state_lock:
+            date_format = self._date_formats.get(relay_id)
+        if date_format is None:
+            raise RuntimeError(
+                f"El rele {relay_id} no tiene un formato de fecha previamente leido"
+            )
+
+        clock = self.reader.read_relay_clock(relay_id, date_format)
+        metadata = reles_dao.get_relay_metadata(relay_id)
+        if metadata is None:
+            raise RuntimeError(f"No existe el rele Modbus {relay_id}")
+        return {
+            "id_modbus": relay_id,
+            "description": metadata["descripcion"],
+            "product": metadata["producto"],
+            "timestamp": timebox.utc_iso_milliseconds(clock.timestamp),
+            "timestamp_format": clock.timestamp_format,
+            "milliseconds_raw": clock.milliseconds_raw,
+            "nominal_frequency_hz": metadata["frecuencia_nominal"],
+            "current_calculation": self.get_current_calculation_snapshot(relay_id),
+        }
 
     def get_query_snapshot(self, relay_id: int) -> list[dict]:
         with self._state_lock:
@@ -405,18 +641,47 @@ class ProtectionRelayClient:
                 "refresh_interval_seconds": self.refresh_interval,
             }
 
-    def _disturbance_due(self, relay_id: int, signature: tuple) -> bool:
+    def _next_modbus_query_delay(self) -> float:
+        now = timebox.monotonic()
         with self._state_lock:
-            cached = self._disturbances.get(relay_id)
-            if cached is None or tuple(cached.get("signature", ())) != signature:
-                return True
-            if cached.get("status") == "available":
-                return False
-            last_attempt = self._disturbance_attempts.get(relay_id)
-            return (
-                last_attempt is None
-                or timebox.monotonic() - last_attempt >= self.DISTURBANCE_RETRY_SECONDS
-            )
+            if not self.relay_unit_ids:
+                return float(self.refresh_interval)
+            for relay_id in self.relay_unit_ids:
+                if (
+                    relay_id not in self._current_profiles_refreshed
+                    or relay_id not in self._date_formats_refreshed
+                    or relay_id not in self._disturbance_configurations_refreshed
+                    or relay_id not in self._last_fault_recognitions
+                ):
+                    return float(self.refresh_interval)
+            remaining = [
+                max(
+                    0.0,
+                    self.FAULT_RECOGNITION_INTERVAL_SECONDS
+                    - (now - self._last_fault_recognitions.get(relay_id, 0.0)),
+                )
+                for relay_id in self.relay_unit_ids
+            ]
+        return min(remaining, default=float(self.refresh_interval))
+
+    def _modbus_query_due(self) -> bool:
+        now = timebox.monotonic()
+        with self._state_lock:
+            for relay_id in self.relay_unit_ids:
+                if (
+                    relay_id not in self._current_profiles_refreshed
+                    or relay_id not in self._date_formats_refreshed
+                    or relay_id not in self._disturbance_configurations_refreshed
+                ):
+                    return True
+                last_recognition = self._last_fault_recognitions.get(relay_id)
+                if (
+                    last_recognition is None
+                    or now - last_recognition
+                    >= self.FAULT_RECOGNITION_INTERVAL_SECONDS
+                ):
+                    return True
+        return False
 
     def _set_disturbance_error(
         self,
@@ -441,6 +706,22 @@ class ProtectionRelayClient:
             }
 
     def get_disturbance_snapshot(self, relay_id: int) -> dict:
+        with self._state_lock:
+            snapshot = self._disturbances.get(relay_id)
+            if snapshot is not None and snapshot.get("status") == "available":
+                return deepcopy(snapshot)
+
+        internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
+        if internal_id is None:
+            raise RuntimeError(
+                f"El rele Modbus {relay_id} no tiene ID interno en el catalogo"
+            )
+        persisted = fallas_reles_dao.get_current_disturbance_for_rele(internal_id)
+        if persisted is not None:
+            with self._state_lock:
+                self._disturbances[relay_id] = persisted
+            return deepcopy(persisted)
+
         if (
             self.observer_store.get_reles_enabled()
             and self._last_observing_status is not True
@@ -485,27 +766,29 @@ class ProtectionRelayClient:
                 self._last_observing_status = enabled
 
             if enabled:
-                with self._state_lock:
-                    self._poll_in_progress = True
-                    self._next_poll_datetime = None
-                try:
-                    self._refresh_relay_ids()
-                    for relay_id in self.relay_unit_ids:
-                        if (
-                            stop_event.is_set()
-                            or not self.observer_store.get_reles_enabled()
-                        ):
-                            break
-                        self.read_relay_status(relay_id)
-                finally:
+                self._refresh_relay_ids()
+                if self._modbus_query_due():
                     with self._state_lock:
-                        self._poll_in_progress = False
-                        self._next_poll_datetime = (
-                            timebox.utc_now()
-                            + timedelta(seconds=self.refresh_interval)
-                            if self.observer_store.get_reles_enabled()
-                            else None
-                        )
+                        self._poll_in_progress = True
+                        self._next_poll_datetime = None
+                    try:
+                        for relay_id in self.relay_unit_ids:
+                            if (
+                                stop_event.is_set()
+                                or not self.observer_store.get_reles_enabled()
+                            ):
+                                break
+                            self.read_relay_status(relay_id)
+                    finally:
+                        with self._state_lock:
+                            self._poll_in_progress = False
+                with self._state_lock:
+                    self._next_poll_datetime = (
+                        timebox.utc_now()
+                        + timedelta(seconds=self._next_modbus_query_delay())
+                        if self.observer_store.get_reles_enabled()
+                        else None
+                    )
             else:
                 with self._state_lock:
                     self._poll_in_progress = False

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from math import sqrt
 
 
@@ -10,6 +11,70 @@ def signed_word(value: int) -> int:
     if word < 0 or word > 0xFFFF:
         raise ValueError(f"Palabra Modbus fuera de rango: {word}")
     return word - 0x10000 if word & 0x8000 else word
+
+
+@dataclass(frozen=True)
+class MicomRelayClock:
+    timestamp: datetime
+    timestamp_format: str
+    milliseconds_raw: int
+
+    @classmethod
+    def from_words(cls, words: list[int], date_format: int) -> "MicomRelayClock":
+        if len(words) != 4 or any(word < 0 or word > 0xFFFF for word in words):
+            raise ValueError("La hora MiCOM requiere cuatro palabras de 16 bits")
+        if date_format == 0:
+            year = words[0]
+            if year < 1994 or year > 2093:
+                raise ValueError(f"Anio privado MiCOM fuera de rango: {year}")
+            month = (words[1] >> 8) & 0xFF
+            day = words[1] & 0xFF
+            hour = (words[2] >> 8) & 0xFF
+            minute = words[2] & 0xFF
+            timestamp_format = "private"
+        elif date_format == 1:
+            year_value = words[0] & 0x7F
+            if year_value > 99:
+                raise ValueError(
+                    f"Anio IEC MiCOM fuera de rango: {year_value}"
+                )
+            year = 1900 + year_value if year_value >= 94 else 2000 + year_value
+            month = (words[1] >> 8) & 0x0F
+            day = words[1] & 0x1F
+            hour = (words[2] >> 8) & 0x1F
+            minute = words[2] & 0x3F
+            timestamp_format = "iec870"
+        else:
+            raise ValueError(f"Formato de fecha MiCOM desconocido: {date_format}")
+
+        milliseconds_raw = words[3]
+        if not 0 <= milliseconds_raw <= 59999:
+            raise ValueError(
+                f"Milisegundos dentro del minuto fuera de rango: {milliseconds_raw}"
+            )
+        second, millisecond = divmod(milliseconds_raw, 1000)
+        try:
+            timestamp = datetime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                millisecond * 1000,
+                tzinfo=timezone.utc,
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "Componentes invalidos en la hora MiCOM: "
+                f"{year:04d}-{month:02d}-{day:02d} "
+                f"{hour:02d}:{minute:02d}:{second:02d}.{millisecond:03d}"
+            ) from exc
+        return cls(
+            timestamp=timestamp,
+            timestamp_format=timestamp_format,
+            milliseconds_raw=milliseconds_raw,
+        )
 
 
 @dataclass(frozen=True)

@@ -61,7 +61,20 @@ MW_EXEMYS = {
     "unit_id": _req_int_range("MODBUS_COLLECTOR_MW_EXEMYS_MB_ID", 0, 255),
     "register_count": _req_int_range("MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT", 16, 125),
     "interval_seconds": _req_positive_int("MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS"),
+    "timeout_seconds": _req_positive_int("MODBUS_COLLECTOR_MW_EXEMYS_MB_TIMEOUT_SECONDS"),
 }
+
+MODBUS_READ_ATTEMPTS = _req_int_range(
+    "MODBUS_COLLECTOR_MB_READ_ATTEMPTS",
+    3,
+    3,
+)
+RELAY_TIMEOUT_SECONDS = _req_positive_int(
+    "MODBUS_COLLECTOR_RELAY_MB_TIMEOUT_SECONDS"
+)
+GENERATOR_TIMEOUT_SECONDS = _req_positive_int(
+    "MODBUS_COLLECTOR_GE_MB_TIMEOUT_SECONDS"
+)
 
 EDIF_ESTIVARIZ_GE = {
     "name": "edif-estivariz",

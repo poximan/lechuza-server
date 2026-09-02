@@ -145,6 +145,12 @@ class ReactApi:
             methods=["GET"],
         )
         self.blueprint.add_url_rule(
+            "/reles/<int:relay_id>/clock-snapshot",
+            "rele_clock_snapshot",
+            self.reles_api.clock_snapshot,
+            methods=["POST"],
+        )
+        self.blueprint.add_url_rule(
             "/mantenimiento",
             "mantenimiento",
             self.mantenimiento_api.get,

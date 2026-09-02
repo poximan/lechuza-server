@@ -10,7 +10,20 @@ EXPECTED_COLUMNS = {
     "grd": {"id", "descripcion", "activo"},
     "historicos": {"id_grd", "timestamp", "conectado"},
     "grd_estado_actual": {"id_grd", "timestamp", "conectado"},
-    "reles": {"id", "id_modbus", "descripcion"},
+    "reles": {
+        "id",
+        "id_modbus",
+        "descripcion",
+        "producto",
+        "formato_fecha",
+        "fase_tc_primario",
+        "fase_tc_secundario",
+        "tierra_tc_primario",
+        "tierra_tc_secundario",
+        "fase_relacion_interna",
+        "tierra_relacion_interna",
+        "frecuencia_nominal",
+    },
     "fallas_reles": {
         "id_rele",
         "numero_falla",
@@ -20,6 +33,8 @@ EXPECTED_COLUMNS = {
         "faseb_corr",
         "fasec_corr",
         "tierra_corr",
+        "perturbacion_registro",
+        "perturbacion_json",
     },
 }
 

@@ -1,8 +1,8 @@
+import math
 import sqlite3
 from datetime import datetime, timedelta
 
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 from logosaurio import logger
 
 from src.utils import timebox
@@ -96,33 +96,25 @@ class HistoricosDAO:
             f"datos semanales del GRD {grd_id}",
         )
 
-    def get_monthly_data_for_grd(
+    def get_data_for_grd_range(
         self,
         grd_id: int,
-        reference_date_str: str,
-        page_number: int = 0,
+        range_start: datetime,
+        range_end: datetime,
     ) -> pd.DataFrame:
-        reference_date = timebox.parse_format(reference_date_str, "%Y-%m-%d")
-        current_month = reference_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        month_start = current_month - relativedelta(months=page_number)
-        month_end = (
-            timebox.utc_now()
-            if page_number == 0
-            else month_start + relativedelta(months=1) - timedelta(seconds=1)
-        )
         return self._read_frame(
             """
             SELECT timestamp, id_grd, conectado
             FROM historicos
-            WHERE id_grd = ? AND timestamp BETWEEN ? AND ?
+            WHERE id_grd = ? AND timestamp >= ? AND timestamp < ?
             ORDER BY timestamp ASC
             """,
             (
                 grd_id,
-                timebox.utc_iso(month_start),
-                timebox.utc_iso(month_end),
+                timebox.utc_iso(range_start),
+                timebox.utc_iso(range_end),
             ),
-            f"datos mensuales del GRD {grd_id}",
+            f"datos del GRD {grd_id} entre {range_start} y {range_end}",
         )
 
     def get_data_page_for_grd(
@@ -168,15 +160,16 @@ class HistoricosDAO:
             return 0
         return ((current.date() - minimum.date()).days // 7) + 1
 
-    def get_total_months_for_grd(self, grd_id: int, _reference_date_str: str) -> int:
+    def get_total_thirty_day_periods_for_grd(self, grd_id: int) -> int:
         minimum = self._get_minimum_timestamp(grd_id)
         if minimum is None:
             return 0
         current = timebox.utc_now()
         if minimum > current:
             return 0
-        difference = relativedelta(current, minimum)
-        return difference.years * 12 + difference.months + 1
+        seconds = (current - minimum).total_seconds()
+        period_seconds = timedelta(days=30).total_seconds()
+        return max(1, math.ceil(seconds / period_seconds))
 
     def _get_minimum_timestamp(self, grd_id: int) -> datetime | None:
         conn = get_db_connection()

@@ -83,4 +83,13 @@ def create_relay_router(context: Callable[[], ApplicationContext]) -> APIRouter:
             )
         return context().orchestrator.relay_disturbance_snapshot(relay_id)
 
+    @router.post("/{relay_id}/clock-snapshot")
+    def clock_snapshot(relay_id: int) -> Any:
+        if reles_dao.get_internal_id_by_modbus_id(relay_id) is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"No existe el rele Modbus {relay_id}"},
+            )
+        return context().orchestrator.relay_clock_on_demand(relay_id)
+
     return router

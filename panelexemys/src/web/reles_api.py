@@ -34,3 +34,6 @@ class RelesApi:
 
     def latest_disturbance(self, relay_id: int) -> Any:
         return self.response(lambda: self.service.get_latest_disturbance(relay_id))
+
+    def clock_snapshot(self, relay_id: int) -> Any:
+        return self.response(lambda: self.service.read_clock(relay_id))

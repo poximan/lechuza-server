@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 from logosaurio import logger
@@ -71,6 +72,104 @@ class FallasRelesDAO:
             )
             raise RuntimeError(
                 f"Fallo al actualizar la falla {numero_falla} del rele {id_rele}"
+            ) from exc
+        finally:
+            conn.close()
+
+    def save_current_disturbance(
+        self,
+        id_rele: int,
+        numero_falla: int,
+        disturbance: dict,
+    ) -> bool:
+        if disturbance.get("status") != "available":
+            raise ValueError("Solo se puede guardar una perturbacion disponible")
+        if disturbance.get("fault_number") != numero_falla:
+            raise ValueError(
+                "La perturbacion no corresponde al numero de falla indicado"
+            )
+        record_number = disturbance.get("record_number")
+        if not isinstance(record_number, int) or not 1 <= record_number <= 5:
+            raise ValueError("Numero de registro de perturbacion invalido")
+        try:
+            payload = json.dumps(
+                disturbance,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("La perturbacion no es serializable") from exc
+
+        conn = get_db_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE;")
+            result = conn.execute(
+                """
+                UPDATE fallas_reles
+                SET perturbacion_registro = ?, perturbacion_json = ?
+                WHERE id_rele = ? AND numero_falla = ?
+                """,
+                (record_number, payload, id_rele, numero_falla),
+            )
+            conn.commit()
+            return result.rowcount == 1
+        except sqlite3.Error as exc:
+            conn.rollback()
+            logger.error(
+                "No se pudo guardar la perturbacion de la falla %s del rele %s: %s",
+                numero_falla,
+                id_rele,
+                exc,
+                origin="MODBUS/DAO",
+            )
+            raise RuntimeError(
+                f"Fallo al guardar la perturbacion de la falla {numero_falla} "
+                f"del rele {id_rele}"
+            ) from exc
+        finally:
+            conn.close()
+
+    def get_current_disturbance_for_rele(self, id_rele: int) -> dict | None:
+        conn = get_db_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT numero_falla, perturbacion_registro, perturbacion_json
+                FROM fallas_reles
+                WHERE id_rele = ? AND perturbacion_json IS NOT NULL
+                """,
+                (id_rele,),
+            ).fetchone()
+            if row is None:
+                return None
+            try:
+                payload = json.loads(str(row["perturbacion_json"]))
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    f"Perturbacion invalida almacenada para el rele {id_rele}"
+                ) from exc
+            if not isinstance(payload, dict):
+                raise RuntimeError(
+                    f"Perturbacion invalida almacenada para el rele {id_rele}"
+                )
+            if (
+                not isinstance(payload.get("fault_number"), int)
+                or payload.get("record_number") != int(row["perturbacion_registro"])
+            ):
+                raise RuntimeError(
+                    f"La perturbacion almacenada es inconsistente para el rele {id_rele}"
+                )
+            return payload
+        except sqlite3.Error as exc:
+            logger.error(
+                "No se pudo consultar la perturbacion del rele %s: %s",
+                id_rele,
+                exc,
+                origin="MODBUS/DAO",
+            )
+            raise RuntimeError(
+                f"Fallo al consultar la perturbacion del rele {id_rele}"
             ) from exc
         finally:
             conn.close()

@@ -14,6 +14,7 @@ import type { JsonRecord, JsonValue } from "../models";
 import styles from "./RelayDisturbanceChart.module.css";
 
 interface Waveform {
+  faultNumber: number;
   recordNumber: number;
   preSeconds: number;
   postSeconds: number;
@@ -48,8 +49,8 @@ const LEFT = 64;
 const RIGHT = 18;
 const TOP = 18;
 const BOTTOM = 42;
-const TOOLTIP_WIDTH = 250;
-const TOOLTIP_HEIGHT = 118;
+const TOOLTIP_WIDTH = 380;
+const TOOLTIP_HEIGHT = 180;
 const MINIMUM_DRAG_PIXELS = 8;
 
 const channelDefinitions: Array<{
@@ -90,6 +91,7 @@ function parseWaveform(payload: JsonRecord): Waveform {
   if (typeof metadata.start_origin !== "string")
     throw new Error("perturbación.metadata.start_origin debe ser texto");
   const parsed: Waveform = {
+    faultNumber: requiredNumber(payload.fault_number, "perturbación.fault_number"),
     recordNumber: requiredNumber(payload.record_number, "perturbación.record_number"),
     preSeconds: requiredNumber(payload.pre_seconds, "perturbación.pre_seconds"),
     postSeconds: requiredNumber(payload.post_seconds, "perturbación.post_seconds"),
@@ -102,6 +104,8 @@ function parseWaveform(payload: JsonRecord): Waveform {
       earth: numericArray(channels.earth, "perturbación.channels.earth"),
     },
   };
+  if (!Number.isInteger(parsed.faultNumber) || parsed.faultNumber < 0)
+    throw new Error("perturbación.fault_number debe ser un entero no negativo");
   if (!Number.isInteger(parsed.recordNumber) || parsed.recordNumber < 1 || parsed.recordNumber > 5)
     throw new Error("perturbación.record_number debe estar entre 1 y 5");
   const lengths = Object.values(parsed.channels).map((values) => values.length);
@@ -171,9 +175,11 @@ function formatRelativeTime(value: number): string {
 
 export function RelayDisturbanceChart({
   client,
+  faultNumber,
   relayId,
 }: {
   client: PanelexemysApiClient;
+  faultNumber: number | null;
   relayId: number;
 }) {
   const clipId = `relay-disturbance-${useId().replace(/:/g, "")}`;
@@ -184,9 +190,18 @@ export function RelayDisturbanceChart({
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("zoom");
   const [selectedWindow, setSelectedWindow] = useState<TimeWindow | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragState = useRef<DragState | null>(null);
+  const waveformRef = useRef<Waveform | null>(null);
+
+  useEffect(() => {
+    waveformRef.current = null;
+    setWaveform(null);
+    setWarning(null);
+    setPinnedIndex(null);
+  }, [relayId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -197,25 +212,41 @@ export function RelayDisturbanceChart({
       if (status !== "available" && status !== "pending" && status !== "unavailable")
         throw new Error(`Contrato inválido: estado de perturbación desconocido ${String(status)}`);
       if (status !== "available") {
-        setWaveform(null);
-        setWarning(null);
-        setMessage(typeof payload.message === "string" ? payload.message : "La perturbación todavía no está disponible.");
+        const unavailableMessage = typeof payload.message === "string"
+          ? payload.message
+          : "La perturbación todavía no está disponible.";
+        if (waveformRef.current === null) {
+          setMessage(unavailableMessage);
+          setWarning(null);
+        } else {
+          setMessage("");
+          setWarning(`No se pudo refrescar la captura: ${unavailableMessage}`);
+        }
         retryTimer = window.setTimeout(() => setRetry((value) => value + 1), 5_000);
         return;
       }
-      setWaveform(parseWaveform(payload));
+      const parsed = parseWaveform(payload);
+      waveformRef.current = parsed;
+      setWaveform(parsed);
       setMessage("");
-      setWarning(
-        typeof payload.refresh_error === "string"
-          ? `No se pudo refrescar la captura: ${payload.refresh_error}`
-          : null,
-      );
+      const previousFaultWarning = faultNumber !== null && parsed.faultNumber !== faultNumber
+        ? `Mostrando la última perturbación disponible, correspondiente a la falla ${parsed.faultNumber}; la falla actual es ${faultNumber}.`
+        : null;
+      const refreshWarning = typeof payload.refresh_error === "string"
+        ? `No se pudo refrescar la captura: ${payload.refresh_error}`
+        : null;
+      setWarning([previousFaultWarning, refreshWarning].filter(Boolean).join(" ") || null);
       retryTimer = window.setTimeout(() => setRetry((value) => value + 1), 30_000);
     }).catch((reason: unknown) => {
       if (!controller.signal.aborted) {
-        setWaveform(null);
-        setWarning(null);
-        setMessage(reason instanceof Error ? reason.message : String(reason));
+        const errorMessage = reason instanceof Error ? reason.message : String(reason);
+        if (waveformRef.current === null) {
+          setMessage(errorMessage);
+          setWarning(null);
+        } else {
+          setMessage("");
+          setWarning(`No se pudo refrescar la captura: ${errorMessage}`);
+        }
         retryTimer = window.setTimeout(() => setRetry((value) => value + 1), 5_000);
       }
     });
@@ -223,7 +254,7 @@ export function RelayDisturbanceChart({
       controller.abort();
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [client, relayId, retry]);
+  }, [client, faultNumber, relayId, retry]);
 
   const fullWindow = useMemo<TimeWindow | null>(() => waveform
     ? { end: waveform.postSeconds, start: -waveform.preSeconds }
@@ -232,7 +263,8 @@ export function RelayDisturbanceChart({
   useEffect(() => {
     setSelectedWindow(null);
     setHoveredIndex(null);
-  }, [relayId, waveform?.recordNumber, waveform?.preSeconds, waveform?.postSeconds]);
+    setPinnedIndex(null);
+  }, [faultNumber, relayId, waveform?.recordNumber, waveform?.preSeconds, waveform?.postSeconds]);
 
   const drawing = useMemo(() => {
     if (!waveform || !fullWindow) return null;
@@ -308,13 +340,25 @@ export function RelayDisturbanceChart({
     const ratio = (timeAtX(value) - fullWindow.start) / drawing.fullSpan;
     setHoveredIndex(Math.max(drawing.firstIndex, Math.min(drawing.lastIndex, Math.round(ratio * (drawing.sampleCount - 1)))));
   };
+  const indexAtX = (value: number) => {
+    const ratio = (timeAtX(value) - fullWindow.start) / drawing.fullSpan;
+    return Math.max(
+      drawing.firstIndex,
+      Math.min(drawing.lastIndex, Math.round(ratio * (drawing.sampleCount - 1))),
+    );
+  };
   const finishDrag = (event: ReactPointerEvent<SVGSVGElement>, cancelled: boolean) => {
     const drag = dragState.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!cancelled && drag.mode === "zoom") {
+    if (!cancelled) {
       const currentX = plotX(svgX(event));
-      if (Math.abs(currentX - drag.startX) >= MINIMUM_DRAG_PIXELS)
+      const movement = Math.abs(currentX - drag.startX);
+      if (movement < MINIMUM_DRAG_PIXELS) {
+        const selectedIndex = indexAtX(currentX);
+        setPinnedIndex((current) => current === selectedIndex ? null : selectedIndex);
+      } else if (drag.mode === "zoom") {
         applyWindow({ end: timeAtX(currentX, drag.initialWindow), start: timeAtX(drag.startX, drag.initialWindow) });
+      }
     }
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -364,10 +408,11 @@ export function RelayDisturbanceChart({
     applyWindow({ end: anchor + (1 - anchorRatio) * nextSpan, start: anchor - anchorRatio * nextSpan });
     setHoveredIndex(null);
   };
-  const hoverDetail = hoveredIndex === null ? null : {
-    index: hoveredIndex,
-    time: drawing.timeAt(hoveredIndex),
-    x: drawing.x(hoveredIndex),
+  const detailIndex = pinnedIndex ?? hoveredIndex;
+  const hoverDetail = detailIndex === null ? null : {
+    index: detailIndex,
+    time: drawing.timeAt(detailIndex),
+    x: drawing.x(detailIndex),
   };
   const tooltipX = hoverDetail === null
     ? LEFT
@@ -384,16 +429,16 @@ export function RelayDisturbanceChart({
   return (
     <section className={styles.container} aria-label="Osciloperturbograma">
       <div className={styles.header}>
-        <strong>Osciloperturbograma · registro {waveform.recordNumber}</strong>
+        <strong>Osciloperturbograma · falla {waveform.faultNumber} · registro {waveform.recordNumber}</strong>
         <span>{waveform.sampleRateHz} muestras/s · t=0: {waveform.origin}</span>
       </div>
       <div className={styles.interactionBar}>
         <div className={styles.modeControls} role="group" aria-label="Modo de interacción">
           <Button aria-pressed={interactionMode === "zoom"} onClick={() => setInteractionMode("zoom")} variant={interactionMode === "zoom" ? "primary" : "ghost"}>Ampliar</Button>
           <Button aria-pressed={interactionMode === "pan"} onClick={() => setInteractionMode("pan")} variant={interactionMode === "pan" ? "primary" : "ghost"}>Mover</Button>
-          <Button disabled={selectedWindow === null} onClick={() => setSelectedWindow(null)} variant="ghost">Restablecer</Button>
+          <Button disabled={selectedWindow === null && pinnedIndex === null} onClick={() => { setSelectedWindow(null); setPinnedIndex(null); }} variant="ghost">Restablecer</Button>
         </div>
-        <span>Arrastrá para {interactionMode === "zoom" ? "ampliar" : "desplazar"}; rueda para zoom y doble clic para restablecer · {zoomFactor > 1.005 ? `Zoom ×${zoomFactor.toFixed(1)}` : "Vista completa"}</span>
+        <span>Arrastrá para {interactionMode === "zoom" ? "ampliar" : "desplazar"}; clic o toque para fijar una muestra; doble clic para restablecer · {zoomFactor > 1.005 ? `Zoom ×${zoomFactor.toFixed(1)}` : "Vista completa"}</span>
       </div>
       <div className={styles.legend}>
         {drawing.paths.map((channel) => <span key={channel.key} style={{ color: channel.color }}><i style={{ backgroundColor: channel.color }} />{channel.label}</span>)}
@@ -401,7 +446,7 @@ export function RelayDisturbanceChart({
       {warning && <p className={styles.warning}>{warning}</p>}
       <svg
         className={`${styles.chart} ${interactionMode === "zoom" ? styles.zoomMode : styles.panMode} ${dragging ? styles.dragging : ""}`}
-        onDoubleClick={() => setSelectedWindow(null)}
+        onDoubleClick={() => { setSelectedWindow(null); setPinnedIndex(null); }}
         onPointerCancel={(event) => finishDrag(event, true)}
         onPointerDown={handlePointerDown}
         onPointerLeave={() => { if (!dragState.current) setHoveredIndex(null); }}
@@ -426,7 +471,7 @@ export function RelayDisturbanceChart({
         <text className={styles.label} textAnchor="end" x={LEFT - 8} y={HEIGHT - BOTTOM}>−{drawing.maximum.toFixed(1)} A</text>
         {hoverDetail !== null && <g className={styles.tooltip} transform={`translate(${tooltipX} ${tooltipY})`}>
           <rect height={TOOLTIP_HEIGHT} rx="7" width={TOOLTIP_WIDTH} />
-          <text x="12" y="22"><tspan className={styles.tooltipTime}>{formatRelativeTime(hoverDetail.time)}</tspan>{channelDefinitions.map((channel, index) => <tspan dy={index === 0 ? 22 : 19} key={channel.key} x="12" fill={channel.color}>{channel.label}: {(waveform.channels[channel.key][hoverDetail.index] ?? 0).toFixed(3)} A</tspan>)}</text>
+          <text x="18" y="32"><tspan className={styles.tooltipTime}>{formatRelativeTime(hoverDetail.time)}{pinnedIndex !== null ? " · fijada" : ""}</tspan>{channelDefinitions.map((channel, index) => <tspan dy={index === 0 ? 34 : 30} key={channel.key} x="18" fill={channel.color}>{channel.label}: {(waveform.channels[channel.key][hoverDetail.index] ?? 0).toFixed(3)} A</tspan>)}</text>
         </g>}
       </svg>
     </section>

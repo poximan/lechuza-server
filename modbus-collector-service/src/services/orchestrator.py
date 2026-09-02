@@ -56,12 +56,33 @@ class ModbusOrchestrator:
                 raise RuntimeError("El orquestador Modbus ya fue iniciado")
             self._started = True
 
-        mw_driver = ModbusTcpReadOnlyDriver.from_config(
+        grd_driver = ModbusTcpReadOnlyDriver.from_config(
             ModbusTcpConnectionConfig(
-                name=str(config.MW_EXEMYS["name"]),
+                name="mw-exemys-grd",
                 host=str(config.MW_EXEMYS["host"]),
                 port=int(config.MW_EXEMYS["port"]),
-                timeout=10,
+                timeout=int(config.MW_EXEMYS["timeout_seconds"]),
+                attempts=config.MODBUS_READ_ATTEMPTS,
+            ),
+            self.logger,
+        )
+        relay_driver = ModbusTcpReadOnlyDriver.from_config(
+            ModbusTcpConnectionConfig(
+                name="mw-exemys-reles",
+                host=str(config.MW_EXEMYS["host"]),
+                port=int(config.MW_EXEMYS["port"]),
+                timeout=config.RELAY_TIMEOUT_SECONDS,
+                attempts=config.MODBUS_READ_ATTEMPTS,
+            ),
+            self.logger,
+        )
+        estivariz_driver = ModbusTcpReadOnlyDriver.from_config(
+            ModbusTcpConnectionConfig(
+                name="mw-exemys-ge-estivariz",
+                host=str(config.MW_EXEMYS["host"]),
+                port=int(config.MW_EXEMYS["port"]),
+                timeout=config.GENERATOR_TIMEOUT_SECONDS,
+                attempts=config.MODBUS_READ_ATTEMPTS,
             ),
             self.logger,
         )
@@ -70,16 +91,22 @@ class ModbusOrchestrator:
                 name=str(config.EDIF_FONTANA_GE["name"]),
                 host=str(config.EDIF_FONTANA_GE["host"]),
                 port=int(config.EDIF_FONTANA_GE["port"]),
-                timeout=10,
+                timeout=config.GENERATOR_TIMEOUT_SECONDS,
+                attempts=config.MODBUS_READ_ATTEMPTS,
             ),
             self.logger,
         )
-        self._drivers = {"mw-exemys": mw_driver, "edif-fontana": fontana_driver}
+        self._drivers = {
+            "mw-exemys-grd": grd_driver,
+            "mw-exemys-reles": relay_driver,
+            "mw-exemys-ge-estivariz": estivariz_driver,
+            "edif-fontana": fontana_driver,
+        }
 
         mw_interval = int(config.MW_EXEMYS["interval_seconds"])
         fontana_interval = int(config.EDIF_FONTANA_GE["interval_seconds"])
         self._relay_client = ProtectionRelayClient(
-            modbus_driver=mw_driver,
+            modbus_driver=relay_driver,
             refresh_interval=mw_interval,
             logger=self.logger,
             observer_store=self.observer_store,
@@ -87,7 +114,7 @@ class ModbusOrchestrator:
         targets: dict[str, WorkerSpec] = {
             "grd-monitor": (
                 GrdMiddlewareClient(
-                    modbus_driver=mw_driver,
+                    modbus_driver=grd_driver,
                     default_unit_id=int(config.MW_EXEMYS["unit_id"]),
                     register_count=int(config.MW_EXEMYS["register_count"]),
                     refresh_interval=mw_interval,
@@ -104,7 +131,7 @@ class ModbusOrchestrator:
             ),
             "ge-estivariz-monitor": (
                 EdifEstivarizGeneratorClient(
-                    modbus_driver=mw_driver,
+                    modbus_driver=estivariz_driver,
                     default_unit_id=int(config.MW_EXEMYS["unit_id"]),
                     refresh_interval=mw_interval,
                     logger=self.logger,
@@ -250,6 +277,11 @@ class ModbusOrchestrator:
         if self._relay_client is None:
             raise RuntimeError("El observador de reles todavia no fue iniciado")
         return self._relay_client.get_current_calculation_snapshot(relay_id)
+
+    def relay_clock_on_demand(self, relay_id: int) -> dict[str, Any]:
+        if self._relay_client is None:
+            raise RuntimeError("El observador de reles todavia no fue iniciado")
+        return self._relay_client.read_clock_on_demand(relay_id)
 
     def relay_query_snapshot(self, relay_id: int) -> list[dict]:
         if self._relay_client is None:

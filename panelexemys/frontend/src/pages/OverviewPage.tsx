@@ -115,7 +115,7 @@ export function OverviewPage({
     windowName === "1sem"
       ? `Semana ${page + 1}`
       : windowName === "1mes"
-        ? `Mes ${page + 1}`
+        ? `Período de 30 días ${page + 1}`
         : "Todos los datos";
   const modemEndpoint =
     modem.ip === null || modem.port === null

@@ -20,3 +20,8 @@ class RelesService:
         if relay_id < 0 or relay_id > 255:
             raise ValueError(f"ID Modbus de rele fuera de rango: {relay_id}")
         return self.modbus_client.get_rele_latest_disturbance(relay_id)
+
+    def read_clock(self, relay_id: int) -> dict[str, Any]:
+        if relay_id < 1 or relay_id > 255:
+            raise ValueError(f"ID Modbus de rele fuera de rango: {relay_id}")
+        return self.modbus_client.read_rele_clock(relay_id)

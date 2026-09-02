@@ -48,6 +48,13 @@ export class PanelexemysApiClient {
     );
   }
 
+  public async readRelayClock(relayId: number): Promise<JsonRecord> {
+    return this.parser.record(
+      await this.send(`reles/${relayId}/clock-snapshot`, "POST", {}),
+      "rele clock snapshot",
+    );
+  }
+
   public async setProxmoxView(view: "vivo" | "historico"): Promise<JsonRecord> {
     return this.parser.record(
       await this.send("proxmox/view", "PUT", { view }),
