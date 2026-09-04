@@ -1,3 +1,0 @@
-"""
-Paquete DAO de panelexemys.
-"""
