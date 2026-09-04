@@ -3,15 +3,19 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from alarm_generator import create_alarm_generator_router
 
 from src.api.generator_api import create_generator_router
 from src.api.grd_api import create_grd_router
 from src.api.relay_api import create_relay_router
 from src.bootstrap import ApplicationContext, create_context
+from src import config
+from src.services.alarm_generator import ModbusAlarmGenerator
 from src.persistencia.validador_esquema import check_database_access, validate_database_schema
 
 
 _context: ApplicationContext | None = None
+_alarm_generator = ModbusAlarmGenerator()
 
 
 def context() -> ApplicationContext:
@@ -24,7 +28,7 @@ def context() -> ApplicationContext:
 async def lifespan(_app: FastAPI):
     global _context
     validate_database_schema()
-    created = create_context()
+    created = create_context(_alarm_generator)
     _context = created
     created.logger.log(
         "Esquema validado; iniciando Modbus Collector.",
@@ -73,3 +77,17 @@ def health() -> JSONResponse:
 app.include_router(create_grd_router(context))
 app.include_router(create_generator_router(context))
 app.include_router(create_relay_router(context))
+app.include_router(
+    create_alarm_generator_router(
+        _alarm_generator.exemys_outbox,
+        config.ALARM_INTERNAL_API_KEY,
+        base_path="/exemys-alarm-generator",
+    )
+)
+app.include_router(
+    create_alarm_generator_router(
+        _alarm_generator.generator_outbox,
+        config.ALARM_INTERNAL_API_KEY,
+        base_path="/generator-alarm-generator",
+    )
+)

@@ -8,8 +8,9 @@ Microservicio FastAPI que releva el estado de instancias remotas de `charo-daemo
 - Consultar periodicamente el endpoint remoto de metricas.
 - Persistir el ultimo estado observado en `CHARITO_STATE_FILE`.
 - Eliminar del estado consolidado las instancias que ya no figuran en el inventario al iniciar el servicio.
-- Exponer una API HTTP interna para que `panelexemys` consulte estado agregado o por instancia.
+- Exponer una API HTTP interna para que `lechu` consulte estado agregado o por instancia.
 - Publicar por MQTT el snapshot consolidado en `CHARITO_MQTT_STATE_TOPIC` para consumidores externos como `panelito`.
+- Generar los flancos de disponibilidad que consume Alarmero.
 
 ## Endpoints
 
@@ -17,6 +18,9 @@ Microservicio FastAPI que releva el estado de instancias remotas de `charo-daemo
 - `GET /api/charito/instances`
 - `GET /api/charito/instances/{instance_id}`
 - `GET /api/charito/state`
+- `GET /api/v1/alarms/catalog`
+- `GET /api/v1/alarms/events`
+- `POST /api/v1/alarms/events/ack`
 
 ## Configuracion
 
@@ -33,15 +37,16 @@ Variables obligatorias:
 - `MQTT_BROKER_USE_TLS`
 - `MQTT_TLS_INSECURE`
 - `MQTT_BROKER_KEEPALIVE`
+- `ALARM_INTERNAL_API_KEY`
 
 `CHARITO_TARGETS_JSON` debe contener un unico formato valido: un objeto JSON con `instances`, `pollIntervalSeconds` y `httpTimeoutSeconds`. Cada entrada de `instances` debe declarar `id`, `alias` y `baseUrl`. El endpoint remoto de metricas es parte fija del contrato: `/metrics`.
 
 Contrato MQTT:
 
-- `CHARITO_MQTT_STATE_TOPIC`, por defecto recomendado `charito/state`.
+- `CHARITO_MQTT_STATE_TOPIC`, dentro de `lechu/v1/charito/status`.
 - Payload retenido: objeto JSON con `ts` e `items`.
 - `charito-service` es la unica fuente de verdad del estado `charo-daemon`; los consumidores no deben suscribirse directo a `charodaemon/host/*`.
-- La ausencia de una instancia en un snapshot completo significa que fue retirada del inventario; `panelexemys` usa esa señal para recuperar cualquier alarma activa asociada.
+- El catálogo de alarmas sigue la lista explícita de instancias configuradas.
 - Estados validos por instancia: `online`, `offline`, `error` y `desconocido`.
 - Un daemon alcanzable pero sin metricas validas se publica como `status: "error"` con `hostReachable: true`.
 

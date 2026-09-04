@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from math import sqrt
 
 
 def signed_word(value: int) -> int:
@@ -209,13 +208,13 @@ class MicomDisturbanceScale:
                 sample
                 * self.phase_primary_ct
                 / self.phase_internal_ratio
-                * sqrt(2)
+                * 2
             )
         if kind == "earth":
             return (
                 sample
                 * self.earth_primary_ct
                 / self.earth_internal_ratio
-                * sqrt(2)
+                * 2
             )
         raise ValueError(f"Tipo de canal de perturbacion desconocido: {kind}")

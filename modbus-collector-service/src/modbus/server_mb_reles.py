@@ -30,7 +30,8 @@ class ProtectionRelayClient:
     """Monitorea la ultima falla y la perturbacion mas reciente de cada rele."""
 
     CATALOG_REFRESH_SECONDS = 300
-    DISTURBANCE_MAX_DURATION_SECONDS = 3.0
+    DISTURBANCE_ASSOCIATION_TOLERANCE_SECONDS = 5.0
+    DISTURBANCE_PRECISE_TOLERANCE_SECONDS = 0.050
     FAULT_RECOGNITION_INTERVAL_SECONDS = 3600
 
     def __init__(
@@ -61,6 +62,7 @@ class ProtectionRelayClient:
         self.relay_unit_ids: list[int] = []
         self._last_fault_signatures: dict[int, tuple] = {}
         self._last_fault_recognitions: dict[int, float] = {}
+        self._pending_disturbance_faults: dict[int, RegistroFalla] = {}
         self._current_profiles: dict[int, MicomCurrentProfile] = {}
         self._current_profiles_refreshed: set[int] = set()
         self._current_profile_parts: dict[int, dict[str, object]] = {}
@@ -77,6 +79,9 @@ class ProtectionRelayClient:
         self._disturbance_configuration_errors: dict[int, dict[str, str]] = {}
         self._disturbances: dict[int, dict] = {}
         self._recent_queries: dict[int, deque[dict]] = {}
+        self._pending_disturbance_page_queries: dict[
+            tuple[int, int], dict
+        ] = {}
         self._next_poll_datetime: datetime | None = None
         self._poll_in_progress = False
         self._state_lock = threading.RLock()
@@ -136,34 +141,118 @@ class ProtectionRelayClient:
 
     def _record_query(self, event: dict) -> None:
         relay_id = int(event["relay_id"])
+        address = int(str(event["address"]), 16)
+        page = address >> 8
+        page_offset = address & 0xFF
+        is_disturbance_page = (
+            self.reader.DISTURBANCE_PAGE_FIRST <= page <= 0x21
+            and int(event["count"]) == self.reader.MODBUS_MAX_READ_WORDS
+            and page_offset in {0, self.reader.MODBUS_MAX_READ_WORDS}
+        )
         with self._state_lock:
             history = self._recent_queries.setdefault(relay_id, deque(maxlen=4))
-            history.appendleft(deepcopy(event))
+            if not is_disturbance_page:
+                history.appendleft(deepcopy(event))
+                return
+
+            query_key = (relay_id, page)
+            if page_offset == 0:
+                logical_query = deepcopy(event)
+                logical_query["address"] = f"0x{page << 8:04X}"
+                logical_query["count"] = self.reader.DISTURBANCE_SAMPLES_PER_PAGE
+                logical_query["received_count"] = int(
+                    event.get("received_count") or 0
+                )
+                logical_query["physical_requests"] = 1
+                if event["status"] == "ok":
+                    self._pending_disturbance_page_queries[query_key] = logical_query
+                else:
+                    history.appendleft(logical_query)
+                return
+
+            first_part = self._pending_disturbance_page_queries.pop(
+                query_key,
+                None,
+            )
+            if first_part is None:
+                logical_query = deepcopy(event)
+                logical_query["address"] = f"0x{page << 8:04X}"
+                logical_query["count"] = self.reader.DISTURBANCE_SAMPLES_PER_PAGE
+                logical_query["received_count"] = int(
+                    event.get("received_count") or 0
+                )
+                logical_query["physical_requests"] = 1
+                history.appendleft(logical_query)
+                return
+
+            received_count = int(first_part["received_count"]) + int(
+                event.get("received_count") or 0
+            )
+            first_part["received_count"] = received_count
+            first_part["physical_requests"] = 2
+            first_part["duration_ms"] = round(
+                float(first_part["duration_ms"]) + float(event["duration_ms"]),
+                1,
+            )
+            first_part["timestamp"] = event["timestamp"]
+            if event["status"] != "ok":
+                first_part["status"] = event["status"]
+            history.appendleft(first_part)
 
     def read_relay_status(self, relay_id: int) -> dict | None:
         self._get_current_profile(relay_id)
         date_format = self._get_date_format(relay_id)
-        if not self._fault_recognition_due(relay_id):
-            return None
-        if date_format is None:
-            return None
-        try:
-            record = self.reader.read_latest_fault(relay_id, date_format)
-        except (MicomReadError, ValueError) as exc:
-            self.logger.log(
-                f"No se pudo reconocer la ultima falla del rele {relay_id}: {exc}",
-                origin="OBS/RELE",
-            )
-            return None
+        self._get_disturbance_configuration(relay_id)
+
+        record: RegistroFalla | None = None
+        if self._fault_recognition_due(relay_id):
+            if date_format is None:
+                return None
+            try:
+                record = self.reader.read_latest_fault(relay_id, date_format)
+            except (MicomReadError, ValueError) as exc:
+                self.logger.log(
+                    f"No se pudo reconocer la ultima falla del rele {relay_id}: {exc}",
+                    origin="OBS/RELE",
+                )
+                return None
+            self._register_recognized_fault(relay_id, record, date_format)
+
+        with self._state_lock:
+            pending_fault = self._pending_disturbance_faults.get(relay_id)
+        if pending_fault is not None and date_format is not None:
+            internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
+            if internal_id is None:
+                raise RuntimeError(
+                    f"El rele Modbus {relay_id} no tiene ID interno en el catalogo"
+                )
+            if self._refresh_latest_disturbance(
+                relay_id,
+                internal_id,
+                pending_fault,
+                date_format,
+            ):
+                with self._state_lock:
+                    current_pending = self._pending_disturbance_faults.get(relay_id)
+                    if current_pending is pending_fault:
+                        self._pending_disturbance_faults.pop(relay_id, None)
+
+        return record.to_dict() if record is not None else None
+
+    def _register_recognized_fault(
+        self,
+        relay_id: int,
+        record: RegistroFalla,
+        date_format: int,
+    ) -> None:
         internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
         if internal_id is None:
             raise RuntimeError(
-                f"El rele Modbus {relay_id} no tiene ID interno en el catalogo migrado"
+                f"El rele Modbus {relay_id} no tiene ID interno en el catalogo"
             )
 
         timestamp = timebox.utc_iso_milliseconds(record.fault_datetime)
         signature = (record.fault_number, timestamp)
-
         if self._last_fault_signatures.get(relay_id) != signature:
             replaced = fallas_reles_dao.replace_if_newer(
                 id_rele=internal_id,
@@ -189,12 +278,8 @@ class ProtectionRelayClient:
             and current_fault["numero_falla"] == record.fault_number
             and current_fault["timestamp"] == timestamp
         ):
-            self._refresh_latest_disturbance(
-                relay_id,
-                internal_id,
-                record,
-                date_format,
-            )
+            with self._state_lock:
+                self._pending_disturbance_faults[relay_id] = record
         else:
             self.logger.log(
                 f"No se vinculo una perturbacion al rele {relay_id}: "
@@ -204,7 +289,6 @@ class ProtectionRelayClient:
 
         with self._state_lock:
             self._last_fault_recognitions[relay_id] = timebox.monotonic()
-        return record.to_dict()
 
     def _fault_recognition_due(self, relay_id: int) -> bool:
         with self._state_lock:
@@ -221,22 +305,18 @@ class ProtectionRelayClient:
         internal_id: int,
         fault: RegistroFalla,
         date_format: int,
-    ) -> None:
+    ) -> bool:
         with self._state_lock:
             cached = self._disturbances.get(relay_id)
-            if (
-                cached is not None
-                and cached.get("status") == "available"
-                and cached.get("fault_number") == fault.fault_number
-            ):
-                return
+            if self._disturbance_matches_fault(cached, fault):
+                return True
 
         persisted = fallas_reles_dao.get_current_disturbance_for_rele(internal_id)
         if persisted is not None:
             with self._state_lock:
                 self._disturbances[relay_id] = persisted
-            if persisted.get("fault_number") == fault.fault_number:
-                return
+            if self._disturbance_matches_fault(persisted, fault):
+                return True
 
         configuration = self._get_disturbance_configuration(relay_id)
         if configuration is None:
@@ -247,18 +327,20 @@ class ProtectionRelayClient:
                     or "La frecuencia nominal aun no fue leida del rele."
                 )
             self._set_disturbance_error(relay_id, message)
-            return
+            return False
 
         try:
             references = self.reader.read_disturbance_references(relay_id)
             reference = self._select_disturbance_reference(
+                relay_id,
                 references,
                 fault,
                 date_format,
+                configuration,
             )
         except (MicomReadError, ValueError) as exc:
             self._set_disturbance_error(relay_id, str(exc))
-            return
+            return False
 
         signature = reference.signature
         try:
@@ -289,9 +371,26 @@ class ProtectionRelayClient:
                 record_number=reference.record_number,
                 signature=signature,
             )
-            return
+            return False
         with self._state_lock:
             self._disturbances[relay_id] = disturbance
+        return True
+
+    @staticmethod
+    def _disturbance_matches_fault(
+        disturbance: dict | None,
+        fault: RegistroFalla,
+    ) -> bool:
+        if not isinstance(disturbance, dict):
+            return False
+        metadata = disturbance.get("metadata")
+        return (
+            disturbance.get("status") == "available"
+            and disturbance.get("fault_number") == fault.fault_number
+            and isinstance(metadata, dict)
+            and metadata.get("fault_timestamp")
+            == timebox.utc_iso_milliseconds(fault.fault_datetime)
+        )
 
     def _associate_disturbance_with_fault(
         self,
@@ -309,12 +408,6 @@ class ProtectionRelayClient:
             or any(not isinstance(word, int) for word in finish_words)
         ):
             raise ValueError("La perturbacion no contiene una estampa final valida")
-        if metadata.get("start_origin_code") not in {1, 2}:
-            raise ValueError(
-                "La perturbacion mas reciente no fue iniciada por disparo "
-                "ni por un umbral instantaneo"
-            )
-
         finish_datetime = self._decode_disturbance_finish(
             finish_words,
             date_format,
@@ -332,18 +425,39 @@ class ProtectionRelayClient:
         trigger_datetime = finish_datetime - timedelta(
             seconds=float(post_seconds)
         )
-        offset_seconds = abs(
-            (trigger_datetime - fault.fault_datetime).total_seconds()
+        signed_offset_seconds = (
+            trigger_datetime - fault.fault_datetime
+        ).total_seconds()
+        offset_seconds = abs(signed_offset_seconds)
+        precise_tolerance = max(
+            self.DISTURBANCE_PRECISE_TOLERANCE_SECONDS,
+            2.0 / float(sample_rate),
         )
-        tolerance_seconds = max(0.050, 2.0 / float(sample_rate))
-        if offset_seconds > tolerance_seconds:
-            raise ValueError(
-                "La perturbacion mas reciente no corresponde a la falla actual: "
-                f"diferencia={offset_seconds:.3f}s, "
-                f"tolerancia={tolerance_seconds:.3f}s"
+
+        observations: list[str] = []
+        if metadata.get("start_origin_code") not in {1, 2}:
+            observations.append(
+                "La perturbacion mas cercana no fue iniciada por disparo "
+                "ni por un umbral instantaneo."
+            )
+        if offset_seconds > self.DISTURBANCE_ASSOCIATION_TOLERANCE_SECONDS:
+            observations.append(
+                "La perturbacion mas cercana no corresponde temporalmente "
+                "a la falla actual: "
+                f"diferencia={offset_seconds:.3f}s, tolerancia=+/-"
+                f"{self.DISTURBANCE_ASSOCIATION_TOLERANCE_SECONDS:.3f}s. "
+                "Se muestra por ser la mejor disponible."
+            )
+        elif offset_seconds > precise_tolerance:
+            observations.append(
+                "La perturbacion mas cercana difiere de la falla actual: "
+                f"diferencia={offset_seconds:.3f}s; se encuentra dentro de "
+                "la tolerancia de +/-"
+                f"{self.DISTURBANCE_ASSOCIATION_TOLERANCE_SECONDS:.3f}s."
             )
 
         disturbance["fault_number"] = fault.fault_number
+        disturbance["association_warning"] = " ".join(observations) or None
         metadata["finish_timestamp"] = timebox.utc_iso_milliseconds(
             finish_datetime
         )
@@ -354,32 +468,60 @@ class ProtectionRelayClient:
             fault.fault_datetime
         )
         metadata["fault_offset_ms"] = round(offset_seconds * 1000, 3)
+        metadata["fault_signed_offset_ms"] = round(
+            signed_offset_seconds * 1000,
+            3,
+        )
+        metadata["association_tolerance_seconds"] = (
+            self.DISTURBANCE_ASSOCIATION_TOLERANCE_SECONDS
+        )
+        metadata["association_within_tolerance"] = (
+            offset_seconds <= self.DISTURBANCE_ASSOCIATION_TOLERANCE_SECONDS
+        )
 
     def _select_disturbance_reference(
         self,
+        relay_id: int,
         references: list[MicomDisturbanceReference],
         fault: RegistroFalla,
         date_format: int,
+        configuration: MicomDisturbanceConfiguration,
     ) -> MicomDisturbanceReference:
-        tolerance_seconds = 0.050
-        for reference in reversed(references):
-            if reference.start_origin_code not in {1, 2}:
-                continue
+        scored: list[tuple[float, MicomDisturbanceReference]] = []
+        errors: list[str] = []
+        for reference in references:
             finish_datetime = self._decode_disturbance_finish(
                 list(reference.finish_words),
                 date_format,
             )
-            elapsed = (finish_datetime - fault.fault_datetime).total_seconds()
-            if (
-                -tolerance_seconds
-                <= elapsed
-                <= self.DISTURBANCE_MAX_DURATION_SECONDS + tolerance_seconds
-            ):
-                return reference
-        raise ValueError(
-            "Ninguna perturbacion almacenada corresponde temporalmente "
-            f"a la falla {fault.fault_number}"
-        )
+            try:
+                _, post_samples = self.reader.read_disturbance_timing(
+                    relay_id,
+                    reference,
+                )
+            except (MicomReadError, ValueError) as exc:
+                errors.append(str(exc))
+                continue
+            trigger_datetime = finish_datetime - timedelta(
+                seconds=post_samples / configuration.sample_rate_hz
+            )
+            scored.append(
+                (
+                    abs(
+                        (
+                            trigger_datetime - fault.fault_datetime
+                        ).total_seconds()
+                    ),
+                    reference,
+                )
+            )
+        if not scored:
+            detail = "; ".join(errors) or "sin cabeceras temporales validas"
+            raise ValueError(
+                "No se pudo comparar ninguna perturbacion almacenada con "
+                f"la falla {fault.fault_number}: {detail}"
+            )
+        return min(scored, key=lambda candidate: candidate[0])[1]
 
     def _decode_disturbance_finish(
         self,
@@ -391,8 +533,10 @@ class ProtectionRelayClient:
                 "La fecha de perturbacion requiere cuatro palabras"
             )
         if date_format == RegistroFalla.DATE_FORMAT_PRIVATE:
-            seconds_since_epoch = (finish_words[0] << 16) | finish_words[1]
-            milliseconds = (finish_words[2] << 16) | finish_words[3]
+            seconds_since_epoch = (
+                finish_words[1] << 16
+            ) | finish_words[0]
+            milliseconds = (finish_words[3] << 16) | finish_words[2]
             if milliseconds > 999:
                 raise ValueError(
                     "Milisegundos privados de perturbacion fuera de rango: "
@@ -568,10 +712,11 @@ class ProtectionRelayClient:
             self._disturbance_configurations_refreshed.clear()
             self._disturbance_configuration_parts.clear()
             self._disturbance_configuration_errors.clear()
-            self._disturbances.clear()
             self._recent_queries.clear()
+            self._pending_disturbance_page_queries.clear()
             self._last_fault_signatures.clear()
             self._last_fault_recognitions.clear()
+            self._pending_disturbance_faults.clear()
             self._last_catalog_refresh = None
             self._next_poll_datetime = None
             self._poll_in_progress = False
@@ -646,6 +791,8 @@ class ProtectionRelayClient:
         with self._state_lock:
             if not self.relay_unit_ids:
                 return float(self.refresh_interval)
+            if self._pending_disturbance_faults:
+                return float(self.refresh_interval)
             for relay_id in self.relay_unit_ids:
                 if (
                     relay_id not in self._current_profiles_refreshed
@@ -667,6 +814,8 @@ class ProtectionRelayClient:
     def _modbus_query_due(self) -> bool:
         now = timebox.monotonic()
         with self._state_lock:
+            if self._pending_disturbance_faults:
+                return True
             for relay_id in self.relay_unit_ids:
                 if (
                     relay_id not in self._current_profiles_refreshed

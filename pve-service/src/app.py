@@ -7,13 +7,16 @@ from .history import update_history, load_history_for_dashboard
 from .mqtt_pub import publish_snapshot
 from .poller import Poller
 from .repository import SnapshotRepository
+from .alarm_source import PveAlarmSource
 from .utils import timebox
+from alarm_generator import create_alarm_generator_router
 
 
 app = FastAPI(title="pve-service", version="1.1.0")
 
 _collector = PveCollector()
 _repository = SnapshotRepository()
+_alarm_source = PveAlarmSource()
 _STALE_SECONDS = cfg.PVE_POLL_INTERVAL_SECONDS * 2
 
 
@@ -24,6 +27,7 @@ def _handle_snapshot(snapshot: Dict[str, Any]) -> None:
         poll_seconds=cfg.PVE_POLL_INTERVAL_SECONDS,
         hours=cfg.PVE_HISTORY_HOURS,
     )
+    _alarm_source.observe(snapshot)
 
 
 _poller = Poller(
@@ -65,3 +69,11 @@ def get_state() -> Dict[str, Any]:
 def get_history() -> Dict[str, Any]:
     vms, meta = load_history_for_dashboard()
     return {"vms": vms, "meta": meta}
+
+
+app.include_router(
+    create_alarm_generator_router(
+        _alarm_source.outbox,
+        cfg.ALARM_INTERNAL_API_KEY,
+    )
+)

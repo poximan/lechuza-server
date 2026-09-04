@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 
 def _req(name: str) -> str:

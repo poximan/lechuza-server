@@ -8,6 +8,7 @@ from src.control.latest_state_registry import LatestStateRegistry
 from src.persistencia.dao.dao_estado_grd import grd_state_dao
 from src.persistencia.dao.dao_grd import grd_dao
 from src.services.grd_service import GrdService
+from src.services.alarm_generator import ModbusAlarmGenerator
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.utils import timebox
 
@@ -29,6 +30,7 @@ class GrdMiddlewareClient:
         mqtt_publisher: ModbusMqttPublisher,
         state_registry: LatestStateRegistry,
         grd_service: GrdService,
+        alarm_generator: ModbusAlarmGenerator,
     ):
         self.driver = modbus_driver
         self.default_unit_id = default_unit_id
@@ -38,6 +40,7 @@ class GrdMiddlewareClient:
         self.publisher = mqtt_publisher
         self.state_registry = state_registry
         self.grd_service = grd_service
+        self.alarm_generator = alarm_generator
         self.failure_threshold = config.GRD_FAILURE_THRESHOLD
 
         self._active_grd_data: dict[int, str] | None = None
@@ -190,6 +193,10 @@ class GrdMiddlewareClient:
             or self._last_payload_down is None
         ):
             self._publish_snapshots_if_changed()
+        self.alarm_generator.observe_grd_snapshot(
+            self.grd_service.summary(),
+            grd_data,
+        )
 
     def start_observer_loop(
         self,

@@ -91,6 +91,16 @@ class FallasRelesDAO:
         record_number = disturbance.get("record_number")
         if not isinstance(record_number, int) or not 1 <= record_number <= 5:
             raise ValueError("Numero de registro de perturbacion invalido")
+        metadata = disturbance.get("metadata")
+        fault_timestamp = (
+            metadata.get("fault_timestamp")
+            if isinstance(metadata, dict)
+            else None
+        )
+        if not isinstance(fault_timestamp, str) or not fault_timestamp:
+            raise ValueError(
+                "La perturbacion no identifica la estampa de su falla"
+            )
         try:
             payload = json.dumps(
                 disturbance,
@@ -108,9 +118,15 @@ class FallasRelesDAO:
                 """
                 UPDATE fallas_reles
                 SET perturbacion_registro = ?, perturbacion_json = ?
-                WHERE id_rele = ? AND numero_falla = ?
+                WHERE id_rele = ? AND numero_falla = ? AND timestamp = ?
                 """,
-                (record_number, payload, id_rele, numero_falla),
+                (
+                    record_number,
+                    payload,
+                    id_rele,
+                    numero_falla,
+                    fault_timestamp,
+                ),
             )
             conn.commit()
             return result.rowcount == 1

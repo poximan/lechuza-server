@@ -18,12 +18,24 @@
   padding: var(--sc-space-3) var(--sc-space-5) var(--sc-space-5);
 }
 
-.item {
+.item,
+.labels {
   display: grid;
-  grid-template-columns: minmax(7rem, 1fr) 2fr auto;
+  grid-template-columns: minmax(9rem, 1fr) repeat(4, 3rem);
   align-items: center;
   gap: var(--sc-space-3);
   padding: var(--sc-space-2) 0;
+}
+
+.labels {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-xs);
+  font-weight: 700;
+}
+
+.labels span:not(:first-child),
+.item strong {
+  text-align: right;
 }
 
 .item > span {
@@ -31,17 +43,4 @@
   font-size: var(--sc-font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.track {
-  height: 0.45rem;
-  overflow: hidden;
-  border-radius: var(--sc-radius-pill);
-  background: var(--sc-color-background);
-}
-
-.bar {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--sc-color-primary), var(--sc-color-info));
 }

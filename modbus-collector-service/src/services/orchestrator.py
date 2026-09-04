@@ -12,6 +12,7 @@ from src.modbus.server_ge_fontana import EdifFontanaGeneratorClient
 from src.modbus.server_mb_middleware import GrdMiddlewareClient
 from src.modbus.server_mb_reles import ProtectionRelayClient
 from src.services.generator_state import GeneratorStateCache
+from src.services.alarm_generator import ModbusAlarmGenerator
 from src.services.grd_service import GrdService
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.services.state_store import ObserverStateStore
@@ -35,6 +36,7 @@ class ModbusOrchestrator:
         generator_state_cache: GeneratorStateCache,
         grd_state_registry: LatestStateRegistry,
         grd_service: GrdService,
+        alarm_generator: ModbusAlarmGenerator,
     ):
         self.logger = logger
         self.mqtt_publisher = mqtt_publisher
@@ -42,6 +44,7 @@ class ModbusOrchestrator:
         self.generator_state_cache = generator_state_cache
         self.grd_state_registry = grd_state_registry
         self.grd_service = grd_service
+        self.alarm_generator = alarm_generator
         self._stop_event = threading.Event()
         self._lock = threading.RLock()
         self._threads: dict[str, threading.Thread] = {}
@@ -122,6 +125,7 @@ class ModbusOrchestrator:
                     mqtt_publisher=self.mqtt_publisher,
                     state_registry=self.grd_state_registry,
                     grd_service=self.grd_service,
+                    alarm_generator=self.alarm_generator,
                 ).start_observer_loop,
                 mw_interval,
             ),
@@ -137,6 +141,7 @@ class ModbusOrchestrator:
                     logger=self.logger,
                     mqtt_publisher=self.mqtt_publisher,
                     state_cache=self.generator_state_cache,
+                    alarm_generator=self.alarm_generator,
                 ).start_monitoring_loop,
                 mw_interval,
             ),
@@ -156,6 +161,7 @@ class ModbusOrchestrator:
                     state_cache=self.generator_state_cache,
                     topic=str(config.EDIF_FONTANA_GE["topic"]),
                     name=str(config.EDIF_FONTANA_GE["name"]),
+                    alarm_generator=self.alarm_generator,
                 ).start_monitoring_loop,
                 fontana_interval,
             ),

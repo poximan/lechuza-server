@@ -33,7 +33,10 @@ class MicomRelayReader:
     DISTURBANCE_AVAILABLE_ADDRESS = 0x3D00
     DISTURBANCE_PAGE_FIRST = 0x09
     DISTURBANCE_SAMPLES_PER_PAGE = 250
+    MODBUS_MAX_READ_WORDS = 125
+    DISTURBANCE_INDEX_WORDS = 9
     DISTURBANCE_SAMPLES_PER_SELECTOR = 6250
+    DISTURBANCE_SELECTOR_BLOCKS = 16
     CHANNELS = (
         ("phase_a", 0, "phase"),
         ("phase_b", 1, "phase"),
@@ -176,14 +179,14 @@ class MicomRelayReader:
         relay_id: int,
         date_format: int,
     ) -> RegistroFalla:
-        candidates: list[list[int]] = []
+        candidates: list[tuple[int, int]] = []
         for offset in range(self.FAULT_RECORD_COUNT):
             address = self.FAULT_ADDRESS + offset
-            candidates.append(
-                self._read(relay_id, address, self.FAULT_WORDS)
-            )
+            fault_number = self._read(relay_id, address, 1)[0]
+            candidates.append((fault_number, address))
 
-        words = max(candidates, key=lambda candidate: candidate[0])
+        _, latest_address = max(candidates, key=lambda candidate: candidate[0])
+        words = self._read(relay_id, latest_address, self.FAULT_WORDS)
         return RegistroFalla(
             words,
             date_format,
@@ -232,12 +235,6 @@ class MicomRelayReader:
             raise MicomReadError(
                 f"Rele {relay_id}: el directorio repite numeros de perturbacion"
             )
-        unused_words = directory[1 + available * 7 :]
-        if any(unused_words):
-            raise MicomReadError(
-                f"Rele {relay_id}: el directorio contiene reservas no nulas"
-            )
-
         # El manual ordena el directorio desde el registro mas antiguo.
         return references
 
@@ -317,6 +314,20 @@ class MicomRelayReader:
             "channels": channels,
         }
 
+    def read_disturbance_timing(
+        self,
+        relay_id: int,
+        reference: MicomDisturbanceReference,
+    ) -> tuple[int, int]:
+        headers = self._select_channel_headers(
+            relay_id,
+            reference.record_number,
+            0,
+        )
+        pre_samples = sum(header[1] for header in headers)
+        post_samples = sum(header[2] for header in headers)
+        return pre_samples, post_samples
+
     def _validate_disturbance_reference(
         self,
         relay_id: int,
@@ -337,23 +348,84 @@ class MicomRelayReader:
         self,
         relay_id: int,
         slot: int,
-        chunk: int,
         channel_id: int,
+        block_index: int,
     ) -> list[int]:
         if slot < 1 or slot > 5:
             raise MicomReadError(
                 f"Rele {relay_id}: posicion de perturbacion invalida: {slot}"
             )
-        if chunk < 0 or chunk > 4:
-            raise MicomReadError(
-                f"Rele {relay_id}: bloque de perturbacion invalido: {chunk}"
-            )
         if channel_id < 0 or channel_id > 5:
             raise MicomReadError(
                 f"Rele {relay_id}: canal de perturbacion invalido: {channel_id}"
             )
-        selector = ((0x38 + slot - 1) << 8) | (chunk << 4) | channel_id
+        if block_index < 0 or block_index >= self.DISTURBANCE_SELECTOR_BLOCKS:
+            raise MicomReadError(
+                f"Rele {relay_id}: bloque de perturbacion invalido: {block_index}"
+            )
+        selector = (
+            ((0x38 + slot - 1) << 8)
+            | (block_index << 4)
+            | channel_id
+        )
         return self._read(relay_id, selector, 11)
+
+    def _select_channel_headers(
+        self,
+        relay_id: int,
+        slot: int,
+        channel_id: int,
+    ) -> list[list[int]]:
+        headers: list[list[int]] = []
+        scale_signature: tuple[int, ...] | None = None
+        for block_index in range(self.DISTURBANCE_SELECTOR_BLOCKS):
+            header = self._select_channel(
+                relay_id,
+                slot,
+                channel_id,
+                block_index,
+            )
+            scale_signature = self._validate_channel_header(
+                relay_id,
+                block_index,
+                header,
+                scale_signature,
+            )
+            headers.append(header)
+            if header[0] < self.DISTURBANCE_SAMPLES_PER_SELECTOR:
+                return headers
+        raise MicomReadError(
+            f"Rele {relay_id}: la perturbacion supera los "
+            f"{self.DISTURBANCE_SELECTOR_BLOCKS} bloques soportados por el mapa"
+        )
+
+    def _validate_channel_header(
+        self,
+        relay_id: int,
+        block_index: int,
+        header: list[int],
+        expected_scale_signature: tuple[int, ...] | None,
+    ) -> tuple[int, ...]:
+        sample_count = header[0]
+        if sample_count < 1 or sample_count > self.DISTURBANCE_SAMPLES_PER_SELECTOR:
+            raise MicomReadError(
+                f"Rele {relay_id}: cantidad invalida de muestras en el bloque "
+                f"{block_index}: {sample_count}"
+            )
+        if sample_count != header[1] + header[2]:
+            raise MicomReadError(
+                f"Rele {relay_id}: el bloque {block_index} no concilia muestras "
+                "totales, pretiempo y post-tiempo"
+            )
+        scale_signature = tuple(header[3:9])
+        if (
+            expected_scale_signature is not None
+            and scale_signature != expected_scale_signature
+        ):
+            raise MicomReadError(
+                f"Rele {relay_id}: la escala cambio entre bloques del canal"
+            )
+        return scale_signature
 
     def _read_channel(
         self,
@@ -361,72 +433,53 @@ class MicomRelayReader:
         slot: int,
         channel_id: int,
     ) -> tuple[list[int], list[int], int, int, list[int]]:
+        headers: list[list[int]] = []
         samples: list[int] = []
-        first_header: list[int] | None = None
-        pre_samples = 0
-        post_samples = 0
-        selected_index: list[int] | None = None
-        for chunk in range(5):
-            header = self._select_channel(relay_id, slot, chunk, channel_id)
-            if first_header is None:
-                first_header = header
-            elif header[3:9] != first_header[3:9]:
-                raise MicomReadError(
-                    f"Rele {relay_id}: la escala del canal cambio entre bloques"
-                )
-            sample_count = header[0]
-            if sample_count < 1 or sample_count > self.DISTURBANCE_SAMPLES_PER_SELECTOR:
-                raise MicomReadError(
-                    f"Rele {relay_id}: cantidad invalida de muestras en selector: {sample_count}"
-                )
-            if sample_count != header[1] + header[2]:
-                raise MicomReadError(
-                    f"Rele {relay_id}: la cabecera no concilia muestras totales, "
-                    "pretiempo y post-tiempo"
-                )
-            mapping_samples = self._read_selected_samples(
+        scale_signature: tuple[int, ...] | None = None
+        for block_index in range(self.DISTURBANCE_SELECTOR_BLOCKS):
+            header = self._select_channel(
+                relay_id,
+                slot,
+                channel_id,
+                block_index,
+            )
+            scale_signature = self._validate_channel_header(
+                relay_id,
+                block_index,
+                header,
+                scale_signature,
+            )
+            headers.append(header)
+            block_samples = self._read_selected_samples(
                 relay_id,
                 header[9],
                 header[10],
             )
-            if len(mapping_samples) != sample_count:
+            if len(block_samples) != header[0]:
                 raise MicomReadError(
-                    f"Rele {relay_id}: el mapa contiene {len(mapping_samples)} "
-                    f"muestras y la cabecera informa {sample_count}"
+                    f"Rele {relay_id}: el bloque {block_index} contiene "
+                    f"{len(block_samples)} muestras y la cabecera informa {header[0]}"
                 )
-            samples.extend(mapping_samples)
-            pre_samples += header[1]
-            post_samples += header[2]
-            chunk_index = self._read(
-                relay_id,
-                self.DISTURBANCE_INDEX_ADDRESS,
-                7,
-            )
-            if selected_index is None:
-                selected_index = chunk_index
-            elif chunk_index != selected_index:
-                raise MicomReadError(
-                    f"Rele {relay_id}: el indice cambio entre bloques del canal"
-                )
-            if sample_count < self.DISTURBANCE_SAMPLES_PER_SELECTOR:
+            samples.extend(block_samples)
+            if header[0] < self.DISTURBANCE_SAMPLES_PER_SELECTOR:
                 break
         else:
             raise MicomReadError(
-                f"Rele {relay_id}: el canal excede los cinco bloques documentados"
+                f"Rele {relay_id}: la perturbacion supera los "
+                f"{self.DISTURBANCE_SELECTOR_BLOCKS} bloques soportados por el mapa"
             )
-        if first_header is None:
-            raise MicomReadError(f"Rele {relay_id}: canal de perturbacion vacio")
         if len(samples) < 2:
             raise MicomReadError(
                 f"Rele {relay_id}: el canal no contiene suficientes muestras"
             )
-        if len(samples) != pre_samples + post_samples:
-            raise MicomReadError(
-                f"Rele {relay_id}: el canal no concilia su ventana temporal"
-            )
-        if selected_index is None:
-            raise MicomReadError(f"Rele {relay_id}: indice de perturbacion ausente")
-        return samples, first_header, pre_samples, post_samples, selected_index
+        selected_index = self._read(
+            relay_id,
+            self.DISTURBANCE_INDEX_ADDRESS,
+            self.DISTURBANCE_INDEX_WORDS,
+        )
+        pre_samples = sum(header[1] for header in headers)
+        post_samples = sum(header[2] for header in headers)
+        return samples, headers[0], pre_samples, post_samples, selected_index
 
     def _read_selected_samples(
         self,
@@ -446,26 +499,37 @@ class MicomRelayReader:
             )
         result: list[int] = []
         for page in range(self.DISTURBANCE_PAGE_FIRST, last_page + 1):
-            page_count = (
+            valid_word_count = (
                 last_page_count
                 if page == last_page
                 else self.DISTURBANCE_SAMPLES_PER_PAGE
             )
-            first_count = min(page_count, 125)
-            values = self._read(relay_id, page << 8, first_count)
-            if page_count > first_count:
-                values.extend(
-                    self._read(relay_id, (page << 8) + first_count, page_count - first_count)
+            page_address = page << 8
+            values = self._read(
+                relay_id,
+                page_address,
+                self.MODBUS_MAX_READ_WORDS,
+            )
+            values.extend(
+                self._read(
+                    relay_id,
+                    page_address + self.MODBUS_MAX_READ_WORDS,
+                    self.MODBUS_MAX_READ_WORDS,
                 )
-            result.extend(signed_word(value) for value in values)
+            )
+            result.extend(
+                signed_word(value) for value in values[:valid_word_count]
+            )
         return result
 
     def _parse_disturbance_index(
         self,
         words: list[int],
     ) -> dict:
-        if len(words) != 7:
-            raise MicomReadError("El indice de perturbacion requiere siete palabras")
+        if len(words) != self.DISTURBANCE_INDEX_WORDS:
+            raise MicomReadError(
+                "El indice de perturbacion requiere nueve palabras"
+            )
         origin = words[5]
         if origin not in self.START_ORIGINS:
             raise MicomReadError(
@@ -477,4 +541,5 @@ class MicomRelayReader:
             "start_origin_code": origin,
             "start_origin": self.START_ORIGINS[origin],
             "post_time_frequency_raw": words[6],
+            "index_extension_words_raw": words[7:9],
         }

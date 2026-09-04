@@ -31,25 +31,41 @@ export interface IncidentCounts {
   resolved: number;
 }
 
+export interface AlarmConditionCounts {
+  active: number;
+  inactive: number;
+  unknown: number;
+}
+
 export interface FrequentIncident {
+  source_id: string;
   alarm_key: string;
   title: string;
   category: string;
   total: number;
+  daily: number;
+  weekly: number;
+  monthly: number;
+  annual: number;
 }
 
 export interface ClearanceMetric {
+  source_id: string;
   alarm_key: string;
   title: string;
   category: string;
   configured_minutes: number;
-  sample_count: number;
-  median_minutes: number | null;
-  p90_minutes: number | null;
+  active_sample_count: number;
+  median_active_minutes: number | null;
+  p90_active_minutes: number | null;
+  inactive_sample_count: number;
+  median_inactive_minutes: number | null;
+  p90_inactive_minutes: number | null;
 }
 
 export interface Dashboard {
   counts: IncidentCounts;
+  conditions: AlarmConditionCounts;
   frequent: FrequentIncident[];
   clearance: ClearanceMetric[];
 }
@@ -70,4 +86,17 @@ export interface AlarmeroSnapshot {
   incidents: Incident[];
   dashboard: Dashboard;
   health: HealthStatus;
+}
+
+export interface AlarmCatalogItem {
+  source_id: string;
+  alarm_key: string;
+  title: string;
+  category: string;
+  activation_seconds: number;
+  recovery_seconds: number;
+  send_start: number;
+  send_end: number;
+  current_condition: number | null;
+  condition_since_at: string | null;
 }

@@ -1,0 +1,30 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sc-space-3);
+}
+.card {
+  display: grid;
+  gap: var(--sc-space-2);
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+.card span,
+.empty {
+  color: var(--sc-color-text-muted);
+}
+.error {
+  color: var(--sc-color-danger);
+}
+@media (max-width: 60rem) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 38rem) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

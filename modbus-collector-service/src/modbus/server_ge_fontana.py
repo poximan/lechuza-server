@@ -4,6 +4,7 @@ from collections.abc import Callable
 from logosaurio import Logosaurio
 from src.modbus.modbus_driver import ModbusTcpReadOnlyDriver
 from src.services.generator_state import GeneratorStateCache
+from src.services.alarm_generator import ModbusAlarmGenerator
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.utils import timebox
 
@@ -27,6 +28,7 @@ class EdifFontanaGeneratorClient:
         state_cache: GeneratorStateCache,
         topic: str,
         name: str,
+        alarm_generator: ModbusAlarmGenerator,
     ):
         self.driver = modbus_driver
         self.unit_id = unit_id
@@ -40,6 +42,7 @@ class EdifFontanaGeneratorClient:
         self.state_cache = state_cache
         self.topic = topic
         self.name = name
+        self.alarm_generator = alarm_generator
         self._last_bits: tuple[int, int] | None = None
 
     @staticmethod
@@ -80,6 +83,7 @@ class EdifFontanaGeneratorClient:
         raw_value = int(registers[0])
         payload = self._build_payload(raw_value)
         self.state_cache.update(self.name, payload)
+        self.alarm_generator.observe_generator(self.name, payload)
         current_bits = (
             int(payload["interruptor_linea"]["bit"]),
             int(payload["interruptor_grupo"]["bit"]),

@@ -7,6 +7,7 @@ from src.control.latest_state_registry import LatestStateRegistry
 from src.persistencia.dao.dao_estado_grd import grd_state_dao
 from src.persistencia.dao.dao_grd import grd_dao
 from src.services.state_store import ObserverStateStore
+from src.services.alarm_generator import ModbusAlarmGenerator
 from src.services.generator_state import GeneratorStateCache
 from src.services.grd_service import GrdService
 from src.services.mqtt_publisher import ModbusMqttPublisher
@@ -23,9 +24,10 @@ class ApplicationContext:
     grd_service: GrdService
     publisher: ModbusMqttPublisher
     orchestrator: ModbusOrchestrator
+    alarm_generator: ModbusAlarmGenerator
 
 
-def create_context() -> ApplicationContext:
+def create_context(alarm_generator: ModbusAlarmGenerator) -> ApplicationContext:
     state_store = ObserverStateStore(config.OBS_STATE_FILE)
     generator_cache = GeneratorStateCache()
     grd_state_registry = LatestStateRegistry(grd_state_dao.get_current_states())
@@ -38,6 +40,7 @@ def create_context() -> ApplicationContext:
         generator_cache,
         grd_state_registry,
         grd_service,
+        alarm_generator,
     )
     return ApplicationContext(
         logger=logger,
@@ -47,4 +50,5 @@ def create_context() -> ApplicationContext:
         grd_service=grd_service,
         publisher=publisher,
         orchestrator=orchestrator,
+        alarm_generator=alarm_generator,
     )

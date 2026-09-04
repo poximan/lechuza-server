@@ -6,6 +6,7 @@ from src import config
 from logosaurio import Logosaurio
 from src.modbus.modbus_driver import ModbusTcpReadOnlyDriver
 from src.services.generator_state import GeneratorStateCache
+from src.services.alarm_generator import ModbusAlarmGenerator
 from src.services.mqtt_publisher import ModbusMqttPublisher
 from src.utils import timebox
 
@@ -24,6 +25,7 @@ class EdifEstivarizGeneratorClient:
         logger: Logosaurio,
         mqtt_publisher: ModbusMqttPublisher,
         state_cache: GeneratorStateCache,
+        alarm_generator: ModbusAlarmGenerator,
     ):
         self.driver = modbus_driver
         self.unit_id = default_unit_id
@@ -31,6 +33,7 @@ class EdifEstivarizGeneratorClient:
         self.logger = logger
         self.publisher = mqtt_publisher
         self.state_cache = state_cache
+        self.alarm_generator = alarm_generator
         self._last_line_bit: Optional[int] = None
 
         ge_cfg = config.EDIF_ESTIVARIZ_GE
@@ -87,6 +90,7 @@ class EdifEstivarizGeneratorClient:
         raw_value = int(registers[0])
         payload = self._build_payload(raw_value)
         self.state_cache.update(self._name, payload)
+        self.alarm_generator.observe_generator(self._name, payload)
         line_bit = int(payload["interruptor_linea"]["bit"])
         if line_bit != self._last_line_bit and self.publisher.publish_ge_status(
             self._topic,

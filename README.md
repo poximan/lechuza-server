@@ -1,61 +1,68 @@
 # lechuza-server
 
-Stack operativo de Lechuza desplegado desde `docker-compose.yml`.
+Stack operativo desplegado por `docker-compose.yml` bajo el proyecto Compose
+`lechu` y la red privada `lechu-backend-net`.
 
-| Servicio | Responsabilidad | Interfaces |
-| --- | --- | --- |
-| `panelexemys` | Dashboard, alarmas y coordinacion | HTTP, MQTT |
-| `mensagelo` | Envio y registro de correo | HTTP interno |
-| `modbus-collector-service` | Estado GRD, MiCOM y generadores | HTTP, MQTT |
-| `pve-service` | Estado e historial de Proxmox | HTTP, MQTT |
-| `modem-link-monitor` | Estado del enlace del router | HTTP, MQTT |
-| `charito-service` | Estado consolidado de `charo-daemon` | HTTP, MQTT |
-| `alarmero-service` | Historial y dashboard de incidencias | HTTP |
+| Servicio | Responsabilidad principal |
+| --- | --- |
+| `lechu` | Interfaz web y composición de vistas |
+| `modbus-collector-service` | GRD, generadores y relés MiCOM |
+| `pve-service` | Estado e historial Proxmox |
+| `charito-service` | Estado consolidado de `charo-daemon` |
+| `modem-link-monitor` | Estado del enlace del módem |
+| `alarmero-service` | Alarmas, deduplicación, tiempos, historia y envíos |
+| `mensagelo` | Cola durable y entrega SMTP |
 
-`panelito` y `charo-daemon` son productos externos. Los consumidores usan los contratos HTTP/MQTT; no acceden a bases ni archivos internos de otros servicios.
+Las imágenes y contenedores usan el prefijo `lechu-`, salvo el componente central
+`lechu`, cuyo nombre fue fijado explícitamente. La frontera HTTP pertenece a
+`platform/edge-platform`; este Compose consume `servicoop-edge-net` como red
+externa.
 
-## Exposicion publica
+## Alarmas
 
-La frontera HTTP pertenece a `servicoop/platform/edge-platform`. El DNS externo de `comunicaciones.servicoop.com.ar` apunta al router frontera, que reenvia `80/443` al host Docker. `edge-gateway` selecciona los servicios de Lechuza por ruta.
+Los servicios expertos exponen catálogo y flancos mediante su ruta base:
 
-Los servicios publicables se conectan a `servicoop-edge-net`. Esta red pertenece a `platform`; este Compose solo la consume como `external: true`. Desplegar primero `platform/docker-compose.yml` y no crear la red manualmente.
+- `GET /api/v1/alarms/catalog`
+- `GET /api/v1/alarms/events`
+- `POST /api/v1/alarms/events/ack`
 
-La comunicacion privada entre servicios usa la red explicita
-`comunic-mon-backend-net`; el despliegue no depende del nombre automatico de
-Compose.
+Alarmero consulta la lista explícita `ALARMERO_SOURCES_JSON`. Persiste primero cada
+flanco, confirma su cursor después, aplica los tiempos del catálogo y recién entonces
+genera un despacho recuperable. También administra los checks de correo de inicio y
+fin. Mensagelo recibe el pedido idempotente y realiza la entrega SMTP.
 
-## Integraciones
+El colector publica dos generadores independientes porque tienen temporizaciones
+distintas: `/exemys-alarm-generator` y `/generator-alarm-generator`. Los demás
+servicios publican el contrato desde su raíz HTTP.
 
-- `panelexemys` consume las APIs internas de los demas servicios.
-- `modbus-collector-service`, `pve-service` y `modem-link-monitor` publican estado por MQTT.
-- `charito-service` consulta `/metrics` de las instancias declaradas en `CHARITO_TARGETS_JSON` y publica el consolidado para `panelito`.
-- El inventario operativo de Charito usa `pc0092-sca-wiz` como nombre vigente; `pc0043-sca-wiz` es un identificador retirado y `pc-hugo` ya no forma parte del seguimiento.
-- `pve-service` releva las VMs `100`, `102`, `107`, `108` y `110`; `panelexemys` usa el mismo `PVE_VHOST_IDS` para generar sus alarmas por VM.
-- `alarmero-service` consume por HTTP el ciclo de alarmas de `panelexemys` y los despachos de `mensagelo`; no accede a sus bases.
-- La persistencia local vive bajo `volumes/`.
+Tiempos vigentes:
 
-## Configuracion
+- conectividad global roja, GRD individual, módem, Proxmox y Charito: 20 minutos;
+- grupo electrógeno en marcha: 60 segundos;
+- finalización de cualquier alarma: 20 segundos.
 
-Copiar `.env.example` como `.env` y completar secretos, usuarios y endpoints. `.env` y `volumes/` no se versionan. Cada servicio documenta sus endpoints y variables en su propio README.
+Una alarma individual de GRD sólo existe fuera de la zona roja global. RL1 no forma
+parte del catálogo actual.
 
-## Ciclo de alarmas y correo
+## Persistencia
 
-`panelexemys` es responsable de detectar la condicion, exigir su duracion minima,
-mantener la incidencia activa y decidir cuando queda recuperada. La incidencia y su
-identificador idempotente se conservan en `panelexemys.db`, incluso ante reinicios.
+Cada servicio usa exclusivamente su volumen. No se comparten bases ni archivos entre
+contenedores. `modbus-collector-service` conserva catálogo e historia GRD y una sola
+falla/perturbación vigente por relé. Alarmero usa un esquema nuevo sin migraciones en
+caliente; una base existente con otro contrato detiene el servicio.
 
-`mensagelo` es responsable de aceptar una sola vez ese identificador, persistir el
-pedido y efectuar un unico intento SMTP. Un HTTP `202` confirma aceptacion durable;
-no confirma entrega. Una incidencia solo puede generar otra notificacion despues de
-una recuperacion valida sostenida durante `ALARM_MIN_RECOVERY_DURATION_MINUTES`.
+`modbus-collector-service/tools/rebuild_operational_snapshot.py` crea una base nueva y
+copia únicamente el catálogo/historia GRD, el estado vigente y la última falla y
+perturbación MiCOM.
 
-`alarmero-service` mantiene una proyeccion append-only propia para consulta. Muestra
-alarmas `potential`, `active`, `recovering` y `resolved`, correlaciona destinatarios
-y estado SMTP por el identificador de incidencia y calcula frecuencias, mediana y
-percentil 90 de despeje. Las estimaciones iniciales se declaran en
-`ALARM_CLEARANCE_ESTIMATES_MINUTES`. El acceso publico es protegido en `/alarmero/`.
+## Contratos
 
-Snapshots ausentes o invalidos no resuelven alarmas. Cuando `charito-service`
-entrega un snapshot completo valido, `panelexemys` contrasta sus instancias contra
-las incidencias activas: una instancia retirada del inventario inicia el ciclo
-normal de recuperacion y el cambio se replica a `alarmero-service`.
+- HTTP público: `/lechu/`, `/alarmero/`, `/api/`, `/pve/` y `/router/` según
+  `platform/edge-platform/edge-gateway/config/routes.txt`.
+- MQTT: namespace `lechu/v1/...`.
+- Variables: `.env` y `.env.example` declaran el mismo conjunto de claves.
+- Puertos TCP: [`../../../ports.txt`](../../../ports.txt) es la fuente única del
+  espacio de trabajo; este Compose no mantiene una tabla paralela.
+
+`panelito` queda temporalmente fuera de contrato hasta adaptar sus tópicos al nuevo
+namespace.

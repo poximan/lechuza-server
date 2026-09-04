@@ -16,7 +16,7 @@ export function IncidentsTable({ incidents, presenter, referenceNow, toolbar }: 
   return (
     <Card>
       <div className={styles.heading}>
-        <div><h2>Incidencias</h2><p>Panelexemys define el estado; Mensagelo define el despacho.</p></div>
+        <div><h2>Incidencias</h2><p>Alarmero confirma, persiste y administra cada ciclo de vida.</p></div>
         {toolbar}
       </div>
       <div className={styles.tableWrap}>

@@ -1,5 +1,5 @@
 import { AlarmeroContractParser } from "./AlarmeroContractParser";
-import type { Dashboard, HealthStatus, Incident, IncidentFilter } from "./AlarmModels";
+import type { AlarmCatalogItem, Dashboard, HealthStatus, Incident, IncidentFilter } from "./AlarmModels";
 
 export class AlarmeroApiClient {
   public constructor(
@@ -18,6 +18,28 @@ export class AlarmeroApiClient {
 
   public async getHealth(signal?: AbortSignal): Promise<HealthStatus> {
     return this.parser.parseHealth(await this.getJson("health", signal));
+  }
+
+  public async getCatalog(signal?: AbortSignal): Promise<AlarmCatalogItem[]> {
+    return this.parser.parseCatalog(await this.getJson("api/catalog", signal));
+  }
+
+  public async updateNotificationSettings(
+    item: AlarmCatalogItem,
+    sendStart: boolean,
+    sendEnd: boolean,
+  ): Promise<void> {
+    const path = `api/catalog/${encodeURIComponent(item.source_id)}/${item.alarm_key
+      .split("/").map(encodeURIComponent).join("/")}`;
+    const response = await fetch(new URL(path, this.baseUrl), {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ send_start: sendStart, send_end: sendEnd }),
+    });
+    if (!response.ok) {
+      throw new Error(`configuración respondió HTTP ${response.status}`);
+    }
   }
 
   private async getJson(relativePath: string, signal?: AbortSignal): Promise<unknown> {

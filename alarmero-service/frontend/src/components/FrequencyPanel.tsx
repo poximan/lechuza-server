@@ -8,16 +8,18 @@ export interface FrequencyPanelProps {
 }
 
 export function FrequencyPanel({ items }: FrequencyPanelProps) {
-  const maximum = Math.max(1, ...items.map((item) => item.total));
   return (
     <Card>
-      <div className={styles.heading}><h2>Más frecuentes</h2><p>Alarmas confirmadas agrupadas por origen.</p></div>
+      <div className={styles.heading}><h2>Frecuencia</h2><p>Alarmas confirmadas por ventana móvil.</p></div>
       <div className={styles.ranking}>
+        {items.length > 0 && <div className={styles.labels}><span>Alarma</span><span>24 h</span><span>7 d</span><span>30 d</span><span>365 d</span></div>}
         {items.map((item) => (
-          <div className={styles.item} key={item.alarm_key}>
+          <div className={styles.item} key={`${item.source_id}/${item.alarm_key}`}>
             <span title={item.title}>{item.title}</span>
-            <div className={styles.track}><div className={styles.bar} style={{ width: `${Math.round(item.total * 100 / maximum)}%` }} /></div>
-            <strong>{item.total}</strong>
+            <strong>{item.daily}</strong>
+            <strong>{item.weekly}</strong>
+            <strong>{item.monthly}</strong>
+            <strong>{item.annual}</strong>
           </div>
         ))}
         {items.length === 0 && <p>No hay alarmas confirmadas.</p>}

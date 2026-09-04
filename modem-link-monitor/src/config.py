@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 
 def _req(name: str) -> str:
@@ -23,6 +23,8 @@ def _req_bool(name: str) -> bool:
 TARGET_IP = _req("TARGET_IP")
 TARGET_PORT = _req_int("TARGET_PORT")
 PROBE_INTERVAL_SECONDS = _req_int("PROBE_INTERVAL_SECONDS")
+DATA_DIR = _req("MODEM_LINK_MONITOR_DATA_DIR")
+ALARM_INTERNAL_API_KEY = _req("ALARM_INTERNAL_API_KEY")
 
 CHECK_HOST_BASE_URL = _req("CHECK_HOST_BASE_URL")
 CHECK_HOST_MAX_NODES = _req_int("CHECK_HOST_MAX_NODES")

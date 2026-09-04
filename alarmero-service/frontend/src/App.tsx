@@ -8,6 +8,7 @@ import { ClearanceTable } from "./components/ClearanceTable";
 import { FilterBar } from "./components/FilterBar";
 import { FrequencyPanel } from "./components/FrequencyPanel";
 import { IncidentsTable } from "./components/IncidentsTable";
+import { NotificationSettings } from "./components/NotificationSettings";
 import { SummaryGrid } from "./components/SummaryGrid";
 import { useAlarmeroData } from "./useAlarmeroData";
 
@@ -17,7 +18,7 @@ export function App() {
   const { error, loading, snapshot } = useAlarmeroData(filter);
 
   return (
-    <AppShell productName="Alarmero">
+    <AppShell productName="lechuza-server" sectionName="Alarmero">
       <main className={styles.main}>
         <header className={styles.introduction}>
           <div><p>lechuza-server</p><h1>Seguimiento de alarmas</h1><span>Incidencias, despachos y tiempos de despeje</span></div>
@@ -31,13 +32,17 @@ export function App() {
 
         {snapshot && (
           <>
-            <SummaryGrid counts={snapshot.dashboard.counts} />
+            <SummaryGrid
+              conditions={snapshot.dashboard.conditions}
+              counts={snapshot.dashboard.counts}
+            />
             <IncidentsTable
               incidents={snapshot.incidents}
               presenter={presenter}
               referenceNow={snapshot.health.generated_at}
               toolbar={<FilterBar onSelect={setFilter} selected={filter} />}
             />
+            <NotificationSettings />
             <div className={styles.dashboardGrid}>
               <FrequencyPanel items={snapshot.dashboard.frequent} />
               <ClearanceTable items={snapshot.dashboard.clearance} presenter={presenter} />

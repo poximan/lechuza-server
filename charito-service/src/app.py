@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -8,6 +8,8 @@ from config import load_service_config_from_json
 from broadcast import broadcast_state, close_mqtt
 from poller import CharitoPoller
 from state import StateStore
+from alarm_source import CharitoAlarmSource
+from alarm_generator import create_alarm_generator_router
 
 
 def _req(name: str) -> str:
@@ -23,18 +25,21 @@ TARGETS_JSON = _req("CHARITO_TARGETS_JSON")
 service_cfg = load_service_config_from_json(TARGETS_JSON)
 POLL_INTERVAL = service_cfg.poll_interval_seconds
 HTTP_TIMEOUT = service_cfg.http_timeout_seconds
+ALARM_INTERNAL_API_KEY = _req("ALARM_INTERNAL_API_KEY")
 
 app = FastAPI(title="charito-service", version="2.0.0")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 state_store = StateStore(Path(STATE_FILE))
 targets = service_cfg.instances
+alarm_source = CharitoAlarmSource(DATA_DIR, targets)
 
 poller = CharitoPoller(
     targets=targets,
     state=state_store,
     poll_interval=POLL_INTERVAL,
     request_timeout=HTTP_TIMEOUT,
+    on_state=alarm_source.observe,
 )
 
 
@@ -74,3 +79,11 @@ def full_state(ids: Optional[str] = None) -> dict:
     if ids:
         subset = [part.strip() for part in ids.split(",") if part.strip()]
     return state_store.build_state(subset)
+
+
+app.include_router(
+    create_alarm_generator_router(
+        alarm_source.outbox,
+        ALARM_INTERNAL_API_KEY,
+    )
+)

@@ -13,6 +13,24 @@ class AlarmService:
     def dashboard(self) -> dict:
         return db.dashboard()
 
+    def catalog(self) -> dict:
+        return {"items": db.list_catalog()}
+
+    def update_notification_settings(
+        self,
+        source_id: str,
+        alarm_key: str,
+        send_start: bool,
+        send_end: bool,
+    ) -> dict:
+        db.update_notification_settings(
+            source_id,
+            alarm_key,
+            send_start,
+            send_end,
+        )
+        return {"ok": True}
+
     def health(self) -> dict:
         sync = sync_worker.status()
         return {

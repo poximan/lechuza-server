@@ -1,5 +1,5 @@
 import threading
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 import requests
 
@@ -19,11 +19,13 @@ class CharitoPoller:
             state: StateStore,
             poll_interval: int,
             request_timeout: float,
+            on_state: Callable[[dict], None],
     ) -> None:
         self._targets = list(targets)
         self._state = state
         self._interval = poll_interval
         self._timeout = request_timeout
+        self._on_state = on_state
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._registry: dict[str, dict] = {}
@@ -173,8 +175,10 @@ class CharitoPoller:
         return sample
 
     def _broadcast_state(self) -> None:
+        snapshot = self._state.build_state()
+        self._on_state(snapshot)
         try:
-            broadcast_state(self._state.build_state())
+            broadcast_state(snapshot)
         except Exception:
             self._log.exception("No se pudo publicar estado charito por MQTT", origin="CHARITO/MQTT")
 

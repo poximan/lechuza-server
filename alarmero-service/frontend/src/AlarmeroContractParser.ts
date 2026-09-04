@@ -1,6 +1,31 @@
-import type { Dashboard, HealthStatus, Incident } from "./AlarmModels";
+import type { AlarmCatalogItem, Dashboard, HealthStatus, Incident } from "./AlarmModels";
 
 export class AlarmeroContractParser {
+  public parseCatalog(payload: unknown): AlarmCatalogItem[] {
+    const record = this.requireRecord(payload, "catalog");
+    if (!Array.isArray(record.items)) {
+      throw new Error("Contrato inválido: catalog.items debe ser una lista");
+    }
+    return record.items.map((item, index) => {
+      const path = `catalog.items[${index}]`;
+      const entry = this.requireRecord(item, path);
+      return {
+        source_id: this.requireString(entry, "source_id", path),
+        alarm_key: this.requireString(entry, "alarm_key", path),
+        title: this.requireString(entry, "title", path),
+        category: this.requireString(entry, "category", path),
+        activation_seconds: this.requireNonNegativeInteger(entry, "activation_seconds", path),
+        recovery_seconds: this.requireNonNegativeInteger(entry, "recovery_seconds", path),
+        send_start: this.requireFlag(entry, "send_start", path),
+        send_end: this.requireFlag(entry, "send_end", path),
+        current_condition: entry["current_condition"] === null
+          ? null
+          : this.requireFlag(entry, "current_condition", path),
+        condition_since_at: this.requireNullableString(entry, "condition_since_at", path),
+      };
+    });
+  }
+
   public parseIncidents(payload: unknown): Incident[] {
     const record = this.requireRecord(payload, "incidents");
     if (!Array.isArray(record.items)) {
@@ -12,6 +37,7 @@ export class AlarmeroContractParser {
   public parseDashboard(payload: unknown): Dashboard {
     const record = this.requireRecord(payload, "dashboard");
     const counts = this.requireRecord(record.counts, "dashboard.counts");
+    const conditions = this.requireRecord(record.conditions, "dashboard.conditions");
     if (!Array.isArray(record.frequent) || !Array.isArray(record.clearance)) {
       throw new Error("Contrato inválido: dashboard.frequent y dashboard.clearance deben ser listas");
     }
@@ -22,25 +48,39 @@ export class AlarmeroContractParser {
         recovering: this.requireNonNegativeInteger(counts, "recovering", "dashboard.counts"),
         resolved: this.requireNonNegativeInteger(counts, "resolved", "dashboard.counts"),
       },
+      conditions: {
+        active: this.requireNonNegativeInteger(conditions, "active", "dashboard.conditions"),
+        inactive: this.requireNonNegativeInteger(conditions, "inactive", "dashboard.conditions"),
+        unknown: this.requireNonNegativeInteger(conditions, "unknown", "dashboard.conditions"),
+      },
       frequent: record.frequent.map((item, index) => {
         const entry = this.requireRecord(item, `dashboard.frequent[${index}]`);
         return {
+          source_id: this.requireString(entry, "source_id", `dashboard.frequent[${index}]`),
           alarm_key: this.requireString(entry, "alarm_key", `dashboard.frequent[${index}]`),
           title: this.requireString(entry, "title", `dashboard.frequent[${index}]`),
           category: this.requireString(entry, "category", `dashboard.frequent[${index}]`),
           total: this.requireNonNegativeInteger(entry, "total", `dashboard.frequent[${index}]`),
+          daily: this.requireNonNegativeInteger(entry, "daily", `dashboard.frequent[${index}]`),
+          weekly: this.requireNonNegativeInteger(entry, "weekly", `dashboard.frequent[${index}]`),
+          monthly: this.requireNonNegativeInteger(entry, "monthly", `dashboard.frequent[${index}]`),
+          annual: this.requireNonNegativeInteger(entry, "annual", `dashboard.frequent[${index}]`),
         };
       }),
       clearance: record.clearance.map((item, index) => {
         const entry = this.requireRecord(item, `dashboard.clearance[${index}]`);
         return {
+          source_id: this.requireString(entry, "source_id", `dashboard.clearance[${index}]`),
           alarm_key: this.requireString(entry, "alarm_key", `dashboard.clearance[${index}]`),
           title: this.requireString(entry, "title", `dashboard.clearance[${index}]`),
           category: this.requireString(entry, "category", `dashboard.clearance[${index}]`),
           configured_minutes: this.requireNonNegativeNumber(entry, "configured_minutes", `dashboard.clearance[${index}]`),
-          sample_count: this.requireNonNegativeInteger(entry, "sample_count", `dashboard.clearance[${index}]`),
-          median_minutes: this.requireNullableNonNegativeNumber(entry, "median_minutes", `dashboard.clearance[${index}]`),
-          p90_minutes: this.requireNullableNonNegativeNumber(entry, "p90_minutes", `dashboard.clearance[${index}]`),
+          active_sample_count: this.requireNonNegativeInteger(entry, "active_sample_count", `dashboard.clearance[${index}]`),
+          median_active_minutes: this.requireNullableNonNegativeNumber(entry, "median_active_minutes", `dashboard.clearance[${index}]`),
+          p90_active_minutes: this.requireNullableNonNegativeNumber(entry, "p90_active_minutes", `dashboard.clearance[${index}]`),
+          inactive_sample_count: this.requireNonNegativeInteger(entry, "inactive_sample_count", `dashboard.clearance[${index}]`),
+          median_inactive_minutes: this.requireNullableNonNegativeNumber(entry, "median_inactive_minutes", `dashboard.clearance[${index}]`),
+          p90_inactive_minutes: this.requireNullableNonNegativeNumber(entry, "p90_inactive_minutes", `dashboard.clearance[${index}]`),
         };
       }),
     };

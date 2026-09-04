@@ -9,8 +9,8 @@ services:
     build:
       context: .
       dockerfile: mensagelo/Dockerfile
-    image: comunic-mon-mensagelo:1.0.0
-    container_name: comunic-mon-mensagelo
+    image: lechu-mensagelo:1.0.0
+    container_name: lechu-mensagelo
     hostname: mensagelo
     environment:
       DATABASE_DIR: ${MENSAGELO_DATABASE_DIR}
@@ -32,7 +32,7 @@ services:
     networks:
       - backend
 
-  panelexemys:
+  lechu:
     pids_limit: 256
     logging: &default-logging
       driver: json-file
@@ -41,26 +41,22 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: panelexemys/Dockerfile
+      dockerfile: lechu/Dockerfile
       additional_contexts:
         frontend-foundation: ../../../platform/frontend-foundation
-    image: comunic-mon-panelexemys:1.0.0
-    container_name: comunic-mon-panelexemys
+    image: lechu:1.0.0
+    container_name: lechu
     depends_on:
       modbus-collector-service:
         condition: service_started
     environment:
-      PANELEXEMYS_DATA_DIR: ${PANELEXEMYS_DATA_DIR}
+      LECHU_DATA_DIR: ${LECHU_DATA_DIR}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
-      PANELEXEMYS_REFRESH_MS: ${PANELEXEMYS_REFRESH_MS}
+      LECHU_REFRESH_MS: ${LECHU_REFRESH_MS}
       GLOBAL_THRESHOLD_ROJO: ${GLOBAL_THRESHOLD_ROJO}
       GLOBAL_THRESHOLD_AMARILLO: ${GLOBAL_THRESHOLD_AMARILLO}
-      ALARM_CHECK_INTERVAL_SECONDS: ${ALARM_CHECK_INTERVAL_SECONDS}
-      ALARM_MIN_SUSTAINED_DURATION_MINUTES: ${ALARM_MIN_SUSTAINED_DURATION_MINUTES}
-      ALARM_MIN_RECOVERY_DURATION_MINUTES: ${ALARM_MIN_RECOVERY_DURATION_MINUTES}
-      ALARM_EMAIL_RECIPIENT: ${ALARM_EMAIL_RECIPIENT}
-      ALARM_EMAIL_SUBJECT_PREFIX: ${ALARM_EMAIL_SUBJECT_PREFIX}
-      ALARM_CLEARANCE_ESTIMATES_MINUTES: ${ALARM_CLEARANCE_ESTIMATES_MINUTES}
+      EMAIL_TEST_RECIPIENTS: ${ALARM_RECIPIENTS}
+      EMAIL_TEST_SUBJECT_PREFIX: ${ALARM_SUBJECT_PREFIX}
       MENSAGELO_BASE_URL: ${MENSAGELO_BASE_URL}
       MENSAGELO_TIMEOUT_SECONDS: ${MENSAGELO_TIMEOUT_SECONDS}
       MENSAGELO_API_KEY: ${MENSAGELO_API_KEY}
@@ -68,19 +64,10 @@ services:
       MENSAGELO_BACKOFF_INITIAL: ${MENSAGELO_BACKOFF_INITIAL}
       MENSAGELO_BACKOFF_MAX: ${MENSAGELO_BACKOFF_MAX}
       CHARITO_API_BASE: ${CHARITO_API_BASE}
-      CHARITO_STALE_THRESHOLD_SECONDS: ${CHARITO_STALE_THRESHOLD_SECONDS}
       PVE_API_BASE: ${PVE_API_BASE}
-      PVE_NODE_NAME: ${PVE_NODE_NAME}
-      PVE_VHOST_IDS: ${PVE_VHOST_IDS}
-      PVE_POLL_INTERVAL_SECONDS: ${PVE_POLL_INTERVAL_SECONDS}
-      PVE_HTTP_TIMEOUT_SECONDS: ${PVE_HTTP_TIMEOUT_SECONDS}
-      PVE_VERIFY_SSL: ${PVE_VERIFY_SSL}
-      PVE_HISTORY_HOURS: ${PVE_HISTORY_HOURS}
-      PVE_MQTT_PUBLISH_FACTOR: ${PVE_MQTT_PUBLISH_FACTOR}
       MODBUS_COLLECTOR_API_BASE: ${MODBUS_COLLECTOR_API_BASE}
       MODBUS_COLLECTOR_HTTP_TIMEOUT: ${MODBUS_COLLECTOR_HTTP_TIMEOUT}
       MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT: ${MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT}
-      MODBUS_HTTP_POLL_SECONDS: ${MODBUS_HTTP_POLL_SECONDS}
       MODEM_LINK_MONITOR_URL: ${MODEM_LINK_MONITOR_URL}
       MODEM_LINK_MONITOR_TIMEOUT_SECONDS: ${MODEM_LINK_MONITOR_TIMEOUT_SECONDS}
       MODEM_EXTERNAL_CHECK_URL: ${MODEM_EXTERNAL_CHECK_URL}
@@ -116,7 +103,7 @@ services:
       MQTT_RPC_RES_ROOT: ${MQTT_RPC_RES_ROOT}
       MQTT_RPC_QUEUE_MAXSIZE: ${MQTT_RPC_QUEUE_MAXSIZE}
     volumes:
-      - ./volumes/panelexemys:/app/data
+      - ./volumes/lechu:/app/data
     restart: unless-stopped
     tmpfs:
       - /tmp
@@ -134,19 +121,28 @@ services:
       dockerfile: alarmero-service/Dockerfile
       additional_contexts:
         frontend-foundation: ../../../platform/frontend-foundation
-    image: comunic-mon-alarmero-service:1.0.0
-    container_name: comunic-mon-alarmero-service
+    image: lechu-alarmero-service:1.0.0
+    container_name: lechu-alarmero-service
     depends_on:
-      panelexemys:
+      modbus-collector-service:
+        condition: service_started
+      pve-service:
+        condition: service_started
+      charito-service:
+        condition: service_started
+      modem-link-monitor:
         condition: service_started
       mensagelo:
         condition: service_started
     environment:
       DATABASE_DIR: ${ALARMERO_DATABASE_DIR}
       DATABASE_NAME: ${ALARMERO_DATABASE_NAME}
-      PANELEXEMYS_BASE_URL: ${ALARMERO_PANELEXEMYS_BASE_URL}
+      ALARMERO_SOURCES_JSON: ${ALARMERO_SOURCES_JSON}
+      ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
       MENSAGELO_BASE_URL: ${ALARMERO_MENSAGELO_BASE_URL}
-      SOURCE_API_KEY: ${MENSAGELO_API_KEY}
+      MENSAGELO_API_KEY: ${MENSAGELO_API_KEY}
+      ALARM_RECIPIENTS: ${ALARM_RECIPIENTS}
+      ALARM_SUBJECT_PREFIX: ${ALARM_SUBJECT_PREFIX}
       HTTP_TIMEOUT_SECONDS: ${ALARMERO_HTTP_TIMEOUT_SECONDS}
       POLL_INTERVAL_SECONDS: ${ALARMERO_POLL_INTERVAL_SECONDS}
     volumes:
@@ -167,13 +163,14 @@ services:
     build:
       context: .
       dockerfile: charito-service/Dockerfile
-    image: comunic-mon-charito-service:1.0.0
-    container_name: comunic-mon-charito-service
+    image: lechu-charito-service:1.0.0
+    container_name: lechu-charito-service
     environment:
       CHARITO_DATA_DIR: ${CHARITO_DATA_DIR}
       CHARITO_STATE_FILE: ${CHARITO_STATE_FILE}
       CHARITO_TARGETS_JSON: ${CHARITO_TARGETS_JSON}
       CHARITO_MQTT_STATE_TOPIC: ${CHARITO_MQTT_STATE_TOPIC}
+      ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
       MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
       MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
       MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
@@ -193,8 +190,8 @@ services:
     build:
       context: .
       dockerfile: pve-service/Dockerfile
-    image: comunic-mon-pve-service:1.0.0
-    container_name: comunic-mon-pve-service
+    image: lechu-pve-service:1.0.0
+    container_name: lechu-pve-service
     environment:
       PVE_DATA_DIR: ${PVE_DATA_DIR}
       PVE_BASE_URL: ${PVE_BASE_URL}
@@ -218,6 +215,7 @@ services:
       MQTT_PUBLISH_RETAIN_STATE: ${MQTT_PUBLISH_RETAIN_STATE}
       PVE_STATE_FILE: ${PVE_STATE_FILE}
       PVE_HISTORY_FILE: ${PVE_HISTORY_FILE}
+      ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
     volumes:
       - ./volumes/pve-service:/app/data
     restart: unless-stopped
@@ -234,8 +232,8 @@ services:
     build:
       context: .
       dockerfile: modbus-collector-service/Dockerfile
-    image: comunic-mon-modbus-collector-service:1.0.0
-    container_name: comunic-mon-modbus-collector-service
+    image: lechu-modbus-collector-service:1.0.0
+    container_name: lechu-modbus-collector-service
     environment:
       MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST}
       MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT}
@@ -280,6 +278,8 @@ services:
       MQTT_TOPIC_GRDS: ${MQTT_TOPIC_GRDS}
       MQTT_PUBLISH_QOS_STATE: ${MQTT_PUBLISH_QOS_STATE}
       MQTT_PUBLISH_RETAIN_STATE: ${MQTT_PUBLISH_RETAIN_STATE}
+      GLOBAL_THRESHOLD_ROJO: ${GLOBAL_THRESHOLD_ROJO}
+      ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
     volumes:
       - ./volumes/modbus-collector-service:/app/data
     restart: unless-stopped
@@ -297,12 +297,14 @@ services:
     build:
       context: .
       dockerfile: modem-link-monitor/Dockerfile
-    image: comunic-mon-modem-link-monitor:1.0.0
-    container_name: comunic-mon-modem-link-monitor
+    image: lechu-modem-link-monitor:1.0.0
+    container_name: lechu-modem-link-monitor
     environment:
       TARGET_IP: ${TARGET_IP}
       TARGET_PORT: ${TARGET_PORT}
       PROBE_INTERVAL_SECONDS: ${PROBE_INTERVAL_SECONDS}
+      MODEM_LINK_MONITOR_DATA_DIR: /app/data
+      ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
       CHECK_HOST_BASE_URL: ${CHECK_HOST_BASE_URL}
       CHECK_HOST_MAX_NODES: ${CHECK_HOST_MAX_NODES}
       CHECK_HOST_SUCCESS_LATENCY_SECONDS: ${CHECK_HOST_SUCCESS_LATENCY_SECONDS}
@@ -324,16 +326,18 @@ services:
       MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
     ports:
       - "127.0.0.1:8086:8086"
+    volumes:
+      - ./volumes/modem-link-monitor:/app/data
     restart: unless-stopped
     networks:
       - backend
       - edge
 
-name: comunic-mon
+name: lechu
 
 networks:
   backend:
-    name: comunic-mon-backend-net
+    name: lechu-backend-net
     driver: bridge
   edge:
     name: servicoop-edge-net

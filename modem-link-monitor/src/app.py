@@ -8,6 +8,8 @@ from . import config
 from .logger import logger
 from .mqtt_publisher import MqttPublisher
 from .tcp_probe import TcpProbe
+from .alarm_source import ModemAlarmSource
+from alarm_generator import create_alarm_generator_router
 
 app = FastAPI(title="modem-link-monitor", version="1.0.0")
 time_provider = get_time_authority()
@@ -29,6 +31,7 @@ _probe = TcpProbe(
 )
 _publisher: MqttPublisher | None = None
 _monitor_task: asyncio.Task | None = None
+_alarm_source = ModemAlarmSource()
 class ConnectionState:
     def __init__(self, ip: str, port: int) -> None:
         self._lock = asyncio.Lock()
@@ -60,6 +63,8 @@ async def _monitor_loop():
             if state not in {"abierto", "cerrado", "desconocido"}:
                 state = "desconocido"
             await _state.set_state(state)
+            snapshot = await _state.snapshot()
+            _alarm_source.observe(state, str(snapshot["ts"]))
             if _publisher and state != _last_published:
                 published = _publisher.publish_state(state)
                 if published:
@@ -99,3 +104,11 @@ async def on_shutdown():
 @app.get("/status")
 async def get_status():
     return await _state.snapshot()
+
+
+app.include_router(
+    create_alarm_generator_router(
+        _alarm_source.outbox,
+        config.ALARM_INTERNAL_API_KEY,
+    )
+)

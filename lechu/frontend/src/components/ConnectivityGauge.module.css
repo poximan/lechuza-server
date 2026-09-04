@@ -1,0 +1,51 @@
+.gauge {
+  position: relative;
+  width: min(100%, 14rem);
+  margin: 0 auto;
+}
+.gauge svg {
+  display: block;
+  width: 100%;
+}
+.gauge path:not(.needle) {
+  fill: none;
+  stroke-linecap: butt;
+  stroke-width: 18;
+}
+.base {
+  stroke: var(--sc-color-border);
+}
+.red {
+  stroke: var(--sc-color-danger);
+}
+.yellow {
+  stroke: var(--sc-color-warning);
+}
+.green {
+  stroke: var(--sc-color-success);
+}
+.needle {
+  fill: var(--sc-color-text);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 28%));
+  stroke: none;
+}
+.hub {
+  fill: var(--sc-color-text);
+}
+.hubCenter {
+  fill: var(--sc-color-background);
+}
+.value {
+  display: grid;
+  justify-items: center;
+  gap: var(--sc-space-1);
+  margin-top: var(--sc-space-1);
+}
+.value strong {
+  font-size: var(--sc-font-size-xl);
+  line-height: 1;
+}
+.value span {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}

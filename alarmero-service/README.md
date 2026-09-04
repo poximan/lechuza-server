@@ -1,52 +1,32 @@
 # alarmero-service
 
-Vista consolidada y solo de lectura del ciclo de vida de alarmas. Panelexemys es
-el unico responsable de detectar y resolver incidencias; Mensagelo es el unico
-responsable del despacho de correo. Alarmero consume ambos contratos por HTTP y
-mantiene su propio historial append-only en SQLite.
+Único responsable del ciclo de vida de alarmas de `lechuza-server`.
 
-El endpoint `/internal/alarms` pertenece a `panelexemys` y es exclusivamente el
-contrato privado de sincronizacion que consume este servicio. No es una pagina ni
-un endpoint publico para operadores. Las nuevas claves de VM o Charito se incorporan
-automaticamente cuando `panelexemys` publica sus eventos de ciclo de vida.
+## Flujo
 
-Estados visibles:
+1. Consulta por HTTP los catálogos y flancos de `ALARMERO_SOURCES_JSON`.
+2. Persiste cada flanco y luego confirma el cursor a la fuente.
+3. Aplica activación y recuperación según el generador experto.
+4. Deduplica y mantiene incidencias potenciales, activas, en recuperación y resueltas.
+5. Crea el despacho en la misma transacción que confirma el flanco.
+6. Envía a los dos destinatarios de `ALARM_RECIPIENTS` mediante Mensagelo y sigue su estado.
 
-- `potential`: condicion detectada que aun no cumplio el tiempo de activacion.
-- `active`: alarma confirmada.
-- `recovering`: la condicion desaparecio, pendiente de 10 minutos sostenidos.
-- `resolved`: incidencia finalizada o potencial descartada.
+La UI permite habilitar por alarma el correo de inicio y de fin. También muestra
+el estado actual de todo el catálogo, frecuencia móvil de 24 horas, 7, 30 y 365
+días, y medianas/P90 de los períodos históricos de actividad e inactividad.
 
-El estado `sent` confirma que Mensagelo termino el intercambio SMTP. No implica
-entrega en la bandeja del destinatario, dato que SMTP no puede garantizar.
+## Persistencia
 
-El tiempo historico de despeje se mide hasta la primera observacion normal que
-inicia `recovering`; la incidencia solo pasa a `resolved` si esa normalidad se
-mantiene durante los 10 minutos configurados.
+`backend/db.py` contiene el único esquema SQLite. Si la base no existe se crea; si
+existe con otra versión, tablas o columnas, el servicio aborta. No se ejecutan
+`ALTER TABLE` ni capas sucesivas de migración.
 
-El contenedor prepara el bind mount `/app/data` al iniciar y luego ejecuta Uvicorn
-como el usuario sin privilegios `appuser` (UID 1000). Esto permite que SQLite cree
-la base y sus archivos WAL aun cuando Docker haya creado inicialmente el directorio
-del host como `root`.
+## API
 
-## Frontend
+- `GET /api/incidents`
+- `GET /api/dashboard`
+- `GET /api/catalog`
+- `PUT /api/catalog/{source_id}/{alarm_key}`
+- `GET /health`
 
-La interfaz usa React, TypeScript estricto y Vite. Consume
-`@servicoop/frontend-foundation` mediante un contexto Docker adicional limitado a
-`platform/frontend-foundation`; no duplica tokens ni componentes.
-El build genera archivos estáticos relativos para que funcionen detrás de
-`/alarmero/` con strip de prefijo en edge-gateway.
-
-## Mapa de la vista
-
-Alarmero tiene una sola vista operativa; resumen, incidencias, frecuencia y despejes son secciones del mismo agregado, no pestañas independientes.
-
-| Capa | Fuentes |
-|---|---|
-| Presentación | `frontend/src/App.tsx`, `frontend/src/components/*` |
-| Estado y contrato frontend | `useAlarmeroData.ts`, `AlarmeroApiClient.ts`, `AlarmeroContractParser.ts` |
-| API | `backend/alarm_api.py` |
-| Servicio | `backend/alarm_service.py`, `backend/sync_worker.py` |
-| DAO | `backend/db.py` |
-
-`backend/app.py` solo compone el proceso. La metodología general está en `../../../../metodologia.txt`.
+La vista pública protegida se sirve en `/alarmero/` por `edge-platform`.

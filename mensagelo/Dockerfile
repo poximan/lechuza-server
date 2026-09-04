@@ -29,9 +29,7 @@ RUN groupadd --gid 1000 appgroup && \
     useradd --uid 1000 --gid 1000 --create-home --shell /bin/sh appuser
 
 # codigo
-COPY mensagelo/email_service /app/email_service
-
-RUN chown -R 1000:1000 /app
+COPY --chown=1000:1000 mensagelo/email_service /app/email_service
 
 USER 1000:1000
 

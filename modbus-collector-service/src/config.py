@@ -104,6 +104,11 @@ OBS_STATE_FILE = os.path.join(DATABASE_DIR, "modbus-collector-state.json")
 GRD_FAILURE_THRESHOLD = _req_positive_int("MODBUS_COLLECTOR_GRD_FAILURE_THRESHOLD")
 RELAY_LATEST_FAULT_ADDRESS = _req_int_range("MODBUS_RELAY_LATEST_FAULT_ADDRESS", 0, 65535)
 RELAY_FAULT_REGISTER_COUNT = _req_int_range("MODBUS_RELAY_FAULT_REGISTER_COUNT", 15, 15)
+ALARM_INTERNAL_API_KEY = _req("ALARM_INTERNAL_API_KEY")
+ALARM_OUTBOX_FILE = os.path.join(DATABASE_DIR, "alarm-events.json")
+GLOBAL_RED_THRESHOLD = float(_req("GLOBAL_THRESHOLD_ROJO"))
+if not 0 <= GLOBAL_RED_THRESHOLD <= 100:
+    raise EnvironmentError("GLOBAL_THRESHOLD_ROJO debe estar entre 0 y 100")
 
 # ------------------ MQTT ------------------
 MQTT_BROKER_HOST = _req("MQTT_BROKER_HOST")
