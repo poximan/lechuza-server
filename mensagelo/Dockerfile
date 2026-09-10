@@ -1,4 +1,11 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12.11-slim-bookworm AS python-deps
+WORKDIR /workspace/mensagelo/email_service
+COPY shared/timeauthority-pkg /workspace/shared/timeauthority-pkg
+COPY mensagelo/email_service/requirements.txt ./requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.12.11-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -19,10 +26,10 @@ RUN set -eux; \
 WORKDIR /app
 
 # deps primero para cache
-COPY shared /shared
+COPY --chown=1000:1000 shared /shared
 ENV PYTHONPATH="/shared:${PYTHONPATH}"
-COPY mensagelo/email_service/requirements.txt /app/requirements.txt
-RUN pip install --no-compile -r /app/requirements.txt
+COPY --from=python-deps /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # usuario no-root
 RUN groupadd --gid 1000 appgroup && \
@@ -35,7 +42,5 @@ USER 1000:1000
 
 EXPOSE 8081
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
-    CMD curl -fsS http://localhost:8081/health
 
 CMD ["python", "-m", "email_service.main"]

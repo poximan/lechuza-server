@@ -19,7 +19,7 @@ class MqttDriver:
         self._origen = "OBS/MQTT"
 
         client_id = self._compute_client_id()
-        clean_session = True  # comportamiento habitual en clientes móviles/edge
+        clean_session = True  # comportamiento habitual en clientes moviles/edge
 
         try:
             self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=client_id, clean_session=clean_session)

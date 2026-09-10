@@ -6,11 +6,12 @@ from logosaurio import Logosaurio
 
 from src import config
 from src.control.latest_state_registry import LatestStateRegistry
+from src.modbus.channel_queue import ModbusChannelQueue
 from src.modbus.modbus_driver import ModbusTcpConnectionConfig, ModbusTcpReadOnlyDriver
 from src.modbus.server_ge_estivariz import EdifEstivarizGeneratorClient
 from src.modbus.server_ge_fontana import EdifFontanaGeneratorClient
 from src.modbus.server_mb_middleware import GrdMiddlewareClient
-from src.modbus.server_mb_reles import ProtectionRelayClient
+from src.services.relay_monitoring import RelayMonitoringService
 from src.services.generator_state import GeneratorStateCache
 from src.services.alarm_generator import ModbusAlarmGenerator
 from src.services.grd_service import GrdService
@@ -50,7 +51,7 @@ class ModbusOrchestrator:
         self._threads: dict[str, threading.Thread] = {}
         self._workers: dict[str, dict[str, Any]] = {}
         self._drivers: dict[str, ModbusTcpReadOnlyDriver] = {}
-        self._relay_client: ProtectionRelayClient | None = None
+        self._relay_client: RelayMonitoringService | None = None
         self._started = False
 
     def start(self) -> None:
@@ -106,9 +107,19 @@ class ModbusOrchestrator:
             "edif-fontana": fontana_driver,
         }
 
+        channels = {}
+        worker_names = {
+            "mw-exemys-grd": "grd-monitor", "mw-exemys-reles": "rele-monitor",
+            "mw-exemys-ge-estivariz": "ge-estivariz-monitor", "edif-fontana": "ge-fontana-monitor",
+        }
+        for name, driver in self._drivers.items():
+            endpoint = f"{driver.host}:{driver.port}"
+            driver.channel_queue = channels.setdefault(endpoint, ModbusChannelQueue(endpoint))
+            driver.heartbeat = lambda worker=worker_names[name]: self._heartbeat(worker)
+
         mw_interval = int(config.MW_EXEMYS["interval_seconds"])
         fontana_interval = int(config.EDIF_FONTANA_GE["interval_seconds"])
-        self._relay_client = ProtectionRelayClient(
+        self._relay_client = RelayMonitoringService(
             modbus_driver=relay_driver,
             refresh_interval=mw_interval,
             logger=self.logger,
@@ -264,7 +275,9 @@ class ModbusOrchestrator:
         )
         dependencies_ready = (
             bool(drivers)
-            and all(drivers.values())
+            and all(connected for name, connected in drivers.items()
+                    if name != "mw-exemys-reles" or (self._relay_client is not None
+                        and self._relay_client.transport_required()))
             and mqtt_connected
         )
         return {
@@ -274,25 +287,28 @@ class ModbusOrchestrator:
             "mqtt_connected": mqtt_connected,
         }
 
-    def relay_disturbance_snapshot(self, relay_id: int) -> dict[str, Any]:
-        if self._relay_client is None:
-            raise RuntimeError("El observador de reles todavia no fue iniciado")
-        return self._relay_client.get_disturbance_snapshot(relay_id)
+    def channel_diagnostics(self) -> dict:
+        channels = {id(driver.channel_queue): driver.channel_queue for driver in self._drivers.values()}
+        return {
+            "version": 1,
+            "sampled_at": timebox.utc_iso(),
+            "channels": [channel.snapshot() for channel in channels.values()],
+        }
 
     def relay_current_calculation_snapshot(self, relay_id: int) -> dict[str, Any]:
         if self._relay_client is None:
             raise RuntimeError("El observador de reles todavia no fue iniciado")
-        return self._relay_client.get_current_calculation_snapshot(relay_id)
+        return self._relay_client.metadata.get_current_calculation_snapshot(relay_id)
 
     def relay_clock_on_demand(self, relay_id: int) -> dict[str, Any]:
         if self._relay_client is None:
             raise RuntimeError("El observador de reles todavia no fue iniciado")
-        return self._relay_client.read_clock_on_demand(relay_id)
+        return self._relay_client.metadata.read_clock_on_demand(relay_id)
 
     def relay_query_snapshot(self, relay_id: int) -> list[dict]:
         if self._relay_client is None:
             raise RuntimeError("El observador de reles todavia no fue iniciado")
-        return self._relay_client.get_query_snapshot(relay_id)
+        return self._relay_client.query_diagnostics.get_query_snapshot(relay_id)
 
     def relay_observer_runtime_snapshot(self) -> dict[str, Any]:
         if self._relay_client is None:

@@ -5,4 +5,4 @@ paho-mqtt==2.1.0
 pandas==2.2.2
 python-dateutil==2.9.0.post0
 certifi>=2024.2.2
--e ../shared/timeauthority-pkg
+../shared/timeauthority-pkg

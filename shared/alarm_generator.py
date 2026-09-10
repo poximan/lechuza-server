@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from contextlib import contextmanager
 import hmac
 import json
 import os
@@ -76,7 +78,7 @@ class AlarmGeneratorOutbox:
         self._validate_instant(occurred_at)
         if not subject.strip() or not body.strip():
             raise ValueError("El asunto y el cuerpo de alarma son obligatorios")
-        with self._lock:
+        with self._lock, self._persistent_change():
             if alarm_key not in self._catalog:
                 raise KeyError(f"Alarma no registrada en catalogo: {alarm_key}")
             conditions = self._state["conditions"]
@@ -158,7 +160,7 @@ class AlarmGeneratorOutbox:
     def acknowledge(self, through_event_id: int) -> None:
         if through_event_id < 0:
             raise ValueError("El cursor confirmado no puede ser negativo")
-        with self._lock:
+        with self._lock, self._persistent_change():
             last_acked = int(self._state["last_acked_event_id"])
             if through_event_id <= last_acked:
                 return
@@ -246,6 +248,15 @@ class AlarmGeneratorOutbox:
         if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
             raise ValueError(f"Timestamp sin zona UTC: {value!r}")
 
+    @contextmanager
+    def _persistent_change(self):
+        previous = deepcopy(self._state)
+        try:
+            yield
+        except Exception:
+            self._state = previous
+            raise
+
     def _save(self) -> None:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.state_file.with_suffix(f"{self.state_file.suffix}.tmp")
@@ -255,7 +266,10 @@ class AlarmGeneratorOutbox:
             sort_keys=True,
             separators=(",", ":"),
         )
-        temporary.write_text(payload, encoding="utf-8")
+        with temporary.open("w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(temporary, self.state_file)
 
 

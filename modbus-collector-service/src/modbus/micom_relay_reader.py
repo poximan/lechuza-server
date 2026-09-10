@@ -26,7 +26,11 @@ class MicomReadError(RuntimeError):
 class MicomRelayReader:
     """Adapta el mapa MiCOM usando exclusivamente lecturas Modbus 03."""
 
-    FAULT_ADDRESS = 0x3700
+    FAULT_ADDRESS_HEX = 0x3700
+    FAULT_ADDRESS_DECIMAL = 14080
+    if FAULT_ADDRESS_HEX != FAULT_ADDRESS_DECIMAL:
+        raise RuntimeError("El mapa MiCOM 0x3700 debe convertirse a 14080")
+    FAULT_ADDRESS = FAULT_ADDRESS_DECIMAL
     FAULT_WORDS = 15
     FAULT_RECORD_COUNT = 25
     DISTURBANCE_INDEX_ADDRESS = 0x2200
@@ -179,14 +183,13 @@ class MicomRelayReader:
         relay_id: int,
         date_format: int,
     ) -> RegistroFalla:
-        candidates: list[tuple[int, int]] = []
+        candidates: list[tuple[int, int, list[int]]] = []
         for offset in range(self.FAULT_RECORD_COUNT):
             address = self.FAULT_ADDRESS + offset
-            fault_number = self._read(relay_id, address, 1)[0]
-            candidates.append((fault_number, address))
+            words = self._read(relay_id, address, self.FAULT_WORDS)
+            candidates.append((words[0], address, words))
 
-        _, latest_address = max(candidates, key=lambda candidate: candidate[0])
-        words = self._read(relay_id, latest_address, self.FAULT_WORDS)
+        _, _, words = max(candidates, key=lambda candidate: candidate[0])
         return RegistroFalla(
             words,
             date_format,
@@ -204,7 +207,7 @@ class MicomRelayReader:
         )
         available = directory[0]
         if available == 0:
-            raise MicomReadError(f"Rele {relay_id}: no hay perturbaciones almacenadas")
+            return []
         if available < 0 or available > 5:
             raise MicomReadError(
                 f"Rele {relay_id}: cantidad de perturbaciones invalida: {available}"
@@ -314,20 +317,6 @@ class MicomRelayReader:
             "channels": channels,
         }
 
-    def read_disturbance_timing(
-        self,
-        relay_id: int,
-        reference: MicomDisturbanceReference,
-    ) -> tuple[int, int]:
-        headers = self._select_channel_headers(
-            relay_id,
-            reference.record_number,
-            0,
-        )
-        pre_samples = sum(header[1] for header in headers)
-        post_samples = sum(header[2] for header in headers)
-        return pre_samples, post_samples
-
     def _validate_disturbance_reference(
         self,
         relay_id: int,
@@ -369,35 +358,6 @@ class MicomRelayReader:
             | channel_id
         )
         return self._read(relay_id, selector, 11)
-
-    def _select_channel_headers(
-        self,
-        relay_id: int,
-        slot: int,
-        channel_id: int,
-    ) -> list[list[int]]:
-        headers: list[list[int]] = []
-        scale_signature: tuple[int, ...] | None = None
-        for block_index in range(self.DISTURBANCE_SELECTOR_BLOCKS):
-            header = self._select_channel(
-                relay_id,
-                slot,
-                channel_id,
-                block_index,
-            )
-            scale_signature = self._validate_channel_header(
-                relay_id,
-                block_index,
-                header,
-                scale_signature,
-            )
-            headers.append(header)
-            if header[0] < self.DISTURBANCE_SAMPLES_PER_SELECTOR:
-                return headers
-        raise MicomReadError(
-            f"Rele {relay_id}: la perturbacion supera los "
-            f"{self.DISTURBANCE_SELECTOR_BLOCKS} bloques soportados por el mapa"
-        )
 
     def _validate_channel_header(
         self,

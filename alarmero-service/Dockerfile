@@ -1,3 +1,10 @@
+FROM python:3.12.11-slim-bookworm AS python-deps
+WORKDIR /workspace/alarmero-service
+COPY shared/timeauthority-pkg /workspace/shared/timeauthority-pkg
+COPY alarmero-service/requirements.txt ./requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
 FROM node:24.18.0-alpine AS frontend-builder
 
 WORKDIR /workspace/products/comunic-mon/lechuza-server/alarmero-service/frontend
@@ -11,7 +18,7 @@ COPY alarmero-service/frontend/src ./src
 RUN npm ci --ignore-scripts --no-audit --no-fund
 RUN npm run build
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -21,10 +28,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SERVICE_PORT=8094
 
 WORKDIR /app
-COPY shared /shared
+COPY --chown=1000:1000 shared /shared
 ENV PYTHONPATH="/shared:${PYTHONPATH}"
-COPY alarmero-service/requirements.txt /app/requirements.txt
-RUN pip install --no-compile -r /app/requirements.txt
+COPY --from=python-deps /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 RUN groupadd --gid 1000 appgroup && \
     useradd --uid 1000 --gid 1000 --create-home --shell /bin/sh appuser
 COPY --chown=1000:1000 alarmero-service/backend /app/backend
@@ -33,6 +40,4 @@ COPY --from=frontend-builder --chown=1000:1000 \
     /app/frontend
 USER 1000:1000
 EXPOSE 8094
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8094/health', timeout=4)"
 CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8094"]

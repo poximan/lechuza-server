@@ -94,6 +94,7 @@ def _sync_source(source: config.AlarmSource) -> None:
             acknowledgement.raise_for_status()
         if not has_more:
             break
+    db.initialize_catalog_baselines(source.source_id)
 
 
 def _dispatch_pending() -> None:
@@ -136,16 +137,18 @@ def _sync_dispatch_results() -> None:
 
 def sync_once() -> None:
     failures = []
+    synchronized_sources = set()
     db.reconcile_configured_sources(
         {source.source_id for source in config.ALARM_SOURCES}
     )
     for source in config.ALARM_SOURCES:
         try:
             _sync_source(source)
+            synchronized_sources.add(source.source_id)
         except Exception as exc:
             failures.append(f"{source.source_id}: {type(exc).__name__}: {exc}")
 
-    db.process_due_transitions(_TIME.utc_iso(), list(config.ALARM_RECIPIENTS))
+    db.process_due_transitions(_TIME.utc_iso(), list(config.ALARM_RECIPIENTS), synchronized_sources)
     _dispatch_pending()
     try:
         _sync_dispatch_results()

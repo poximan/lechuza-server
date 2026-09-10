@@ -3,6 +3,11 @@ from __future__ import annotations
 import threading
 from typing import Any
 
+from src.dao.lechu_state_store import read_value, write_value
+
+
+MQTT_CONNECTION_ENABLED = "mqtt_connection_enabled"
+
 
 class BrokerService:
     def __init__(self, mqtt_client_manager: Any):
@@ -10,11 +15,13 @@ class BrokerService:
 
     def get_contract(self) -> dict[str, Any]:
         return {
+            "enabled": read_value(MQTT_CONNECTION_ENABLED) is not False,
             "status": self.mqtt_client_manager.get_connection_status(),
             "traffic": self.mqtt_client_manager.get_traffic_snapshot(),
         }
 
     def set_connection(self, enabled: bool) -> dict[str, bool]:
+        write_value(MQTT_CONNECTION_ENABLED, enabled)
         if enabled:
             if self.mqtt_client_manager.get_connection_status() == "desconectado":
                 threading.Thread(

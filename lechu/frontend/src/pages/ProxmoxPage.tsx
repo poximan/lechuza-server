@@ -256,7 +256,9 @@ export function ProxmoxPage({
   }
   const missing =
     state && Array.isArray(state.missing) ? state.missing.map(String) : [];
-  const stateError = data.state_error ?? state?.error ?? null;
+  const stateError = data.state_error ?? state?.source_error ?? state?.error ?? null;
+  const stateStale = state?.stale === true;
+  const unavailable = stateError !== null || stateStale;
   const refreshing = Array.isArray(data.refreshing)
     ? data.refreshing.map(String)
     : [];
@@ -272,9 +274,11 @@ export function ProxmoxPage({
           Última actualización:{" "}
           {lastUpdate ? time.formatInstant(lastUpdate) : "N/D"}
         </p>
-        <p className={stateError ? styles.healthBad : statePending ? styles.muted : styles.healthOk}>
-          {stateError
-            ? "Hipervisor Proxmox no responde"
+        <p className={unavailable ? styles.healthBad : statePending ? styles.muted : styles.healthOk}>
+          {unavailable
+            ? vms.length > 0
+              ? "Hipervisor sin conexión · mostrando últimos datos locales"
+              : "Hipervisor Proxmox no responde"
             : statePending
               ? refreshing.includes("state")
                 ? "Consultando hipervisor Proxmox"
@@ -293,17 +297,15 @@ export function ProxmoxPage({
             rightLabel="Histórico"
           />
         </div>
-        {stateError && (
-          <p className={styles.error}>{formatter.scalar(stateError)}</p>
+        {unavailable && vms.length === 0 && (
+          <p className={styles.error}>Todavía no existe una muestra local válida.</p>
         )}
-        {data.history_error && (
-          <p className={styles.error}>
-            Histórico no disponible: {formatter.scalar(data.history_error)}
-          </p>
+        {data.history_error && historyMap === null && (
+          <p className={styles.error}>Todavía no existe un histórico local válido.</p>
         )}
         {historyOnly && (
           <p className={styles.error}>
-            Mostrando datos históricos porque no hay snapshot reciente.
+            Mostrando el último histórico guardado localmente.
           </p>
         )}
         {missing.length > 0 && (

@@ -74,6 +74,11 @@ def health() -> JSONResponse:
     )
 
 
+@app.get("/internal/v1/modbus/channels")
+def modbus_channels() -> dict:
+    return context().orchestrator.channel_diagnostics()
+
+
 app.include_router(create_grd_router(context))
 app.include_router(create_generator_router(context))
 app.include_router(create_relay_router(context))

@@ -8,6 +8,7 @@ import config
 from src.dao.dao_email_health import EmailHealthDao
 from src.dao.dao_mantenimiento import MantenimientoDao
 from src.dao.dao_mensagelo_attempts import MensageloAttemptsDao
+from src.dao.dao_proxmox_cache import ProxmoxCacheDao
 from src.dao.dao_proxmox_view import ProxmoxViewDao
 from src.servicios.broker.broker_service import BrokerService
 from src.servicios.charito.charito_service import CharitoService
@@ -61,6 +62,7 @@ class ReactApi:
             service=ProxmoxService(
                 client=proxmox_client,
                 view_dao=ProxmoxViewDao(),
+                cache_dao=ProxmoxCacheDao(),
             ),
             require_protected=self._require_protected,
             response=self._response,
@@ -139,9 +141,15 @@ class ReactApi:
             methods=["PUT"],
         )
         self.blueprint.add_url_rule(
-            "/reles/<int:relay_id>/latest-disturbance",
-            "rele_latest_disturbance",
-            self.reles_api.latest_disturbance,
+            "/reles/<int:relay_id>/disturbances",
+            "rele_disturbances",
+            self.reles_api.disturbances,
+            methods=["GET"],
+        )
+        self.blueprint.add_url_rule(
+            "/reles/<int:relay_id>/disturbances/<int:record_number>",
+            "rele_disturbance",
+            self.reles_api.disturbance,
             methods=["GET"],
         )
         self.blueprint.add_url_rule(

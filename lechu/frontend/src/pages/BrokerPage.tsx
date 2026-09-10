@@ -90,6 +90,7 @@ export function BrokerPage({
   onChanged: () => Promise<void>;
 }) {
   const status = reader.string(data.status, "broker.status");
+  const enabled = reader.boolean(data.enabled, "broker.enabled");
   const traffic = reader.record(data.traffic, "broker.traffic");
   const totals = reader.record(traffic.totals, "broker.traffic.totals");
   const topics = Array.isArray(traffic.active_topics)
@@ -112,13 +113,12 @@ export function BrokerPage({
     "broker.traffic.listeners",
   );
   const recent = reader.records(traffic.recent, "broker.traffic.recent");
-  const connected = status === "conectado" || status === "conectando";
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function toggle(): Promise<void> {
     setPending(true);
     try {
-      await client.setBrokerConnection(!connected);
+      await client.setBrokerConnection(!enabled);
       await onChanged();
       setError(null);
     } catch (reason) {
@@ -146,7 +146,7 @@ export function BrokerPage({
       <Card className={styles.brokerCommandBar}>
         <div className={styles.brokerCommandMain}>
           <ToggleSwitch
-            checked={connected}
+            checked={enabled}
             disabled={pending}
             onChange={() => void toggle()}
             rightLabel="conectar al broker"

@@ -1,5 +1,7 @@
-from fastapi import FastAPI, HTTPException
+import threading
 from typing import Dict, Any
+
+from fastapi import FastAPI, HTTPException
 
 from . import config as cfg
 from .collector import PveCollector
@@ -8,7 +10,6 @@ from .mqtt_pub import publish_snapshot
 from .poller import Poller
 from .repository import SnapshotRepository
 from .alarm_source import PveAlarmSource
-from .utils import timebox
 from alarm_generator import create_alarm_generator_router
 
 
@@ -18,9 +19,12 @@ _collector = PveCollector()
 _repository = SnapshotRepository()
 _alarm_source = PveAlarmSource()
 _STALE_SECONDS = cfg.PVE_POLL_INTERVAL_SECONDS * 2
+_availability_lock = threading.RLock()
+_last_collection_error: Dict[str, Any] | None = None
 
 
 def _handle_snapshot(snapshot: Dict[str, Any]) -> None:
+    global _last_collection_error
     _repository.store(snapshot)
     update_history(
         snapshot,
@@ -28,12 +32,22 @@ def _handle_snapshot(snapshot: Dict[str, Any]) -> None:
         hours=cfg.PVE_HISTORY_HOURS,
     )
     _alarm_source.observe(snapshot)
+    with _availability_lock:
+        _last_collection_error = None
+
+
+def _handle_collection_failure(failure: Dict[str, Any]) -> None:
+    global _last_collection_error
+    _alarm_source.observe(failure)
+    with _availability_lock:
+        _last_collection_error = dict(failure)
 
 
 _poller = Poller(
     interval_seconds=cfg.PVE_POLL_INTERVAL_SECONDS,
     collect_fn=_collector.collect,
     on_snapshot=_handle_snapshot,
+    on_failure=_handle_collection_failure,
     publish_fn=publish_snapshot,
     publish_every=cfg.PVE_MQTT_PUBLISH_FACTOR,
 )
@@ -60,8 +74,12 @@ def get_state() -> Dict[str, Any]:
     if not snapshot:
         raise HTTPException(status_code=503, detail="Sin datos disponibles")
     age = _repository.age_seconds()
-    if age is None or age > _STALE_SECONDS:
-        raise HTTPException(status_code=503, detail="Estado desactualizado")
+    with _availability_lock:
+        failure = dict(_last_collection_error) if _last_collection_error else None
+    snapshot["data_age_seconds"] = age
+    snapshot["stale"] = age is None or age > _STALE_SECONDS
+    snapshot["source_status"] = "offline" if failure else "online"
+    snapshot["source_error"] = failure.get("error") if failure else None
     return snapshot
 
 

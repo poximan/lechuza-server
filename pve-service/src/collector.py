@@ -16,7 +16,7 @@ class PveCollector:
     """
 
     def __init__(self) -> None:
-        # recrear explícitamente la sesión para evitar residuos entre builds
+        # recrear explicitamente la sesion para evitar residuos entre builds
         self._session = requests.Session()
         token = cfg.PVE_API_TOKEN
         self._token = token if token.lower().startswith("pveapitoken") else f"PVEAPIToken={token}"

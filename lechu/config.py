@@ -157,6 +157,7 @@ MQTT_RPC_ALLOWED_ACTIONS = {
     "get_global_status",   # responde en estado/exemys con resumen + ultimos estados por GRD
     "get_modem_status",    # responde en estado/sensor con estado del modem
     "get_ge_status",       # responde con estado actual de interruptores GE Estivariz
+    "get_email_events",    # devuelve los ultimos intentos de correo conocidos por Lechu
     "send_email_test",     # dispara un correo de prueba via mensagelo
 }
 

@@ -15,6 +15,7 @@ from src.logger import Logosaurio
 from src.utils import timebox
 from src.servicios.email.mensagelo_client import MensageloClient
 from src.servicios.mqtt import mqtt_event_bus
+from src.dao.dao_mensagelo_attempts import MensageloAttemptsDao
 from src.web.clients.modbus_client import modbus_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 import config
@@ -151,6 +152,10 @@ class MqttRequestRouter:
 
                 self._handle_get_ge_status(corr, reply_to)
 
+            elif action == "get_email_events":
+
+                self._handle_get_email_events(corr, reply_to)
+
             elif action == "send_email_test":
 
                 self._handle_send_email_test(corr, reply_to, params)
@@ -245,6 +250,26 @@ class MqttRequestRouter:
             self._emit_error(corr, reply_to, "get_ge_status", str(exc))
             return
         self._emit_ok(corr, reply_to, "get_ge_status", data)
+
+
+    def _handle_get_email_events(self, corr: str, reply_to: str):
+        """Devuelve los ultimos intentos de correo sin exponer cuerpo ni destinatarios."""
+        try:
+            attempts = MensageloAttemptsDao().latest()
+            items = [
+                {
+                    "type": "email",
+                    "subject": str(item.get("subject") or ""),
+                    "ok": bool(item.get("ok")),
+                    "ts": str(item.get("ts") or ""),
+                    "detail": str(item.get("detail") or ""),
+                }
+                for item in attempts
+            ]
+        except Exception as exc:
+            self._emit_error(corr, reply_to, "get_email_events", str(exc))
+            return
+        self._emit_ok(corr, reply_to, "get_email_events", {"items": items})
 
 
     def _handle_send_email_test(self, corr: str, reply_to: str, params: dict):
@@ -430,7 +455,6 @@ class MqttRequestRouter:
             source=self._origen,
 
         )
-
 
 
 

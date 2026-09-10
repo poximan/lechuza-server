@@ -1,3 +1,5 @@
+from copy import deepcopy
+import math
 import os
 import json
 import threading
@@ -5,6 +7,7 @@ from typing import Any, Dict, List, Tuple
 
 from . import config as cfg
 from src.utils import timebox
+from .logger import logger
 
 _LOCK = threading.RLock()
 _HISTORY_CACHE: Dict[str, Any] | None = None
@@ -16,26 +19,30 @@ def _path(filename: str) -> str:
 
 
 def _read_json(filename: str, default: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        path = _path(filename)
-        if not os.path.exists(path):
-            return default
-        content = open(path, "r", encoding="utf-8").read().strip()
-        if not content:
-            return default
-        return json.loads(content)
-    except Exception:
+    path = _path(filename)
+    if not os.path.exists(path):
         return default
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict) or not isinstance(data.get("vms"), dict) or not isinstance(data.get("meta"), dict):
+        raise ValueError(f"Historico invalido: {path}")
+    return data
 
 
 def _write_json(filename: str, data: Dict[str, Any]) -> None:
-    try:
-        tmp = _path(filename) + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, _path(filename))
-    except Exception:
-        pass
+    tmp = _path(filename) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False, indent=2, allow_nan=False)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, _path(filename))
+
+
+def _metric(vm, key):
+    value = vm[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"Metrica PVE invalida: vm={vm.get('vmid')} campo={key}")
+    return float(value)
 
 
 def _history() -> Dict[str, Any]:
@@ -46,25 +53,25 @@ def _history() -> Dict[str, Any]:
 
 
 def update_history(snapshot: Dict[str, Any], poll_seconds: int, hours: int) -> Tuple[Dict[str, Any], int]:
+    global _HISTORY_CACHE
     max_entries = int((hours * 3600 + poll_seconds - 1) / poll_seconds)
     with _LOCK:
-        history = _history()
+        history = deepcopy(_history())
         history.setdefault("meta", {})
         history.setdefault("vms", {})
         history["meta"].update({"hours": hours, "poll_seconds": poll_seconds, "max_entries": max_entries})
         vms_section = history["vms"]
-        ts = snapshot.get("ts") or timebox.utc_iso()
-        for vm in snapshot.get("vms", []):
+        ts = snapshot["ts"]
+        timebox.parse(ts)
+        for vm in snapshot["vms"]:
+            vmid = str(int(vm["vmid"]))
+            # Una VM sin metricas no produce una muestra numerica inventada.
             try:
-                vmid = str(int(vm.get("vmid")))
-            except Exception:
+                entry = {"ts": ts, "cpu": _metric(vm, "cpu_pct"),
+                         "mem": _metric(vm, "mem_pct"), "disk": _metric(vm, "disk_pct")}
+            except (KeyError, ValueError) as error:
+                logger.log(f"Muestra historica rechazada VM {vmid}: {error}", "PVE/HISTORY")
                 continue
-            entry = {
-                "ts": ts,
-                "cpu": float(vm.get("cpu_pct") or 0.0),
-                "mem": float(vm.get("mem_pct") or 0.0) if vm.get("mem_pct") is not None else 0.0,
-                "disk": float(vm.get("disk_pct") or 0.0) if vm.get("disk_pct") is not None else 0.0,
-            }
             vm_rec = vms_section.setdefault(vmid, {"name": vm.get("name") or vmid, "history": []})
             vm_rec["name"] = vm.get("name") or vm_rec.get("name") or vmid
             lst = vm_rec.get("history") or []
@@ -73,6 +80,7 @@ def update_history(snapshot: Dict[str, Any], poll_seconds: int, hours: int) -> T
                 lst = lst[:max_entries]
             vm_rec["history"] = lst
         _write_json(cfg.HISTORY_FILE, history)
+        _HISTORY_CACHE = history
         return history, max_entries
 
 
@@ -81,18 +89,14 @@ def load_history_for_dashboard() -> Tuple[Dict[int, Dict[str, Any]], Dict[str, A
         history = _history()
         result: Dict[int, Dict[str, Any]] = {}
         for vmid_str, data in (history.get("vms") or {}).items():
-            try:
-                vmid = int(vmid_str)
-            except Exception:
-                continue
+            vmid = int(vmid_str)
             entries = data.get("history") or []
             prepared = {"cpu_pct": [], "mem_pct": [], "disk_pct": []}
             for item in reversed(entries):
-                ts = item.get("ts")
-                if not ts:
-                    continue
-                prepared["cpu_pct"].append({"ts": ts, "value": item.get("cpu", 0.0)})
-                prepared["mem_pct"].append({"ts": ts, "value": item.get("mem", 0.0)})
-                prepared["disk_pct"].append({"ts": ts, "value": item.get("disk", 0.0)})
+                ts = item["ts"]
+                timebox.parse(ts)
+                prepared["cpu_pct"].append({"ts": ts, "value": item["cpu"]})
+                prepared["mem_pct"].append({"ts": ts, "value": item["mem"]})
+                prepared["disk_pct"].append({"ts": ts, "value": item["disk"]})
             result[vmid] = {"name": data.get("name"), "history": prepared}
         return result, dict(history.get("meta", {}))

@@ -38,13 +38,22 @@ export class LechuApiClient {
     );
   }
 
-  public async relayLatestDisturbance(
+  public async relayDisturbance(
+    relayId: number, recordNumber: number, signal?: AbortSignal,
+  ): Promise<JsonRecord> {
+    return this.parser.record(
+      await this.get(`reles/${relayId}/disturbances/${recordNumber}`, signal),
+      "rele disturbance",
+    );
+  }
+
+  public async relayDisturbances(
     relayId: number,
     signal?: AbortSignal,
   ): Promise<JsonRecord> {
     return this.parser.record(
-      await this.get(`reles/${relayId}/latest-disturbance`, signal),
-      "rele latest disturbance",
+      await this.get(`reles/${relayId}/disturbances`, signal),
+      "rele disturbances",
     );
   }
 

@@ -32,8 +32,11 @@ class RelesApi:
             lambda: self.service.set_observer(bool(body["enabled"]))
         )
 
-    def latest_disturbance(self, relay_id: int) -> Any:
-        return self.response(lambda: self.service.get_latest_disturbance(relay_id))
+    def disturbances(self, relay_id: int) -> Any:
+        return self.response(lambda: self.service.get_disturbances(relay_id))
+
+    def disturbance(self, relay_id: int, record_number: int) -> Any:
+        return self.response(lambda: self.service.get_disturbance(relay_id, record_number))
 
     def clock_snapshot(self, relay_id: int) -> Any:
         return self.response(lambda: self.service.read_clock(relay_id))

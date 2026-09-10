@@ -9,6 +9,7 @@ from src.servicios.mqtt.mqtt_client_manager import MqttClientManager
 
 from src.servicios.mqtt import mqtt_event_bus
 from src.servicios.mqtt.mqtt_rpc import MqttRequestRouter
+from src.dao.lechu_state_store import read_value
 
 from src.servicios.email.estado_email import start_email_health_monitor
 from src.logger import Logosaurio
@@ -25,7 +26,7 @@ APP_HOST = config.LECHU_HOST
 APP_PORT = config.LECHU_PORT
 DEBUG_MODE = False
 USE_RELOADER = False
-AUTO_START_MQTT = True
+AUTO_START_MQTT = read_value("mqtt_connection_enabled") is not False
 _services_lock = threading.Lock()
 _services_started = False
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"

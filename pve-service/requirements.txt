@@ -2,4 +2,4 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 requests==2.31.0
 paho-mqtt==1.6.1
--e ../shared/timeauthority-pkg
+../shared/timeauthority-pkg

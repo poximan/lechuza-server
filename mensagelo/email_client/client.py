@@ -29,13 +29,6 @@ def _headers(idempotency_key: str | None = None):
         headers["Idempotency-Key"] = idempotency_key
     return headers
 
-def send_sync(recipients: List[str], subject: str, body: str, message_type: Optional[str] = None):
-    url = f"{config.SERVICE_BASE_URL}/send"
-    payload = {"recipients": recipients, "subject": subject, "body": body, "message_type": message_type}
-    r = requests.post(url, json=payload, headers=_headers(), timeout=30)
-    r.raise_for_status()
-    return r.json()
-
 def send_async(
     recipients: List[str],
     subject: str,
@@ -115,5 +108,5 @@ if __name__ == "__main__":
         body_prefix="Hola! Esto es una prueba asíncrona concurrente.",
         message_type="test_async",
         count=50,
-        max_workers=50,  # podés bajar/subir esto según tu máquina/servicio
+        max_workers=50,  # podes bajar/subir esto segun tu maquina/servicio
     )

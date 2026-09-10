@@ -1,3 +1,7 @@
+from datetime import timedelta
+from .alarm_time import _iso
+from .dashboard_repository import load_dashboard
+from .dashboard_metrics import summarize_dashboard
 from timeauthority import get_time_authority
 
 from . import db, sync_worker
@@ -11,7 +15,9 @@ class AlarmService:
         return {"items": db.list_incidents(view, limit)}
 
     def dashboard(self) -> dict:
-        return db.dashboard()
+        now = self._time_authority.utc_now()
+        boundaries = tuple(_iso(now - timedelta(days=days)) for days in (1, 7, 30, 365))
+        return summarize_dashboard(*load_dashboard(boundaries))
 
     def catalog(self) -> dict:
         return {"items": db.list_catalog()}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { JsonContractReader } from "../contracts/JsonContractReader";
 import { OperationalFormatter } from "../contracts/OperationalFormatter";
 import { ToggleSwitch } from "../components/ToggleSwitch";
-import { RelayDisturbanceChart } from "../components/RelayDisturbanceChart";
+import { RelayDisturbanceSelector } from "../components/RelayDisturbanceSelector";
 import { RelaySynchronizationModal } from "../components/RelaySynchronizationModal";
 import {
   RelayModbusQueries,
@@ -280,10 +280,8 @@ export function RelaysPage({
                   </table>
                 </div>
                 <RelayModbusQueries queries={queries} />
-                <RelayDisturbanceChart
+                <RelayDisturbanceSelector
                   client={client}
-                  faultNumber={faultNumber}
-                  faultTimestamp={faultTimestamp}
                   relayId={relayId}
                 />
               </Card>

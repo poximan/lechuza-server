@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from logosaurio import Logosaurio
 from pymodbus.client import ModbusTcpClient
+from .channel_queue import ModbusChannelQueue
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,8 @@ class ModbusTcpReadOnlyDriver:
         self._is_connected = False
         self._shutdown = False
         self._io_lock = threading.RLock()
+        self.channel_queue = ModbusChannelQueue(f"{host}:{port}")
+        self.heartbeat = lambda: None
 
     @classmethod
     def from_config(
@@ -148,40 +151,51 @@ class ModbusTcpReadOnlyDriver:
         count: int,
         unit_id: int,
     ):
-        with self._io_lock:
-            total_attempts = self.attempts
-            for attempt in range(1, total_attempts + 1):
-                if not self._is_connected and not self.connect():
-                    reason = "conexion no disponible"
-                else:
-                    try:
-                        operation_method = getattr(self._client, method_name)
-                        result = operation_method(
-                            address_offset,
-                            count=count,
-                            slave=unit_id,
-                        )
-                        registers = getattr(result, "registers", None)
-                        if (
-                            result is not None
-                            and not (
-                                hasattr(result, "isError")
-                                and result.isError()
+        description = {
+            "source": self.name, "unit_id": unit_id,
+            "function_code": 3 if method_name == "read_holding_registers" else 4,
+            "address": f"0x{address_offset:04X}", "count": count,
+        }
+        with self.channel_queue.dispatch(description, lambda: self._shutdown, self.heartbeat) as request:
+            with self._io_lock:
+                total_attempts = self.attempts
+                for attempt in range(1, total_attempts + 1):
+                    self.channel_queue.record_attempt(request, attempt)
+                    self.heartbeat()
+                    if self._shutdown:
+                        return None
+                    if not self._is_connected and not self.connect():
+                        reason = "conexion no disponible"
+                    else:
+                        try:
+                            operation_method = getattr(self._client, method_name)
+                            result = operation_method(
+                                address_offset,
+                                count=count,
+                                slave=unit_id,
                             )
-                            and registers
-                        ):
-                            return registers
-                        reason = f"respuesta invalida: {result}"
-                    except Exception as exc:
-                        reason = f"{type(exc).__name__}: {exc}"
-                self.logger.log(
-                    f"Fallo {operation} en {self.endpoint}, Unit ID {unit_id}, "
-                    f"Addr {address_offset}, intento {attempt}/{total_attempts}: "
-                    f"{reason}",
-                    origin="OBS/DRV",
-                )
-                self.disconnect()
-            return None
+                            registers = getattr(result, "registers", None)
+                            if (
+                                result is not None
+                                and not (
+                                    hasattr(result, "isError")
+                                    and result.isError()
+                                )
+                                and registers
+                            ):
+                                request["succeeded"] = True
+                                return registers
+                            reason = f"respuesta invalida: {result}"
+                        except Exception as exc:
+                            reason = f"{type(exc).__name__}: {exc}"
+                    self.logger.log(
+                        f"Fallo {operation} en {self.endpoint}, Unit ID {unit_id}, "
+                        f"Addr {address_offset}, intento {attempt}/{total_attempts}: "
+                        f"{reason}",
+                        origin="OBS/DRV",
+                    )
+                    self.disconnect()
+                return None
 
     def is_connected(self) -> bool:
         """Informa si este canal TCP permanece conectado."""

@@ -7,7 +7,72 @@ import sqlite3
 from src.persistencia.configuracion_base_datos import DATABASE_FILE
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
+
+FALLAS_RELES_TABLE_SQL = """
+CREATE TABLE fallas_reles (
+    id_rele INTEGER PRIMARY KEY NOT NULL,
+    numero_falla INTEGER NOT NULL,
+    timestamp TEXT NOT NULL CHECK (
+        length(timestamp) = 24
+        AND timestamp GLOB '????-??-??T??:??:??.???Z'
+        AND datetime(timestamp) IS NOT NULL
+    ),
+    formato_timestamp TEXT NOT NULL CHECK (
+        formato_timestamp IN ('private', 'iec870')
+    ),
+    fasea_corr INTEGER,
+    faseb_corr INTEGER,
+    fasec_corr INTEGER,
+    tierra_corr INTEGER,
+    FOREIGN KEY (id_rele) REFERENCES reles(id)
+)
+"""
+
+OSCILOPERTURBOGRAMAS_TABLE_SQL = """
+CREATE TABLE osciloperturbogramas_reles (
+    id_rele INTEGER NOT NULL REFERENCES reles(id),
+    registro INTEGER NOT NULL CHECK (registro BETWEEN 1 AND 5),
+    timestamp TEXT NOT NULL CHECK (
+        length(timestamp) = 24
+        AND timestamp GLOB '????-??-??T??:??:??.???Z'
+        AND datetime(timestamp) IS NOT NULL
+    ),
+    descargado_en TEXT CHECK (
+        descargado_en IS NULL
+        OR (
+            length(descargado_en) = 24
+            AND descargado_en GLOB '????-??-??T??:??:??.???Z'
+            AND datetime(descargado_en) IS NOT NULL
+        )
+    ),
+    contenido_json TEXT NOT NULL CHECK (json_valid(contenido_json)),
+    PRIMARY KEY (id_rele, registro)
+)
+"""
+
+ACTUALIZACION_REGISTROS_RELES_TABLE_SQL = """
+CREATE TABLE actualizacion_registros_reles (
+    id_rele INTEGER PRIMARY KEY REFERENCES reles(id),
+    actualizado_en TEXT CHECK (
+        actualizado_en IS NULL
+        OR (
+            length(actualizado_en) = 24
+            AND actualizado_en GLOB '????-??-??T??:??:??.???Z'
+            AND datetime(actualizado_en) IS NOT NULL
+        )
+    ),
+    reintentar_en TEXT CHECK (
+        reintentar_en IS NULL
+        OR (
+            length(reintentar_en) = 24
+            AND reintentar_en GLOB '????-??-??T??:??:??.???Z'
+            AND datetime(reintentar_en) IS NOT NULL
+        )
+    ),
+    error TEXT
+)
+"""
 
 SCHEMA_SQL = f"""
 PRAGMA foreign_keys = ON;
@@ -78,36 +143,11 @@ CREATE TABLE reles (
     )
 );
 
-CREATE TABLE fallas_reles (
-    id_rele INTEGER PRIMARY KEY NOT NULL,
-    numero_falla INTEGER NOT NULL,
-    timestamp TEXT NOT NULL CHECK (
-        length(timestamp) = 24
-        AND timestamp GLOB '????-??-??T??:??:??.???Z'
-        AND datetime(timestamp) IS NOT NULL
-    ),
-    formato_timestamp TEXT NOT NULL CHECK (
-        formato_timestamp IN ('private', 'iec870')
-    ),
-    fasea_corr INTEGER,
-    faseb_corr INTEGER,
-    fasec_corr INTEGER,
-    tierra_corr INTEGER,
-    perturbacion_registro INTEGER CHECK (
-        perturbacion_registro IS NULL
-        OR perturbacion_registro BETWEEN 1 AND 5
-    ),
-    perturbacion_json TEXT CHECK (
-        perturbacion_json IS NULL
-        OR length(trim(perturbacion_json)) > 0
-    ),
-    CHECK (
-        (perturbacion_registro IS NULL AND perturbacion_json IS NULL)
-        OR
-        (perturbacion_registro IS NOT NULL AND perturbacion_json IS NOT NULL)
-    ),
-    FOREIGN KEY (id_rele) REFERENCES reles(id)
-);
+{FALLAS_RELES_TABLE_SQL};
+
+{OSCILOPERTURBOGRAMAS_TABLE_SQL};
+
+{ACTUALIZACION_REGISTROS_RELES_TABLE_SQL};
 
 PRAGMA user_version = {SCHEMA_VERSION};
 COMMIT;

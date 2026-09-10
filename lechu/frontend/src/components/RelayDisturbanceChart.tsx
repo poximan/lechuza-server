@@ -9,13 +9,13 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 
+import { formatRelayTimestamp } from "../relayTime";
 import type { LechuApiClient } from "../LechuApiClient";
 import type { JsonRecord, JsonValue } from "../models";
 import styles from "./RelayDisturbanceChart.module.css";
 
 interface Waveform {
-  faultNumber: number;
-  faultTimestamp: string;
+  eventTimestamp: string;
   recordNumber: number;
   preSeconds: number;
   postSeconds: number;
@@ -91,11 +91,10 @@ function parseWaveform(payload: JsonRecord): Waveform {
   const metadata = requiredRecord(payload.metadata, "perturbación.metadata");
   if (typeof metadata.start_origin !== "string")
     throw new Error("perturbación.metadata.start_origin debe ser texto");
-  if (typeof metadata.fault_timestamp !== "string")
-    throw new Error("perturbación.metadata.fault_timestamp debe ser texto");
+  if (typeof metadata.trigger_timestamp !== "string")
+    throw new Error("perturbación.metadata.trigger_timestamp debe ser texto");
   const parsed: Waveform = {
-    faultNumber: requiredNumber(payload.fault_number, "perturbación.fault_number"),
-    faultTimestamp: metadata.fault_timestamp,
+    eventTimestamp: metadata.trigger_timestamp,
     recordNumber: requiredNumber(payload.record_number, "perturbación.record_number"),
     preSeconds: requiredNumber(payload.pre_seconds, "perturbación.pre_seconds"),
     postSeconds: requiredNumber(payload.post_seconds, "perturbación.post_seconds"),
@@ -108,8 +107,6 @@ function parseWaveform(payload: JsonRecord): Waveform {
       earth: numericArray(channels.earth, "perturbación.channels.earth"),
     },
   };
-  if (!Number.isInteger(parsed.faultNumber) || parsed.faultNumber < 0)
-    throw new Error("perturbación.fault_number debe ser un entero no negativo");
   if (!Number.isInteger(parsed.recordNumber) || parsed.recordNumber < 1 || parsed.recordNumber > 5)
     throw new Error("perturbación.record_number debe estar entre 1 y 5");
   const lengths = Object.values(parsed.channels).map((values) => values.length);
@@ -179,20 +176,18 @@ function formatRelativeTime(value: number): string {
 
 export function RelayDisturbanceChart({
   client,
-  faultNumber,
-  faultTimestamp,
+  recordNumber,
+  eventTimestamp,
   relayId,
 }: {
   client: LechuApiClient;
-  faultNumber: number | null;
-  faultTimestamp: string | null;
+  recordNumber: number;
+  eventTimestamp: string;
   relayId: number;
 }) {
   const clipId = `relay-disturbance-${useId().replace(/:/g, "")}`;
   const [waveform, setWaveform] = useState<Waveform | null>(null);
-  const [message, setMessage] = useState("Leyendo la perturbación más reciente…");
-  const [warning, setWarning] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
+  const [message, setMessage] = useState("Leyendo el osciloperturbograma seleccionado…");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("zoom");
   const [selectedWindow, setSelectedWindow] = useState<TimeWindow | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -200,77 +195,24 @@ export function RelayDisturbanceChart({
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragState = useRef<DragState | null>(null);
-  const waveformRef = useRef<Waveform | null>(null);
-
-  useEffect(() => {
-    waveformRef.current = null;
-    setWaveform(null);
-    setWarning(null);
-    setPinnedIndex(null);
-  }, [relayId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    let retryTimer: number | null = null;
-    setMessage("Leyendo la perturbación más reciente…");
-    void client.relayLatestDisturbance(relayId, controller.signal).then((payload) => {
-      const status = payload.status;
-      if (status !== "available" && status !== "pending" && status !== "unavailable")
-        throw new Error(`Contrato inválido: estado de perturbación desconocido ${String(status)}`);
-      if (status !== "available") {
-        const unavailableMessage = typeof payload.message === "string"
-          ? payload.message
-          : "La perturbación todavía no está disponible.";
-        if (waveformRef.current === null) {
-          setMessage(unavailableMessage);
-          setWarning(null);
-        } else {
-          setMessage("");
-          setWarning(`No se pudo refrescar la captura: ${unavailableMessage}`);
-        }
-        retryTimer = window.setTimeout(() => setRetry((value) => value + 1), 5_000);
-        return;
-      }
+    setWaveform(null);
+    setMessage("Leyendo el osciloperturbograma seleccionado…");
+    void client.relayDisturbance(relayId, recordNumber, controller.signal).then((payload) => {
+      if (controller.signal.aborted) return;
       const parsed = parseWaveform(payload);
-      waveformRef.current = parsed;
+      if (parsed.recordNumber !== recordNumber || parsed.eventTimestamp !== eventTimestamp)
+        throw new Error("El registro cambió durante la actualización. Seleccioná nuevamente el evento.");
       setWaveform(parsed);
       setMessage("");
-      const previousFaultWarning = faultNumber !== null && (
-        parsed.faultNumber !== faultNumber
-        || parsed.faultTimestamp !== faultTimestamp
-      )
-        ? `Mostrando la última perturbación disponible, correspondiente a la falla ${parsed.faultNumber}; la falla actual es ${faultNumber}.`
-        : null;
-      const refreshWarning = typeof payload.refresh_error === "string"
-        ? `No se pudo refrescar la captura: ${payload.refresh_error}`
-        : null;
-      const associationWarning = typeof payload.association_warning === "string"
-        ? payload.association_warning
-        : null;
-      setWarning(
-        [previousFaultWarning, associationWarning, refreshWarning]
-          .filter(Boolean)
-          .join(" ") || null,
-      );
-      retryTimer = window.setTimeout(() => setRetry((value) => value + 1), 30_000);
     }).catch((reason: unknown) => {
-      if (!controller.signal.aborted) {
-        const errorMessage = reason instanceof Error ? reason.message : String(reason);
-        if (waveformRef.current === null) {
-          setMessage(errorMessage);
-          setWarning(null);
-        } else {
-          setMessage("");
-          setWarning(`No se pudo refrescar la captura: ${errorMessage}`);
-        }
-        retryTimer = window.setTimeout(() => setRetry((value) => value + 1), 5_000);
-      }
+      if (!controller.signal.aborted)
+        setMessage(reason instanceof Error ? reason.message : String(reason));
     });
-    return () => {
-      controller.abort();
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-    };
-  }, [client, faultNumber, faultTimestamp, relayId, retry]);
+    return () => controller.abort();
+  }, [client, recordNumber, eventTimestamp, relayId]);
 
   const fullWindow = useMemo<TimeWindow | null>(() => waveform
     ? { end: waveform.postSeconds, start: -waveform.preSeconds }
@@ -280,7 +222,7 @@ export function RelayDisturbanceChart({
     setSelectedWindow(null);
     setHoveredIndex(null);
     setPinnedIndex(null);
-  }, [faultNumber, faultTimestamp, relayId, waveform?.recordNumber, waveform?.preSeconds, waveform?.postSeconds]);
+  }, [recordNumber, eventTimestamp, relayId, waveform?.recordNumber, waveform?.preSeconds, waveform?.postSeconds]);
 
   const drawing = useMemo(() => {
     if (!waveform || !fullWindow) return null;
@@ -445,7 +387,7 @@ export function RelayDisturbanceChart({
   return (
     <section className={styles.container} aria-label="Osciloperturbograma">
       <div className={styles.header}>
-        <strong>Osciloperturbograma · falla {waveform.faultNumber} · registro {waveform.recordNumber}</strong>
+        <strong>Osciloperturbograma · {formatRelayTimestamp(waveform.eventTimestamp)} · registro {waveform.recordNumber}</strong>
         <span>{waveform.sampleRateHz} muestras/s · t=0: {waveform.origin}</span>
       </div>
       <div className={styles.interactionBar}>
@@ -459,7 +401,6 @@ export function RelayDisturbanceChart({
       <div className={styles.legend}>
         {drawing.paths.map((channel) => <span key={channel.key} style={{ color: channel.color }}><i style={{ backgroundColor: channel.color }} />{channel.label}</span>)}
       </div>
-      {warning && <p className={styles.warning}>{warning}</p>}
       <svg
         className={`${styles.chart} ${interactionMode === "zoom" ? styles.zoomMode : styles.panMode} ${dragging ? styles.dragging : ""}`}
         onDoubleClick={() => { setSelectedWindow(null); setPinnedIndex(null); }}

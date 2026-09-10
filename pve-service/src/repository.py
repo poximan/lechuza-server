@@ -28,33 +28,30 @@ class SnapshotRepository:
                     return
                 with open(self._path, "r", encoding="utf-8") as fh:
                     content = fh.read().strip()
-                if not content:
-                    return
                 data = json.loads(content)
-                if isinstance(data, dict):
-                    self._snapshot = dict(data)
+                if not isinstance(data, dict):
+                    raise ValueError("Snapshot persistido invalido")
+                timebox.parse(data["ts"])
+                self._snapshot = dict(data)
             except Exception as exc:
-                logger.log(f"No se pudo cargar snapshot persistido: {exc}", "PVE/STORE")
+                raise RuntimeError("No se pudo cargar snapshot persistido") from exc
 
-    def _persist(self) -> None:
+    def _persist(self, snapshot: Dict[str, Any]) -> None:
         tmp_path = f"{self._path}.tmp"
         with open(tmp_path, "w", encoding="utf-8") as fh:
-            json.dump(self._snapshot, fh, ensure_ascii=False, indent=2)
+            json.dump(snapshot, fh, ensure_ascii=False, indent=2, allow_nan=False)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp_path, self._path)
 
     def store(self, snapshot: Dict[str, Any]) -> None:
         with self._lock:
             if not isinstance(snapshot, dict):
-                logger.log(
-                    f"Snapshot inválido recibido ({type(snapshot).__name__}), se descarta",
-                    "PVE/STORE",
-                )
-                return
-            self._snapshot = dict(snapshot)
-            try:
-                self._persist()
-            except Exception as exc:
-                logger.log(f"No se pudo persistir snapshot actual: {exc}", "PVE/STORE")
+                raise ValueError("Snapshot recibido invalido")
+            timebox.parse(snapshot["ts"])
+            candidate = dict(snapshot)
+            self._persist(candidate)
+            self._snapshot = candidate
 
     def read(self) -> Dict[str, Any]:
         with self._lock:

@@ -44,24 +44,6 @@ def _on_startup():
         w.start()
         worker = w
 
-@app.post("/send", response_model=SendResponse)
-def send_email_sync(
-    payload: SendRequest,
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-):
-    _auth_or_401(x_api_key)
-
-    try:
-        mailer.send_email(payload.recipients, payload.subject, payload.body)
-        db.log_message(payload.subject, payload.body, payload.recipients, success=True, message_type=payload.message_type)
-        return SendResponse(ok=True, queued=False, message="Email enviado")
-    except Exception as e:
-        db.log_message(payload.subject, payload.body, payload.recipients, success=False, message_type=payload.message_type)
-        return JSONResponse(
-            status_code=500,
-            content=SendResponse(ok=False, queued=False, message=f"Fallo SMTP: {e}").model_dump()
-        )
-
 @app.post("/send_async", response_model=SendResponse, status_code=202)
 def send_email_async(
     payload: SendRequest,
@@ -168,4 +150,11 @@ def list_alarm_dispatches(
 
 @app.get("/health")
 def health():
+    if worker is None or not worker.is_alive() or worker.last_error:
+        raise HTTPException(status_code=503, detail="Worker de correo no disponible")
     return {"status": "ok"}
+
+@app.on_event("shutdown")
+def stop_worker():
+    if worker is not None:
+        worker.stop()

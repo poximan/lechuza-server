@@ -1,5 +1,5 @@
 export function formatRelayTimestamp(value: string): string {
-  const timestamp = new Date(value);
+  const timestamp = new Date(new Date(value).getTime() - 3 * 60 * 60 * 1000);
   if (Number.isNaN(timestamp.getTime())) {
     throw new Error(`Estampa MiCOM inválida: ${value}`);
   }
@@ -10,7 +10,7 @@ export function formatRelayTimestamp(value: string): string {
   const minute = String(timestamp.getUTCMinutes()).padStart(2, "0");
   const second = String(timestamp.getUTCSeconds()).padStart(2, "0");
   const millisecond = String(timestamp.getUTCMilliseconds()).padStart(3, "0");
-  return `${day}/${month}/${year}, ${hour}:${minute}:${second}.${millisecond}`;
+  return `${day}/${month}/${year}, ${hour}:${minute}:${second}.${millisecond} UTC−3`;
 }
 
 export function relayTimestampFormat(value: unknown): string {

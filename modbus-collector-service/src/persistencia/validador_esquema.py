@@ -33,8 +33,6 @@ EXPECTED_COLUMNS = {
         "faseb_corr",
         "fasec_corr",
         "tierra_corr",
-        "perturbacion_registro",
-        "perturbacion_json",
     },
 }
 
@@ -66,6 +64,22 @@ EXPECTED_FOREIGN_KEYS = {
     "reles": set(),
     "fallas_reles": {("id_rele", "reles", "id")},
 }
+
+
+EXPECTED_COLUMNS.update({
+    "osciloperturbogramas_reles": {"id_rele", "registro", "timestamp", "descargado_en", "contenido_json"},
+    "actualizacion_registros_reles": {"id_rele", "actualizado_en", "reintentar_en", "error"},
+})
+EXPECTED_PRIMARY_KEYS.update({
+    "osciloperturbogramas_reles": ["id_rele", "registro"],
+    "actualizacion_registros_reles": ["id_rele"],
+})
+EXPECTED_NOT_NULL.update({
+    "osciloperturbogramas_reles": {"id_rele", "registro", "timestamp", "contenido_json"},
+    "actualizacion_registros_reles": set(),
+})
+for table in ("osciloperturbogramas_reles", "actualizacion_registros_reles"):
+    EXPECTED_FOREIGN_KEYS[table] = {("id_rele", "reles", "id")}
 
 
 class DatabaseContractError(RuntimeError):

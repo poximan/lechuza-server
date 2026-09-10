@@ -5,6 +5,7 @@ import time
 from copy import deepcopy
 from typing import Any
 
+from src.dao.dao_proxmox_cache import ProxmoxCacheDao
 from src.dao.dao_proxmox_view import ProxmoxViewDao
 from src.negocio.proxmox import validate_proxmox_view
 
@@ -13,14 +14,17 @@ class ProxmoxService:
     STATE_REFRESH_SECONDS = 10
     HISTORY_REFRESH_SECONDS = 120
 
-    def __init__(self, client: Any, view_dao: ProxmoxViewDao):
+    def __init__(
+        self,
+        client: Any,
+        view_dao: ProxmoxViewDao,
+        cache_dao: ProxmoxCacheDao,
+    ):
         self.client = client
         self.view_dao = view_dao
+        self.cache_dao = cache_dao
         self._lock = threading.RLock()
-        self._values: dict[str, dict[str, Any] | None] = {
-            "state": None,
-            "history": None,
-        }
+        self._values = cache_dao.load()
         self._errors: dict[str, str | None] = {
             "state": None,
             "history": None,
@@ -81,6 +85,7 @@ class ProxmoxService:
         error: str | None = None
         try:
             value = operation()
+            self.cache_dao.save(resource, value)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
         with self._lock:

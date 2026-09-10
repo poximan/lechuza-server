@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import sqlite3
-import statistics
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -13,6 +11,8 @@ from typing import Any
 from timeauthority import get_time_authority
 
 from . import config
+from .alarm_time import _parse_instant, _iso
+from .alarm_lifecycle import condition_transition, due_transition
 
 
 SCHEMA_VERSION = 1
@@ -300,21 +300,22 @@ def ingest_catalog(source_id: str, alarms: list[dict[str, Any]]) -> None:
                     parsed["body"],
                 ),
             )
-            if parsed["condition_active"] is not None:
-                existing = connection.execute(
-                    "SELECT 1 FROM alarm_state WHERE source_id = ? AND alarm_key = ?;",
-                    (source_id, parsed["alarm_key"]),
-                ).fetchone()
-                if existing is None:
-                    _apply_condition(
-                        connection,
-                        source_id,
-                        parsed["alarm_key"],
-                        bool(parsed["condition_active"]),
-                        str(parsed["condition_since_at"]),
-                        source_event_id=None,
-                        payload={"origin": "catalog_baseline"},
-                    )
+        connection.commit()
+
+
+def initialize_catalog_baselines(source_id: str) -> None:
+    # El historial se aplica antes del estado actual, para no adelantar el ciclo.
+    with _LOCK, _connect() as connection:
+        connection.execute("BEGIN IMMEDIATE;")
+        rows = connection.execute(
+            "SELECT c.* FROM alarm_catalog c LEFT JOIN alarm_state s USING (source_id, alarm_key) "
+            "WHERE c.source_id=? AND c.catalog_active=1 AND c.current_condition IS NOT NULL "
+            "AND s.alarm_key IS NULL;", (source_id,),
+        ).fetchall()
+        for row in rows:
+            _apply_condition(connection, source_id, row["alarm_key"], bool(row["current_condition"]),
+                             row["condition_since_at"], source_event_id=None,
+                             payload={"origin": "catalog_baseline"})
         connection.commit()
 
 
@@ -336,6 +337,12 @@ def ingest_events(source_id: str, events: list[dict[str, Any]]) -> int:
                     f"Secuencia incompleta de {source_id}: "
                     f"esperado={cursor + 1}, recibido={event_id}"
                 )
+            _process_due_transitions(
+                connection,
+                event["occurred_at"],
+                list(config.ALARM_RECIPIENTS),
+                (source_id, event["alarm_key"]),
+            )
             _apply_condition(
                 connection,
                 source_id,
@@ -378,37 +385,39 @@ def ingest_events(source_id: str, events: list[dict[str, Any]]) -> int:
         return cursor
 
 
-def process_due_transitions(now_iso: str, recipients: list[str]) -> None:
-    now = _parse_instant(now_iso)
+def process_due_transitions(now_iso: str, recipients: list[str], source_ids: set[str]) -> None:
     with _LOCK, _connect() as connection:
         connection.execute("BEGIN IMMEDIATE;")
-        rows = connection.execute(
-            """
-            SELECT s.*, c.title, c.category, c.activation_seconds,
-                   c.recovery_seconds, c.expected_clearance_minutes,
-                   c.send_start, c.send_end, c.subject, c.body
-            FROM alarm_state s
-            JOIN alarm_catalog c USING (source_id, alarm_key)
-            WHERE c.catalog_active = 1
-              AND s.lifecycle_state IN ('pending_start', 'pending_end');
-            """
-        ).fetchall()
-        for row in rows:
-            condition_since = _parse_instant(str(row["condition_since_at"]))
-            elapsed = (now - condition_since).total_seconds()
-            if row["lifecycle_state"] == "pending_start":
-                if elapsed < int(row["activation_seconds"]):
-                    continue
-                qualified_at = _iso(
-                    condition_since + timedelta(seconds=int(row["activation_seconds"]))
-                )
-                _activate_incident(connection, row, qualified_at, recipients)
-            elif elapsed >= int(row["recovery_seconds"]):
-                resolved_at = _iso(
-                    condition_since + timedelta(seconds=int(row["recovery_seconds"]))
-                )
-                _resolve_incident(connection, row, resolved_at, recipients)
+        _process_due_transitions(connection, now_iso, recipients, source_ids=source_ids)
         connection.commit()
+
+
+def _process_due_transitions(connection, now_iso, recipients, alarm_identity=None, source_ids=None) -> None:
+    _parse_instant(now_iso)
+    rows = connection.execute(
+        """
+        SELECT s.*, c.title, c.category, c.activation_seconds,
+               c.recovery_seconds, c.expected_clearance_minutes,
+               c.send_start, c.send_end, c.subject, c.body
+        FROM alarm_state s
+        JOIN alarm_catalog c USING (source_id, alarm_key)
+        WHERE c.catalog_active = 1
+          AND s.lifecycle_state IN ('pending_start', 'pending_end');
+        """
+    ).fetchall()
+    for row in rows:
+        if source_ids is not None and row["source_id"] not in source_ids:
+            continue
+        if alarm_identity is not None and (row["source_id"], row["alarm_key"]) != alarm_identity:
+            continue
+        transition = due_transition(dict(row), now_iso)
+        if transition is None:
+            continue
+        action, occurred_at = transition
+        if action == "activate":
+            _activate_incident(connection, row, occurred_at, recipients)
+        else:
+            _resolve_incident(connection, row, occurred_at, recipients)
 
 
 def pending_dispatches(limit: int = 100) -> list[dict[str, Any]]:
@@ -556,139 +565,6 @@ def update_notification_settings(
             raise KeyError(f"Alarma desconocida: {source_id}/{alarm_key}")
 
 
-def dashboard() -> dict[str, Any]:
-    now = _TIME.utc_now()
-    boundaries = {
-        "daily": now - timedelta(days=1),
-        "weekly": now - timedelta(days=7),
-        "monthly": now - timedelta(days=30),
-        "annual": now - timedelta(days=365),
-    }
-    with _LOCK, _connect() as connection:
-        count_rows = connection.execute(
-            "SELECT status, COUNT(*) AS total FROM incidents GROUP BY status;"
-        ).fetchall()
-        condition_row = connection.execute(
-            """
-            SELECT
-                SUM(CASE WHEN current_condition = 1 THEN 1 ELSE 0 END) AS active,
-                SUM(CASE WHEN current_condition = 0 THEN 1 ELSE 0 END) AS inactive,
-                SUM(CASE WHEN current_condition IS NULL THEN 1 ELSE 0 END) AS unknown
-            FROM alarm_catalog
-            WHERE catalog_active = 1;
-            """
-        ).fetchone()
-        frequency_rows = connection.execute(
-            """
-            SELECT c.source_id, c.alarm_key, c.title, c.category,
-                   COUNT(i.incident_id) AS total,
-                   SUM(CASE WHEN i.qualified_at >= ? THEN 1 ELSE 0 END) AS daily,
-                   SUM(CASE WHEN i.qualified_at >= ? THEN 1 ELSE 0 END) AS weekly,
-                   SUM(CASE WHEN i.qualified_at >= ? THEN 1 ELSE 0 END) AS monthly,
-                   SUM(CASE WHEN i.qualified_at >= ? THEN 1 ELSE 0 END) AS annual
-            FROM alarm_catalog c
-            LEFT JOIN incidents i
-              ON i.source_id = c.source_id
-             AND i.alarm_key = c.alarm_key
-             AND i.qualified_at IS NOT NULL
-            WHERE c.catalog_active = 1
-            GROUP BY c.source_id, c.alarm_key, c.title, c.category
-            ORDER BY total DESC, c.source_id, c.alarm_key;
-            """,
-            tuple(_iso(boundaries[key]) for key in ("daily", "weekly", "monthly", "annual")),
-        ).fetchall()
-        lifetime_rows = connection.execute(
-            """
-            SELECT c.source_id, c.alarm_key, c.title, c.category,
-                   c.expected_clearance_minutes,
-                   i.qualified_at, i.resolved_at
-            FROM alarm_catalog c
-            LEFT JOIN incidents i
-              ON i.source_id = c.source_id
-             AND i.alarm_key = c.alarm_key
-             AND i.qualified_at IS NOT NULL
-            WHERE c.catalog_active = 1
-            ORDER BY c.source_id, c.alarm_key, i.qualified_at;
-            """
-        ).fetchall()
-
-    metrics: dict[tuple[str, str], dict[str, Any]] = {}
-    for row in lifetime_rows:
-        source_id = str(row["source_id"])
-        alarm_key = str(row["alarm_key"])
-        key = (source_id, alarm_key)
-        entry = metrics.setdefault(
-            key,
-            {
-                "source_id": source_id,
-                "alarm_key": alarm_key,
-                "title": str(row["title"]),
-                "category": str(row["category"]),
-                "configured_minutes": int(row["expected_clearance_minutes"]),
-                "active_samples": [],
-                "inactive_samples": [],
-                "last_resolved_at": None,
-            },
-        )
-        if row["qualified_at"] is None:
-            continue
-        last_resolved_at = entry["last_resolved_at"]
-        if last_resolved_at is not None:
-            entry["inactive_samples"].append(
-                _minutes_between(str(last_resolved_at), str(row["qualified_at"]))
-            )
-        if row["resolved_at"] is not None:
-            entry["active_samples"].append(
-                _minutes_between(str(row["qualified_at"]), str(row["resolved_at"]))
-            )
-            entry["last_resolved_at"] = str(row["resolved_at"])
-    lifetimes = []
-    for entry in metrics.values():
-        active_samples = sorted(entry.pop("active_samples"))
-        inactive_samples = sorted(entry.pop("inactive_samples"))
-        entry.pop("last_resolved_at")
-        entry.update(_sample_metrics(active_samples, "active"))
-        entry.update(_sample_metrics(inactive_samples, "inactive"))
-        lifetimes.append(entry)
-    lifetimes.sort(
-        key=lambda item: (
-            -item["active_sample_count"],
-            item["source_id"],
-            item["alarm_key"],
-        )
-    )
-    counts = {str(row["status"]): int(row["total"]) for row in count_rows}
-    return {
-        "counts": {
-            "potential": counts.get("potential", 0),
-            "active": counts.get("active", 0),
-            "recovering": counts.get("recovering", 0),
-            "resolved": counts.get("resolved", 0),
-        },
-        "conditions": {
-            "active": int(condition_row["active"] or 0),
-            "inactive": int(condition_row["inactive"] or 0),
-            "unknown": int(condition_row["unknown"] or 0),
-        },
-        "frequent": [dict(row) for row in frequency_rows],
-        "clearance": lifetimes,
-    }
-
-
-def _sample_metrics(samples: list[float], prefix: str) -> dict[str, Any]:
-    return {
-        f"{prefix}_sample_count": len(samples),
-        f"median_{prefix}_minutes": (
-            round(statistics.median(samples), 1) if samples else None
-        ),
-        f"p90_{prefix}_minutes": (
-            round(samples[max(0, math.ceil(len(samples) * 0.9) - 1)], 1)
-            if samples
-            else None
-        ),
-    }
-
-
 def _apply_condition(
     connection: sqlite3.Connection,
     source_id: str,
@@ -719,6 +595,7 @@ def _apply_condition(
         "SELECT * FROM alarm_state WHERE source_id = ? AND alarm_key = ?;",
         (source_id, alarm_key),
     ).fetchone()
+    event_type = condition_transition(dict(state) if state is not None else None, active, occurred_at)
     if state is None:
         if active:
             incident_id = str(uuid.uuid4())
@@ -753,10 +630,9 @@ def _apply_condition(
         )
         event_type = "condition_started" if active else "baseline_inactive"
     else:
-        previous_active = bool(state["condition_active"])
-        if previous_active == active:
+        if event_type == "condition_repeated":
             event_type = "condition_repeated"
-        elif active and state["lifecycle_state"] == "inactive":
+        elif event_type == "condition_started":
             incident_id = str(uuid.uuid4())
             _insert_potential_incident(
                 connection,
@@ -776,7 +652,7 @@ def _apply_condition(
                 (occurred_at, incident_id, occurred_at, source_id, alarm_key),
             )
             event_type = "condition_started"
-        elif not active and state["lifecycle_state"] == "pending_start":
+        elif event_type == "cancelled":
             incident_id = state["incident_id"]
             connection.execute(
                 """
@@ -797,7 +673,7 @@ def _apply_condition(
                 (occurred_at, occurred_at, source_id, alarm_key),
             )
             event_type = "cancelled"
-        elif not active and state["lifecycle_state"] == "active":
+        elif event_type == "recovering":
             incident_id = state["incident_id"]
             connection.execute(
                 """
@@ -818,7 +694,7 @@ def _apply_condition(
                 (occurred_at, occurred_at, source_id, alarm_key),
             )
             event_type = "recovering"
-        elif active and state["lifecycle_state"] == "pending_end":
+        elif event_type == "active_again":
             incident_id = state["incident_id"]
             connection.execute(
                 """
@@ -1104,23 +980,6 @@ def _non_negative_int(record: dict[str, Any], key: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{key} debe ser entero no negativo")
     return value
-
-
-def _parse_instant(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
-        raise ValueError(f"Timestamp fuera de UTC: {value}")
-    return parsed.astimezone(timezone.utc)
-
-
-def _iso(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
-        "+00:00", "Z"
-    )
-
-
-def _minutes_between(start: str, end: str) -> float:
-    return max(0.0, (_parse_instant(end) - _parse_instant(start)).total_seconds() / 60.0)
 
 
 def _dispatch_dict(row: sqlite3.Row) -> dict[str, Any]:

@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, StrictBool
 
 from src.bootstrap import ApplicationContext
+from src.persistencia.dao.dao_osciloperturbogramas import (
+    osciloperturbogramas_reles_dao,
+)
 from src.persistencia.dao.dao_fallas_reles import fallas_reles_dao
 from src.persistencia.dao.dao_reles import reles_dao
 from src.utils import timebox
@@ -74,14 +77,29 @@ def create_relay_router(context: Callable[[], ApplicationContext]) -> APIRouter:
         context().state_store.set_reles_enabled(bool(payload.enabled))
         return JSONResponse({"enabled": bool(payload.enabled)})
 
-    @router.get("/{relay_id}/latest-disturbance")
-    def latest_disturbance(relay_id: int) -> Any:
-        if reles_dao.get_internal_id_by_modbus_id(relay_id) is None:
+    @router.get("/{relay_id}/disturbances")
+    def disturbances(relay_id: int) -> Any:
+        internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
+        if internal_id is None:
+            return JSONResponse(status_code=404, content={"error": "No existe el rele"})
+        return osciloperturbogramas_reles_dao.list_records(internal_id)
+
+    @router.get("/{relay_id}/disturbances/{record_number}")
+    def disturbance(relay_id: int, record_number: int) -> Any:
+        if not 1 <= record_number <= 5:
             return JSONResponse(
-                status_code=404,
-                content={"error": f"No existe el rele Modbus {relay_id}"},
+                status_code=400,
+                content={"error": "El registro debe estar entre 1 y 5"},
             )
-        return context().orchestrator.relay_disturbance_snapshot(relay_id)
+        internal_id = reles_dao.get_internal_id_by_modbus_id(relay_id)
+        payload = (
+            osciloperturbogramas_reles_dao.get(internal_id, record_number)
+            if internal_id is not None
+            else None
+        )
+        if payload is None:
+            return JSONResponse(status_code=404, content={"error": "No existe el osciloperturbograma"})
+        return payload
 
     @router.post("/{relay_id}/clock-snapshot")
     def clock_snapshot(relay_id: int) -> Any:
