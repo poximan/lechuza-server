@@ -5,13 +5,12 @@ import os
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from timeauthority import get_time_authority
 
 from . import config
-from .alarm_time import _parse_instant, _iso
+from .alarm_time import _parse_instant
 from .alarm_lifecycle import condition_transition, due_transition
 
 

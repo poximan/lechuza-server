@@ -14,17 +14,17 @@ export function MensageloPage({ data }: { data: JsonRecord }) {
   return (
     <Card>
       <div className={styles.cardHeader}>
-        <h2>Últimos intentos de envío</h2>
+        <h2>Historial durable de envíos</h2>
       </div>
       {items.length === 0 ? (
-        <p>Sin intentos registrados desde el último reinicio.</p>
+        <p>Sin solicitudes registradas.</p>
       ) : (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Éxito</th>
+                <th>Estado</th>
                 <th>Destinatarios</th>
                 <th>Tipo</th>
                 <th>Asunto</th>
@@ -34,13 +34,13 @@ export function MensageloPage({ data }: { data: JsonRecord }) {
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={`${String(item.ts)}-${index}`}>
+                <tr key={`${String(item.idempotency_key)}-${index}`}>
                   <td>
-                    {typeof item.ts === "string"
-                      ? time.formatInstant(item.ts)
+                    {typeof item.updated_at === "string"
+                      ? time.formatInstant(item.updated_at)
                       : "N/D"}
                   </td>
-                  <td>{item.ok === true ? "si" : "no"}</td>
+                  <td>{formatter.scalar(item.status)}</td>
                   <td>
                     {Array.isArray(item.recipients)
                       ? item.recipients.map(String).join(", ")
@@ -52,7 +52,7 @@ export function MensageloPage({ data }: { data: JsonRecord }) {
                     {formatter.scalar(item.body)}
                   </td>
                   <td className={styles.preWrap}>
-                    {formatter.scalar(item.detail)}
+                    {formatter.scalar(item.last_error)}
                   </td>
                 </tr>
               ))}

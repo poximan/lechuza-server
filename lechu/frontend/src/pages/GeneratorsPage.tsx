@@ -1,4 +1,4 @@
-import { Card } from "@servicoop/frontend-foundation";
+import { Card, UtcMinusThreePresenter } from "@servicoop/frontend-foundation";
 import { useEffect } from "react";
 
 import { JsonContractReader } from "../contracts/JsonContractReader";
@@ -6,6 +6,7 @@ import type { JsonRecord } from "../models";
 import styles from "./Pages.module.css";
 
 const reader = new JsonContractReader();
+const time = new UtcMinusThreePresenter();
 
 interface BreakerState {
   bit: 0 | 1 | null;
@@ -18,6 +19,8 @@ interface GeneratorState {
   group: BreakerState;
   line: BreakerState;
   summary: string;
+  status: string;
+  measuredAt: string | null;
 }
 
 function breaker(value: unknown, context: string): BreakerState {
@@ -189,11 +192,13 @@ function generatorState(value: JsonRecord, title: string): GeneratorState {
     line: breaker(value.interruptor_linea, `${title}.interruptor_linea`),
     group: breaker(value.interruptor_grupo, `${title}.interruptor_grupo`),
     summary: reader.string(value.summary, `${title}.summary`),
+    status: reader.string(value.status, `${title}.status`),
+    measuredAt: reader.optionalString(value.measured_at, `${title}.measured_at`),
   };
 }
 
 function GeneratorCard({
-  state: { unsafe, error, group, line, summary },
+  state: { unsafe, error, group, line, summary, status, measuredAt },
   title,
 }: {
   state: GeneratorState;
@@ -205,6 +210,10 @@ function GeneratorCard({
         <h2>{title}</h2>
       </div>
       {error && <p className={styles.error}>{error}</p>}
+      <p>
+        Estado del dato: <strong>{status}</strong>. Última lectura válida:{" "}
+        {measuredAt ? time.formatInstant(measuredAt) : "N/D"}
+      </p>
       <GeneratorDiagram unsafe={unsafe} group={group} line={line} />
       <div className={styles.statusRow}>
         <div

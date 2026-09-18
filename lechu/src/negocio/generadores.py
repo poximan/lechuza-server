@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.utils import timebox
+
 
 def _record(value: Any, context: str) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -14,6 +16,24 @@ def _text(value: Any, context: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{context} debe ser texto no vacio")
     return value
+
+
+def _status(value: Any, context: str) -> str:
+    status = _text(value, context).lower()
+    if status not in {"available", "stale", "unavailable"}:
+        raise ValueError(f"{context} tiene un estado desconocido: {status}")
+    return status
+
+
+def _optional_timestamp(value: Any, context: str) -> str | None:
+    if value is None:
+        return None
+    timestamp = _text(value, context)
+    try:
+        timebox.parse(timestamp)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{context} debe ser una estampa UTC") from exc
+    return timestamp
 
 
 @dataclass(frozen=True)
@@ -70,6 +90,15 @@ def build_generator_contract(source: Any, context: str) -> dict[str, Any]:
         "interruptor_grupo": group.contract(),
         "unsafe_state": unsafe_state,
         "summary": summary,
+        "status": _status(item.get("status"), f"{context}.status"),
+        "measured_at": _optional_timestamp(
+            item.get("measured_at"),
+            f"{context}.measured_at",
+        ),
+        "last_attempt_at": _optional_timestamp(
+            item.get("last_attempt_at"),
+            f"{context}.last_attempt_at",
+        ),
     }
     error = item.get("error")
     if error is not None:

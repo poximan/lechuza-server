@@ -1,0 +1,63 @@
+.backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--sc-space-4);
+  background: rgb(0 0 0 / 62%);
+}
+
+.modal {
+  display: grid;
+  width: min(54rem, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  gap: var(--sc-space-4);
+  padding: var(--sc-space-5);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-lg);
+  background: var(--sc-color-surface);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sc-space-3);
+}
+
+.header h2,
+.header p,
+.modal > p {
+  margin: 0;
+}
+
+.header p {
+  margin-top: var(--sc-space-1);
+  color: var(--sc-color-text-muted);
+}
+
+.steps {
+  display: grid;
+  gap: var(--sc-space-3);
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.steps li {
+  padding-left: var(--sc-space-1);
+}
+
+.steps span {
+  display: block;
+  margin-top: var(--sc-space-1);
+  line-height: 1.5;
+}
+
+.note {
+  padding: var(--sc-space-3);
+  border-left: 0.25rem solid var(--sc-color-info);
+  background: var(--sc-color-surface-raised);
+}

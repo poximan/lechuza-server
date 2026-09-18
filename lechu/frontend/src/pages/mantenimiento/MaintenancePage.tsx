@@ -67,7 +67,7 @@ function PortMappings({ items }: { items: MaintenancePortMapping[] }) {
               <tr key={[item.service, index].join("-")}>
                 <td>{item.service}</td>
                 <td><code>{item.internal}</code></td>
-                <td><code>{item.external}</code></td>
+                <td><code>{item.external ?? "no expuesto"}</code></td>
                 <td><code>{item.localhost}</code></td>
               </tr>
             ))}

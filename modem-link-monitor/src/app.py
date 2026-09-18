@@ -9,6 +9,7 @@ from .logger import logger
 from .mqtt_publisher import MqttPublisher
 from .tcp_probe import TcpProbe
 from .alarm_source import ModemAlarmSource
+from .state_store import ConnectionStateStore
 from alarm_generator import create_alarm_generator_router
 
 app = FastAPI(title="modem-link-monitor", version="1.0.0")
@@ -35,7 +36,8 @@ _alarm_source = ModemAlarmSource()
 class ConnectionState:
     def __init__(self, ip: str, port: int) -> None:
         self._lock = asyncio.Lock()
-        self._state = {"ip": ip, "port": port, "state": "desconocido", "ts": self._iso_now()}
+        self._store = ConnectionStateStore(config.STATE_FILE, ip, port)
+        self._state = self._store.load()
 
     @staticmethod
     def _iso_now() -> str:
@@ -45,6 +47,7 @@ class ConnectionState:
         async with self._lock:
             self._state["state"] = state
             self._state["ts"] = self._iso_now()
+            self._store.save(self._state)
 
     async def snapshot(self) -> dict:
         async with self._lock:

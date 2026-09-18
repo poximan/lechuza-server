@@ -25,9 +25,12 @@ class MailQueueWorker:
     def _run(self):
         while not self._stop.is_set():
             try:
-                key = self.q.get(timeout=0.5)
+                key = self.q.get(timeout=5)
             except queue.Empty:
                 key = None
+                if not db.has_pending_message():
+                    self.last_error = None
+                    continue
             try:
                 task = db.claim_message(key)
                 self.last_error = None
@@ -38,6 +41,9 @@ class MailQueueWorker:
                 self.last_error = str(exc)
                 logger.exception("Fallo del worker de correo; no se repite un envio incierto")
                 self._stop.wait(1)
+            finally:
+                if key is not None:
+                    self.q.task_done()
 
     def _deliver(self, task):
         error = ""
@@ -48,7 +54,5 @@ class MailQueueWorker:
             logger.exception("SMTP no pudo confirmar la entrega")
         # Si falla esta confirmacion, la fila queda processing. El arranque
         # la marca failed; nunca se vuelve a enviar automaticamente.
-        db.complete_message(task["idempotency_key"], success=not error, error=error)
-        db.log_message(task["subject"], task["body"], task["recipients"],
-                       success=not error, message_type=task.get("message_type"))
+        db.complete_message(task, success=not error, error=error)
         self.last_error = None

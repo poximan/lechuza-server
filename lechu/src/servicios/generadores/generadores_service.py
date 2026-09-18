@@ -17,6 +17,9 @@ class GeneradoresService:
             return {
                 "interruptor_linea": {"estado": "desconocido", "bit": None},
                 "interruptor_grupo": {"estado": "desconocido", "bit": None},
+                "status": "unavailable",
+                "measured_at": None,
+                "last_attempt_at": None,
                 "error": f"{type(exc).__name__}: {exc}",
             }
 

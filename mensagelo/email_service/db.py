@@ -61,6 +61,7 @@ def init_db():
             ON mensajes_pendientes(status, created_at);
             """
         )
+        _migrate_legacy_history(conn)
         # Un envio interrumpido no se repite: SMTP no permite distinguir
         # con certeza entre "no enviado" y "enviado sin respuesta final".
         conn.execute(
@@ -74,6 +75,76 @@ def init_db():
             (_AUTH.utc_iso(),),
         )
         conn.commit()
+
+
+def _normalize_legacy_timestamp(value: str) -> str:
+    parsed = _AUTH.parse(value, assume_utc_on_naive=True)
+    return _AUTH.utc_iso(parsed)
+
+
+def _migrate_legacy_history(conn: sqlite3.Connection) -> None:
+    """Incorpora envios previos a la cola durable sin duplicar los actuales."""
+    rows = conn.execute(
+        """
+        SELECT subject, body, timestamp, message_type, recipient, success
+        FROM mensajes_enviados
+        ORDER BY id ASC;
+        """
+    ).fetchall()
+    grouped: dict[tuple, dict] = {}
+    for row in rows:
+        timestamp = _normalize_legacy_timestamp(str(row["timestamp"]))
+        key = (
+            str(row["subject"]),
+            str(row["body"]),
+            timestamp,
+            row["message_type"],
+        )
+        group = grouped.setdefault(key, {"recipients": [], "success": []})
+        recipient = str(row["recipient"] or "").strip()
+        if recipient and recipient not in group["recipients"]:
+            group["recipients"].append(recipient)
+        group["success"].append(bool(row["success"]))
+
+    for (subject, body, timestamp, message_type), group in grouped.items():
+        exists = conn.execute(
+            """
+            SELECT 1 FROM mensajes_pendientes
+            WHERE subject = ? AND body = ? AND message_type IS ?
+              AND updated_at = ?
+            LIMIT 1;
+            """,
+            (subject, body, message_type, timestamp),
+        ).fetchone()
+        if exists is not None:
+            continue
+        identity = json.dumps(
+            [subject, body, timestamp, message_type, group["recipients"]],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        legacy_key = "legacy:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        succeeded = all(group["success"])
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO mensajes_pendientes (
+                idempotency_key, payload_hash, recipients, subject, body,
+                message_type, status, created_at, updated_at, last_error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                legacy_key,
+                _payload_hash(group["recipients"], subject, body, message_type),
+                json.dumps(group["recipients"], ensure_ascii=False),
+                subject,
+                body,
+                message_type,
+                "sent" if succeeded else "failed",
+                timestamp,
+                timestamp,
+                None if succeeded else "envio historico con destinatarios fallidos",
+            ),
+        )
 
 
 def _get_conn():
@@ -209,17 +280,47 @@ def claim_message(idempotency_key: str | None = None) -> dict | None:
             }
 
 
-def complete_message(idempotency_key: str, success: bool, error: str = "") -> None:
+def has_pending_message() -> bool:
+    with _db_lock:
+        with _get_conn() as conn:
+            return conn.execute(
+                "SELECT 1 FROM mensajes_pendientes WHERE status = 'pending' LIMIT 1"
+            ).fetchone() is not None
+
+
+def complete_message(task: dict, success: bool, error: str = "") -> None:
     status = "sent" if success else "failed"
     with _db_lock:
         with _get_conn() as conn:
-            conn.execute(
+            conn.execute("BEGIN IMMEDIATE;")
+            cursor = conn.execute(
                 """
                 UPDATE mensajes_pendientes
                 SET status = ?, updated_at = ?, last_error = ?
                 WHERE idempotency_key = ? AND status = 'processing';
                 """,
-                (status, _AUTH.utc_iso(), error or None, idempotency_key),
+                (status, _AUTH.utc_iso(), error or None, task["idempotency_key"]),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("La solicitud de correo ya no esta en procesamiento")
+            timestamp = _AUTH.utc_iso()
+            conn.executemany(
+                """
+                INSERT INTO mensajes_enviados (
+                    subject, body, timestamp, message_type, recipient, success
+                ) VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    (
+                        task["subject"],
+                        task["body"],
+                        timestamp,
+                        task.get("message_type"),
+                        recipient,
+                        1 if success else 0,
+                    )
+                    for recipient in task["recipients"]
+                ],
             )
             conn.commit()
 
@@ -235,7 +336,7 @@ def list_dispatches(message_type: str, limit: int = 2000) -> list[dict]:
                        created_at, updated_at, last_error
                 FROM mensajes_pendientes
                 WHERE message_type = ?
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC, idempotency_key DESC
                 LIMIT ?;
                 """,
                 (message_type, safe_limit),
@@ -255,33 +356,37 @@ def list_dispatches(message_type: str, limit: int = 2000) -> list[dict]:
             ]
 
 
-def log_message(
-    subject: str,
-    body: str,
-    recipients: Iterable[str],
-    success: bool,
-    message_type: Optional[str] = None,
-):
+def list_messages(limit: int = 200, offset: int = 0) -> tuple[list[dict], int]:
+    """Historial durable de solicitudes; es la unica fuente de verdad de Mensagelo."""
+    safe_limit = min(1000, max(1, int(limit)))
+    safe_offset = max(0, int(offset))
     with _db_lock:
         with _get_conn() as conn:
-            rows = [
-                (
-                    subject,
-                    body,
-                    _AUTH.utc_iso(),
-                    message_type,
-                    recipient,
-                    1 if success else 0,
-                )
-                for recipient in recipients
-            ]
-            conn.executemany(
-                """
-                INSERT INTO mensajes_enviados (
-                    subject, body, timestamp, message_type, recipient, success
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                rows,
+            total = int(
+                conn.execute("SELECT COUNT(*) FROM mensajes_pendientes").fetchone()[0]
             )
-            conn.commit()
+            rows = conn.execute(
+                """
+                SELECT idempotency_key, recipients, subject, body, message_type,
+                       status, created_at, updated_at, last_error
+                FROM mensajes_pendientes
+                ORDER BY created_at DESC, idempotency_key DESC
+                LIMIT ? OFFSET ?
+                """,
+                (safe_limit, safe_offset),
+            ).fetchall()
+    items = [
+        {
+            "idempotency_key": str(row["idempotency_key"]),
+            "recipients": json.loads(str(row["recipients"])),
+            "subject": str(row["subject"]),
+            "body": str(row["body"]),
+            "message_type": row["message_type"],
+            "status": str(row["status"]),
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+            "last_error": row["last_error"],
+        }
+        for row in rows
+    ]
+    return items, total

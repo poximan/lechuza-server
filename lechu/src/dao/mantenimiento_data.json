@@ -71,10 +71,34 @@
       "localhost": "http://localhost:8083/api/pve/state"
     },
     {
-      "servicio": "modbus-collector-service",
-      "interno": "modbus-collector-service:8084 (http)",
-      "externo_path": "/api/",
+      "servicio": "modbus-transport-service",
+      "interno": "modbus-transport-service:8084 (http)",
+      "externo_path": null,
       "localhost": "http://localhost:8084"
+    },
+    {
+      "servicio": "grd-collector-service",
+      "interno": "grd-collector-service:8087 (http)",
+      "externo_path": "/api/grd/",
+      "localhost": "http://localhost:8087"
+    },
+    {
+      "servicio": "generator-collector-service",
+      "interno": "generator-collector-service:8088 (http)",
+      "externo_path": "/api/ge/",
+      "localhost": "http://localhost:8088"
+    },
+    {
+      "servicio": "micom-collector-service",
+      "interno": "micom-collector-service:8089 (http)",
+      "externo_path": "/api/reles/",
+      "localhost": "http://localhost:8089"
+    },
+    {
+      "servicio": "janitza-collector-service",
+      "interno": "janitza-collector-service:8095 (http)",
+      "externo_path": "/api/analizadores/",
+      "localhost": "http://localhost:8095"
     },
     {
       "servicio": "modem-link-monitor",

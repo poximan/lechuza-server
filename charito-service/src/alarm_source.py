@@ -32,16 +32,24 @@ class CharitoAlarmSource:
             status = str(item.get("status") or "desconocido").lower()
             if status == "desconocido":
                 continue
+            host_reachable = item.get("hostReachable")
+            if not isinstance(host_reachable, bool):
+                continue
             self._register(instance_id, alias)
             detail = str(item.get("dataError") or "").strip()
             self.outbox.observe(
                 f"charito:{instance_id}",
-                status != "online",
+                not host_reachable,
                 timestamp,
                 subject=f"charo-daemon {alias} fuera de servicio",
                 body=(
-                    f"charo-daemon {alias} (ID {instance_id}) presenta estado "
-                    f"'{status}'." + (f" Detalle: {detail}" if detail else "")
+                    (
+                        f"charo-daemon {alias} (ID {instance_id}) responde; "
+                        f"sus metricas presentan estado '{status}'."
+                        if host_reachable
+                        else f"charo-daemon {alias} (ID {instance_id}) no responde."
+                    )
+                    + (f" Detalle: {detail}" if detail else "")
                 ),
             )
 

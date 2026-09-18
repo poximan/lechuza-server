@@ -285,6 +285,17 @@
   gap: var(--sc-space-3);
   margin-bottom: var(--sc-space-4);
 }
+.helpButton {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: var(--sc-font-size-lg);
+  font-weight: 800;
+}
 .relayGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -293,6 +304,15 @@
 }
 .relayGrid > article {
   padding: var(--sc-space-4);
+}
+.analyzerMeasurements {
+  margin-top: var(--sc-space-4);
+}
+.measurementGroup th {
+  border-top: 0.2rem solid var(--sc-color-border);
+  color: var(--sc-color-text);
+  letter-spacing: normal;
+  text-transform: none;
 }
 .brokerCommandBar {
   display: flex;

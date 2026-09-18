@@ -65,6 +65,8 @@ def _shutdown() -> None:
 
 @app.get("/health")
 def health() -> Dict[str, str]:
+    if not _poller.is_alive():
+        raise HTTPException(status_code=503, detail="Recolector PVE detenido")
     return {"status": "up"}
 
 

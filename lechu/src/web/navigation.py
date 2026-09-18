@@ -14,6 +14,7 @@ class LechuNavigation:
         ("generadores", "/lechu/generadores", False),
         ("proxmox", "/lechu/proxmox", True),
         ("reles MiCOM", "/lechu/reles", False),
+        ("analiz. red", "/lechu/analizadores", False),
         ("mantenimiento", "/lechu/mantenimiento", True),
         ("mensagelo", "/lechu/mensagelo", True),
         ("broker", "/lechu/broker", True),

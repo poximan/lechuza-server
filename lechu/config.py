@@ -44,9 +44,12 @@ LECHU_PORT = _req_int("LECHU_PORT")
 LECHU_DATA_DIR = _req("LECHU_DATA_DIR")
 
 # ---------------------------------------------------------
-# --- Cliente HTTP hacia modbus-collector-service ----------
+# --- Clientes HTTP de dominios Modbus --------------------
 # ---------------------------------------------------------
-MODBUS_COLLECTOR_API_BASE = _req("MODBUS_COLLECTOR_API_BASE")
+GRD_COLLECTOR_API_BASE = _req("GRD_COLLECTOR_API_BASE")
+GENERATOR_COLLECTOR_API_BASE = _req("GENERATOR_COLLECTOR_API_BASE")
+MICOM_COLLECTOR_API_BASE = _req("MICOM_COLLECTOR_API_BASE")
+JANITZA_COLLECTOR_API_BASE = _req("JANITZA_COLLECTOR_API_BASE")
 MODBUS_COLLECTOR_HTTP_TIMEOUT = _req_int("MODBUS_COLLECTOR_HTTP_TIMEOUT")
 MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT = _req_int(
     "MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT"

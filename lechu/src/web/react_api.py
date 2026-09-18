@@ -7,7 +7,6 @@ from flask import Blueprint, jsonify
 import config
 from src.dao.dao_email_health import EmailHealthDao
 from src.dao.dao_mantenimiento import MantenimientoDao
-from src.dao.dao_mensagelo_attempts import MensageloAttemptsDao
 from src.dao.dao_proxmox_cache import ProxmoxCacheDao
 from src.dao.dao_proxmox_view import ProxmoxViewDao
 from src.servicios.broker.broker_service import BrokerService
@@ -19,10 +18,15 @@ from src.servicios.mensagelo.mensagelo_service import MensageloService
 from src.servicios.exemys.exemys_service import ExemysService
 from src.servicios.proxmox.proxmox_service import ProxmoxService
 from src.servicios.reles.reles_service import RelesService
+from src.servicios.analizadores.analizadores_service import AnalizadoresService
+from src.web.analizadores_api import AnalizadoresApi
 from src.web.broker_api import BrokerApi
 from src.web.charito_api import CharitoApi
 from src.web.clients.charito_client import CharitoClient
-from src.web.clients.modbus_client import modbus_client
+from src.web.clients.grd_client import grd_client
+from src.web.clients.generator_client import generator_client
+from src.web.clients.micom_client import micom_client
+from src.web.clients.janitza_client import janitza_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 from src.web.clients.proxmox_client import ProxmoxClient
 from src.web.email_api import EmailApi
@@ -43,7 +47,7 @@ class ReactApi:
         proxmox_client = ProxmoxClient(config.PVE_API_BASE)
         self.exemys_api = ExemysApi(
             service=ExemysService(
-                modbus_client=modbus_client,
+                modbus_client=grd_client,
                 modem_client=modem_link_monitor_client,
             ),
             require_protected=self._require_protected,
@@ -55,7 +59,7 @@ class ReactApi:
             response=self._response,
         )
         self.generadores_api = GeneradoresApi(
-            service=GeneradoresService(modbus_client),
+            service=GeneradoresService(generator_client),
             response=self._response,
         )
         self.proxmox_api = ProxmoxApi(
@@ -68,7 +72,7 @@ class ReactApi:
             response=self._response,
         )
         self.reles_api = RelesApi(
-            service=RelesService(modbus_client),
+            service=RelesService(micom_client),
             require_protected=self._require_protected,
             response=self._response,
         )
@@ -82,9 +86,12 @@ class ReactApi:
             response=self._response,
         )
         self.mensagelo_api = MensageloApi(
-            service=MensageloService(MensageloAttemptsDao()),
+            service=MensageloService(),
             require_protected=self._require_protected,
             response=self._response,
+        )
+        self.analizadores_api = AnalizadoresApi(
+            service=AnalizadoresService(janitza_client), response=self._response
         )
         self.broker_api = BrokerApi(
             service=BrokerService(mqtt_client_manager),
@@ -133,6 +140,9 @@ class ReactApi:
         )
         self.blueprint.add_url_rule(
             "/reles", "reles", self.reles_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/analizadores", "analizadores", self.analizadores_api.get, methods=["GET"]
         )
         self.blueprint.add_url_rule(
             "/reles/observer",

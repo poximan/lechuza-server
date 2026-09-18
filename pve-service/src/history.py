@@ -3,7 +3,7 @@ import math
 import os
 import json
 import threading
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 from . import config as cfg
 from src.utils import timebox

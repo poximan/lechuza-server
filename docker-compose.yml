@@ -47,7 +47,13 @@ services:
     image: lechu:1.0.0
     container_name: lechu
     depends_on:
-      modbus-collector-service:
+      grd-collector-service:
+        condition: service_started
+      generator-collector-service:
+        condition: service_started
+      micom-collector-service:
+        condition: service_started
+      janitza-collector-service:
         condition: service_started
     environment:
       LECHU_DATA_DIR: ${LECHU_DATA_DIR}
@@ -65,7 +71,10 @@ services:
       MENSAGELO_BACKOFF_MAX: ${MENSAGELO_BACKOFF_MAX}
       CHARITO_API_BASE: ${CHARITO_API_BASE}
       PVE_API_BASE: ${PVE_API_BASE}
-      MODBUS_COLLECTOR_API_BASE: ${MODBUS_COLLECTOR_API_BASE}
+      GRD_COLLECTOR_API_BASE: http://grd-collector-service:8087
+      GENERATOR_COLLECTOR_API_BASE: http://generator-collector-service:8088
+      MICOM_COLLECTOR_API_BASE: http://micom-collector-service:8089
+      JANITZA_COLLECTOR_API_BASE: http://janitza-collector-service:8095
       MODBUS_COLLECTOR_HTTP_TIMEOUT: ${MODBUS_COLLECTOR_HTTP_TIMEOUT}
       MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT: ${MODBUS_COLLECTOR_RELAY_HTTP_TIMEOUT}
       MODEM_LINK_MONITOR_URL: ${MODEM_LINK_MONITOR_URL}
@@ -124,7 +133,9 @@ services:
     image: lechu-alarmero-service:1.0.0
     container_name: lechu-alarmero-service
     depends_on:
-      modbus-collector-service:
+      grd-collector-service:
+        condition: service_started
+      generator-collector-service:
         condition: service_started
       pve-service:
         condition: service_started
@@ -225,34 +236,100 @@ services:
       - backend
       - edge
 
-  modbus-collector-service:
+  modbus-transport-service:
+    pids_limit: 256
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: modbus-transport-service/Dockerfile
+    image: lechu-modbus-transport-service:1.0.0
+    container_name: lechu-modbus-transport-service
+    environment:
+      MODBUS_TRANSPORT_API_KEY: ${ALARM_INTERNAL_API_KEY}
+      MODBUS_TRANSPORT_QUEUE_MAXSIZE: 256
+      MODBUS_TRANSPORT_WAIT_TIMEOUT_SECONDS: 170
+      MODBUS_TRANSPORT_ENDPOINTS_JSON: '[{"name":"mw-exemys","host":"${MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST}","port":${MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT},"timeout_seconds":${MODBUS_COLLECTOR_MW_EXEMYS_MB_TIMEOUT_SECONDS},"attempts":${MODBUS_COLLECTOR_MB_READ_ATTEMPTS}},{"name":"edif-fontana","host":"${MODBUS_COLLECTOR_EDIF_FONTANA_MB_HOST}","port":${MODBUS_COLLECTOR_EDIF_FONTANA_MB_PORT},"timeout_seconds":${MODBUS_COLLECTOR_GE_MB_TIMEOUT_SECONDS},"attempts":${MODBUS_COLLECTOR_MB_READ_ATTEMPTS}}]'
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8084:8084"
+    networks:
+      - backend
+      - edge
+
+  grd-collector-service:
     pids_limit: 256
     stop_grace_period: 30s
     logging: *default-logging
     build:
       context: .
-      dockerfile: modbus-collector-service/Dockerfile
-    image: lechu-modbus-collector-service:1.0.0
-    container_name: lechu-modbus-collector-service
+      dockerfile: grd-collector-service/Dockerfile
+    image: lechu-grd-collector-service:1.0.0
+    container_name: lechu-grd-collector-service
+    depends_on:
+      modbus-transport-service:
+        condition: service_started
     environment:
-      MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_HOST}
-      MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_PORT}
-      MODBUS_COLLECTOR_MW_EXEMYS_MB_ID: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_ID}
-      MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT}
-      MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS}
-      MODBUS_COLLECTOR_MW_EXEMYS_MB_TIMEOUT_SECONDS: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_TIMEOUT_SECONDS}
-      MODBUS_COLLECTOR_RELAY_MB_TIMEOUT_SECONDS: ${MODBUS_COLLECTOR_RELAY_MB_TIMEOUT_SECONDS}
-      MODBUS_COLLECTOR_GE_MB_TIMEOUT_SECONDS: ${MODBUS_COLLECTOR_GE_MB_TIMEOUT_SECONDS}
-      MODBUS_COLLECTOR_MB_READ_ATTEMPTS: ${MODBUS_COLLECTOR_MB_READ_ATTEMPTS}
-      MODBUS_COLLECTOR_GRD_FAILURE_THRESHOLD: ${MODBUS_COLLECTOR_GRD_FAILURE_THRESHOLD}
-      MODBUS_RELAY_LATEST_FAULT_ADDRESS: ${MODBUS_RELAY_LATEST_FAULT_ADDRESS}
-      MODBUS_RELAY_FAULT_REGISTER_COUNT: ${MODBUS_RELAY_FAULT_REGISTER_COUNT}
-      MODBUS_COLLECTOR_EDIF_FONTANA_MB_HOST: ${MODBUS_COLLECTOR_EDIF_FONTANA_MB_HOST}
-      MODBUS_COLLECTOR_EDIF_FONTANA_MB_PORT: ${MODBUS_COLLECTOR_EDIF_FONTANA_MB_PORT}
-      MODBUS_COLLECTOR_EDIF_FONTANA_MB_ID: ${MODBUS_COLLECTOR_EDIF_FONTANA_MB_ID}
-      MODBUS_COLLECTOR_DATA_DIR: ${MODBUS_COLLECTOR_DATA_DIR}
-      MODBUS_COLLECTOR_DATABASE_NAME: ${MODBUS_COLLECTOR_DATABASE_NAME}
-      MODBUS_HISTORY_PAGE_SIZE: ${MODBUS_HISTORY_PAGE_SIZE}
+      GRD_DATA_DIR: /app/data
+      GRD_DATABASE_NAME: grdconectados.db
+      GRD_MODBUS_UNIT_ID: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_ID}
+      GRD_MODBUS_REGISTER_COUNT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT}
+      GRD_POLL_INTERVAL_SECONDS: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS}
+      GRD_FAILURE_THRESHOLD: ${MODBUS_COLLECTOR_GRD_FAILURE_THRESHOLD}
+      GRD_HISTORY_PAGE_SIZE: ${MODBUS_HISTORY_PAGE_SIZE}
+      MODBUS_TRANSPORT_BASE_URL: http://modbus-transport-service:8084
+      MODBUS_TRANSPORT_API_KEY: ${ALARM_INTERNAL_API_KEY}
+      MODBUS_TRANSPORT_TIMEOUT_SECONDS: 180
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
+      MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
+      MQTT_BROKER_PASSWORD: ${MQTT_BROKER_PASSWORD}
+      MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
+      MQTT_BROKER_KEEPALIVE: ${MQTT_BROKER_KEEPALIVE}
+      MQTT_RECONNECT_DELAY_MIN: ${MQTT_RECONNECT_DELAY_MIN}
+      MQTT_RECONNECT_DELAY_MAX: ${MQTT_RECONNECT_DELAY_MAX}
+      MQTT_PUBLISH_TIMEOUT_SECONDS: ${MQTT_PUBLISH_TIMEOUT_SECONDS}
+      MQTT_TOPIC_GRADO: ${MQTT_TOPIC_GRADO}
+      MQTT_TOPIC_GRDS: ${MQTT_TOPIC_GRDS}
+      MQTT_PUBLISH_QOS_STATE: ${MQTT_PUBLISH_QOS_STATE}
+      MQTT_PUBLISH_RETAIN_STATE: ${MQTT_PUBLISH_RETAIN_STATE}
+      GLOBAL_THRESHOLD_ROJO: ${GLOBAL_THRESHOLD_ROJO}
+      ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
+    volumes:
+      - ./volumes/grd-collector-service:/app/data
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8087:8087"
+    networks:
+      - backend
+      - edge
+
+  generator-collector-service:
+    pids_limit: 256
+    stop_grace_period: 30s
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: generator-collector-service/Dockerfile
+    image: lechu-generator-collector-service:1.0.0
+    container_name: lechu-generator-collector-service
+    depends_on:
+      modbus-transport-service:
+        condition: service_started
+    environment:
+      GENERATOR_DATA_DIR: /app/data
+      MODBUS_TRANSPORT_BASE_URL: http://modbus-transport-service:8084
+      MODBUS_TRANSPORT_API_KEY: ${ALARM_INTERNAL_API_KEY}
+      MODBUS_TRANSPORT_TIMEOUT_SECONDS: 180
+      GENERATOR_ESTIVARIZ_UNIT_ID: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_ID}
+      GENERATOR_ESTIVARIZ_REGISTER_COUNT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT}
+      GENERATOR_ESTIVARIZ_POLL_INTERVAL_SECONDS: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS}
+      GENERATOR_FONTANA_UNIT_ID: ${MODBUS_COLLECTOR_EDIF_FONTANA_MB_ID}
       EDIF_ESTIVARIZ_GE_GRD_ID: ${EDIF_ESTIVARIZ_GE_GRD_ID}
       EDIF_ESTIVARIZ_GE_REGISTER_OFFSET: ${EDIF_ESTIVARIZ_GE_REGISTER_OFFSET}
       EDIF_ESTIVARIZ_GE_LINE_BIT_INDEX: ${EDIF_ESTIVARIZ_GE_LINE_BIT_INDEX}
@@ -274,19 +351,76 @@ services:
       MQTT_RECONNECT_DELAY_MIN: ${MQTT_RECONNECT_DELAY_MIN}
       MQTT_RECONNECT_DELAY_MAX: ${MQTT_RECONNECT_DELAY_MAX}
       MQTT_PUBLISH_TIMEOUT_SECONDS: ${MQTT_PUBLISH_TIMEOUT_SECONDS}
-      MQTT_TOPIC_GRADO: ${MQTT_TOPIC_GRADO}
-      MQTT_TOPIC_GRDS: ${MQTT_TOPIC_GRDS}
       MQTT_PUBLISH_QOS_STATE: ${MQTT_PUBLISH_QOS_STATE}
       MQTT_PUBLISH_RETAIN_STATE: ${MQTT_PUBLISH_RETAIN_STATE}
-      GLOBAL_THRESHOLD_ROJO: ${GLOBAL_THRESHOLD_ROJO}
       ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
     volumes:
-      - ./volumes/modbus-collector-service:/app/data
+      - ./volumes/generator-collector-service:/app/data
     restart: unless-stopped
     tmpfs:
       - /tmp
     ports:
-      - "127.0.0.1:8084:8084"
+      - "127.0.0.1:8088:8088"
+    networks:
+      - backend
+      - edge
+
+  micom-collector-service:
+    pids_limit: 256
+    stop_grace_period: 30s
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: micom-collector-service/Dockerfile
+    image: lechu-micom-collector-service:1.0.0
+    container_name: lechu-micom-collector-service
+    depends_on:
+      modbus-transport-service:
+        condition: service_started
+    environment:
+      MICOM_DATA_DIR: /app/data
+      MICOM_DATABASE_NAME: micom.db
+      MODBUS_TRANSPORT_BASE_URL: http://modbus-transport-service:8084
+      MODBUS_TRANSPORT_API_KEY: ${ALARM_INTERNAL_API_KEY}
+      MODBUS_TRANSPORT_TIMEOUT_SECONDS: 180
+      MICOM_POLL_INTERVAL_SECONDS: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS}
+    volumes:
+      - ./volumes/micom-collector-service:/app/data
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8089:8089"
+    networks:
+      - backend
+      - edge
+
+  janitza-collector-service:
+    pids_limit: 256
+    stop_grace_period: 30s
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: janitza-collector-service/Dockerfile
+    image: lechu-janitza-collector-service:1.0.0
+    container_name: lechu-janitza-collector-service
+    depends_on:
+      modbus-transport-service:
+        condition: service_started
+    environment:
+      JANITZA_DATA_DIR: /app/data
+      JANITZA_POLL_INTERVAL_SECONDS: 60
+      JANITZA_ANALYZERS_JSON: '[{"id":8,"name":"(SE)et juan XXIII - analizador Janitza CDA03 33KV"},{"id":9,"name":"(SE)et juan XXIII - analizador Janitza CDA02 13,2KV J1"},{"id":10,"name":"(SE)et juan XXIII - analizador Janitza CDA03 13,2KV J2"}]'
+      MODBUS_TRANSPORT_BASE_URL: http://modbus-transport-service:8084
+      MODBUS_TRANSPORT_API_KEY: ${ALARM_INTERNAL_API_KEY}
+      MODBUS_TRANSPORT_TIMEOUT_SECONDS: 180
+    volumes:
+      - ./volumes/janitza-collector-service:/app/data
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8095:8095"
     networks:
       - backend
       - edge

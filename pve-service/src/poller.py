@@ -36,6 +36,9 @@ class Poller:
         if self._thread:
             self._thread.join(timeout=5)
 
+    def is_alive(self) -> bool:
+        return bool(self._thread and self._thread.is_alive())
+
     def _run(self) -> None:
         publish_counter = self._publish_every
         while not self._stop_event.is_set():
@@ -43,8 +46,9 @@ class Poller:
                 snapshot = self._collect()
                 if isinstance(snapshot, tuple):
                     snapshot = snapshot[0]
+                self._on_snapshot(snapshot)
             except Exception as exc:
-                logger.log(f"Error en colecta PVE: {exc}", "PVE/POLL")
+                logger.log(f"Error en ciclo PVE: {exc}", "PVE/POLL")
                 snapshot = {
                     "ts": self._collect_failure_ts(),
                     "node": "desconocido",
@@ -53,9 +57,13 @@ class Poller:
                     "missing": [],
                     "error": str(exc),
                 }
-                self._on_failure(snapshot)
-            else:
-                self._on_snapshot(snapshot)
+                try:
+                    self._on_failure(snapshot)
+                except Exception as failure_error:
+                    logger.log(
+                        f"Error registrando falla PVE: {failure_error}",
+                        "PVE/POLL",
+                    )
             publish_counter -= 1
             if publish_counter <= 0:
                 try:

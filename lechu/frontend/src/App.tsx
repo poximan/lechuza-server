@@ -13,6 +13,7 @@ const PAGE_TITLES: Record<string, string> = {
   generadores: "generadores",
   proxmox: "proxmox",
   reles: "estado reles MiCOM",
+  analizadores: "analiz. red",
   mantenimiento: "mantenimiento",
   mensagelo: "mensagelo",
   broker: "broker mqtt",
@@ -32,13 +33,16 @@ export function App() {
   const [navigation, setNavigation] = useState<NavigationContract | null>(null);
   const [data, setData] = useState<JsonRecord | null>(null);
   const [dataRevision, setDataRevision] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [pageAttention, setPageAttention] = useState(false);
 
-  const load = useCallback(
+  const loadNavigation = useCallback(
     async (signal?: AbortSignal) => {
       try {
         const nextNavigation = await client.navigation(signal);
+        setNavigation(nextNavigation);
+        setNavigationError(null);
         const currentPath = window.location.pathname.replace(/\/$/, "");
         const visiblePage = nextNavigation.items.some(
           (item) => item.href === currentPath,
@@ -49,16 +53,27 @@ export function App() {
             throw new Error("El modo actual no tiene solapas habilitadas");
           }
           window.location.replace(`${firstVisible.href}/`);
-          return;
         }
-        const nextData = await client.page(page, signal);
-        setNavigation(nextNavigation);
-        setData(nextData);
-        setDataRevision((current) => current + 1);
-        setError(null);
       } catch (reason) {
         if (!signal?.aborted)
-          setError(reason instanceof Error ? reason.message : String(reason));
+          setNavigationError(
+            reason instanceof Error ? reason.message : String(reason),
+          );
+      }
+    },
+    [client],
+  );
+
+  const loadPage = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const nextData = await client.page(page, signal);
+        setData(nextData);
+        setDataRevision((current) => current + 1);
+        setPageError(null);
+      } catch (reason) {
+        if (!signal?.aborted)
+          setPageError(reason instanceof Error ? reason.message : String(reason));
       }
     },
     [client, page],
@@ -66,16 +81,20 @@ export function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    void loadNavigation(controller.signal);
+    void loadPage(controller.signal);
     const timer = window.setInterval(
-      () => void load(controller.signal),
+      () => {
+        void loadNavigation(controller.signal);
+        void loadPage(controller.signal);
+      },
       navigation?.refresh_ms ?? 10_000,
     );
     return () => {
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [load, navigation?.refresh_ms]);
+  }, [loadNavigation, loadPage, navigation?.refresh_ms]);
 
   return (
     <AppShell productName="lechuza-server" sectionName="Comunicaciones">
@@ -104,13 +123,19 @@ export function App() {
           ))}
         </nav>
 
-        {error && (
+        {navigationError && (
           <div className={styles.error} role="alert">
-            <strong>No se pudo actualizar la vista.</strong>
-            <span>{error}</span>
+            <strong>No se pudo actualizar la navegación.</strong>
+            <span>{navigationError}</span>
           </div>
         )}
-        {!data && !error && (
+        {pageError && (
+          <div className={styles.error} role="alert">
+            <strong>No se pudo actualizar la vista.</strong>
+            <span>{pageError}</span>
+          </div>
+        )}
+        {!data && !pageError && (
           <p className={styles.loading}>Cargando estado operativo…</p>
         )}
         {data && (
@@ -121,7 +146,7 @@ export function App() {
             <PageRenderer
               client={client}
               data={data}
-              onChanged={() => load()}
+              onChanged={() => loadPage()}
               page={page}
               protectedMode={navigation?.mode === "protected"}
               onAttentionChange={setPageAttention}

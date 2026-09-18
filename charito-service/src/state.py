@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
@@ -30,10 +32,22 @@ class StateStore:
 
     def _persist(self) -> None:
         snapshot = {"ts": _AUTH.utc_iso(), "items": list(self._items.values())}
-        self._data_path.write_text(
-            json.dumps(snapshot, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self._data_path.parent,
+                delete=False,
+            ) as handle:
+                temporary = handle.name
+                json.dump(snapshot, handle, ensure_ascii=False, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, self._data_path)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.remove(temporary)
 
     def upsert_observation(self, payload: Dict, key_hint: Optional[str] = None, alias: Optional[str] = None) -> None:
         instance_id = str(payload.get("instanceId") or "").strip()

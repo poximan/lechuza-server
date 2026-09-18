@@ -5,6 +5,7 @@ import { JsonContractReader } from "../contracts/JsonContractReader";
 import { OperationalFormatter } from "../contracts/OperationalFormatter";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { RelayDisturbanceSelector } from "../components/RelayDisturbanceSelector";
+import { RelayDisturbanceHelpModal } from "../components/RelayDisturbanceHelpModal";
 import { RelaySynchronizationModal } from "../components/RelaySynchronizationModal";
 import {
   RelayModbusQueries,
@@ -69,6 +70,10 @@ export function RelaysPage({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [openStatusDetails, setOpenStatusDetails] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [synchronizingRelay, setSynchronizingRelay] = useState<{
     description: string;
     id: number;
@@ -86,9 +91,26 @@ export function RelaysPage({
       setPending(false);
     }
   }
+  function toggleStatusDetails(relayId: number): void {
+    setOpenStatusDetails((current) => {
+      const next = new Set(current);
+      if (next.has(relayId)) next.delete(relayId);
+      else next.add(relayId);
+      return next;
+    });
+  }
   return (
     <div className={styles.stack}>
       <div className={styles.relayControls}>
+        <Button
+          aria-label="Ayuda sobre la lectura de perturbaciones MiCOM"
+          className={styles.helpButton}
+          onClick={() => setHelpOpen(true)}
+          title="Cómo se leen las perturbaciones MiCOM"
+          variant="secondary"
+        >
+          ?
+        </Button>
         <ToggleSwitch
           checked={enabled}
           disabled={pending || !protectedMode}
@@ -121,6 +143,8 @@ export function RelaysPage({
               item.id_modbus,
               `reles.faults.items[${index}].id_modbus`,
             );
+            const statusDetailsId = `relay-${String(relayId)}-modbus-status`;
+            const statusDetailsOpen = openStatusDetails.has(relayId);
             const description = reader.string(
               item.description,
               `reles.faults.items[${index}].description`,
@@ -133,7 +157,7 @@ export function RelaysPage({
               item.latest ?? {},
               `reles.faults.items[${index}].latest`,
             );
-            const faultNumber = reader.optionalNumber(
+            reader.optionalNumber(
               latest.numero_falla,
               `reles.faults.items[${index}].latest.numero_falla`,
             );
@@ -279,10 +303,17 @@ export function RelaysPage({
                     </tbody>
                   </table>
                 </div>
-                <RelayModbusQueries queries={queries} />
+                <RelayModbusQueries
+                  detailsId={statusDetailsId}
+                  detailsOpen={statusDetailsOpen}
+                  onToggleDetails={() => toggleStatusDetails(relayId)}
+                  queries={queries}
+                />
                 <RelayDisturbanceSelector
                   client={client}
                   relayId={relayId}
+                  showStatusDetails={statusDetailsOpen}
+                  statusDetailsId={statusDetailsId}
                 />
               </Card>
             );
@@ -296,6 +327,9 @@ export function RelaysPage({
           relayId={synchronizingRelay.id}
           request={synchronizingRelay.request}
         />
+      )}
+      {helpOpen && (
+        <RelayDisturbanceHelpModal onClose={() => setHelpOpen(false)} />
       )}
     </div>
   );

@@ -46,7 +46,11 @@ class MantenimientoService:
                 {
                     "servicio": item.servicio,
                     "interno": item.interno,
-                    "externo": f"{self.public_base_url}{item.externo_path}",
+                    "externo": (
+                        f"{self.public_base_url}{item.externo_path}"
+                        if item.externo_path is not None
+                        else None
+                    ),
                     "localhost": item.localhost,
                 }
                 for item in catalog.port_mappings

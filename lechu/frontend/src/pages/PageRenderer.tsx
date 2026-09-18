@@ -9,6 +9,7 @@ import { MaintenancePage } from "./mantenimiento/MaintenancePage";
 import { MensageloPage } from "./MensageloPage";
 import { ProxmoxPage } from "./ProxmoxPage";
 import { RelaysPage } from "./RelaysPage";
+import { NetworkAnalyzersPage } from "./NetworkAnalyzersPage";
 
 export interface PageRendererProps {
   client: LechuApiClient;
@@ -47,6 +48,8 @@ export function PageRenderer({
           protectedMode={protectedMode}
         />
       );
+    case "analizadores":
+      return <NetworkAnalyzersPage data={data} />;
     case "mantenimiento":
       return <MaintenancePage data={data} />;
     case "mensagelo":

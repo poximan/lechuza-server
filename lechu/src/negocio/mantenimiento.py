@@ -40,15 +40,20 @@ class TelefonoMantenimiento:
 class MapeoPuertoMantenimiento:
     servicio: str
     interno: str
-    externo_path: str
+    externo_path: str | None
     localhost: str
 
     @classmethod
     def from_source(cls, source: Any, context: str) -> "MapeoPuertoMantenimiento":
         item = _record(source, context)
-        externo_path = _text(item.get("externo_path"), f"{context}.externo_path")
-        if not externo_path.startswith("/"):
-            raise ValueError(f"{context}.externo_path debe comenzar con /")
+        externo_path_source = item.get("externo_path")
+        externo_path = (
+            None
+            if externo_path_source is None
+            else _text(externo_path_source, f"{context}.externo_path")
+        )
+        if externo_path is not None and not externo_path.startswith("/"):
+            raise ValueError(f"{context}.externo_path debe comenzar con / o ser nulo")
         return cls(
             servicio=_text(item.get("servicio"), f"{context}.servicio"),
             interno=_text(item.get("interno"), f"{context}.interno"),

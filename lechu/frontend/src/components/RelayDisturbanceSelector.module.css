@@ -1,0 +1,18 @@
+.statusDetails {
+  display: grid;
+  gap: var(--sc-space-2);
+  margin-top: var(--sc-space-3);
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+
+.statusDetails[hidden] {
+  display: none;
+}
+
+.statusDetails p {
+  margin: 0;
+  color: var(--sc-color-text-muted);
+}

@@ -4,13 +4,6 @@ from typing import List, Optional, Tuple
 
 import requests
 
-from src.dao.dao_mensagelo_attempts import record_mensagelo_attempt
-
-
-class MensageloError(Exception):
-    pass
-
-
 class MensageloClient:
     """
     Cliente HTTP para mensagelo.
@@ -60,17 +53,6 @@ class MensageloClient:
             "Idempotency-Key": key,
         }
 
-        def finish(ok: bool, msg: str) -> Tuple[bool, str]:
-            record_mensagelo_attempt(
-                ok=ok,
-                recipients=recipients,
-                subject=subject,
-                body=body,
-                message_type=message_type,
-                detail=msg,
-            )
-            return ok, msg
-
         attempt = 0
         backoff = self.backoff_initial
         while True:
@@ -87,22 +69,19 @@ class MensageloClient:
                     time.sleep(min(backoff, self.backoff_max))
                     backoff = min(backoff * 2.0, self.backoff_max)
                     continue
-                return finish(
-                    False,
-                    f"error de red o timeout tras {attempt} intentos: {exc}",
-                )
+                return False, f"error de red o timeout tras {attempt} intentos: {exc}"
 
             if response.status_code == 202:
                 try:
                     data = response.json()
                 except ValueError:
-                    return finish(False, "respuesta 202 sin JSON valido")
+                    return False, "respuesta 202 sin JSON valido"
                 ok = bool(data.get("ok")) and bool(data.get("queued"))
                 message = str(data.get("message", ""))
-                return finish(ok, message or "pedido aceptado")
+                return ok, message or "pedido aceptado"
 
             if response.status_code in (401, 403):
-                return finish(False, "no autorizado: ver API key")
+                return False, "no autorizado: ver API key"
 
             if response.status_code in (429, 503):
                 if attempt <= self.max_retries:
@@ -113,10 +92,38 @@ class MensageloClient:
                     detail = response.json().get("detail", "")
                 except Exception:
                     detail = response.text
-                return finish(False, f"servicio saturado: {detail}")
+                return False, f"servicio saturado: {detail}"
 
             try:
                 detail = response.json()
             except Exception:
                 detail = response.text
-            return finish(False, f"error http {response.status_code}: {detail}")
+            return False, f"error http {response.status_code}: {detail}"
+
+    def list_messages(self, limit: int | None = None) -> list[dict]:
+        requested = None if limit is None else max(1, int(limit))
+        result: list[dict] = []
+        page_size = min(200, requested) if requested is not None else 200
+        while requested is None or len(result) < requested:
+            response = requests.get(
+                f"{self.base_url}/internal/messages",
+                headers={"X-API-Key": self.api_key},
+                params={"limit": page_size, "offset": len(result)},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            items = payload.get("items") if isinstance(payload, dict) else None
+            total = payload.get("total") if isinstance(payload, dict) else None
+            if (
+                not isinstance(items, list)
+                or any(not isinstance(item, dict) for item in items)
+                or type(total) is not int
+            ):
+                raise RuntimeError("Contrato de historial Mensagelo invalido")
+            result.extend(items)
+            if not items or len(result) >= total:
+                break
+            if requested is not None:
+                page_size = min(200, requested - len(result))
+        return result if requested is None else result[:requested]

@@ -9,7 +9,11 @@ pertenece a `platform`; este Compose consume `servicoop-edge-net` y crea
 | Servicio | Responsabilidad | Puerto publicado |
 |---|---|---:|
 | `lechu` | UI/API y composición de vistas | `127.0.0.1:8052` |
-| `modbus-collector-service` | GRD, generadores y relés MiCOM | `127.0.0.1:8084` |
+| `modbus-transport-service` | Cola FIFO y único dueño de los sockets Modbus/TCP | `127.0.0.1:8084` |
+| `grd-collector-service` | Estado e histórico de conexiones GRD | `127.0.0.1:8087` |
+| `generator-collector-service` | Grupos electrógenos Estivariz y Fontana | `127.0.0.1:8088` |
+| `micom-collector-service` | Fallas y perturbaciones de relés MiCOM | `127.0.0.1:8089` |
+| `janitza-collector-service` | Magnitudes de analizadores Janitza UMG96S | `127.0.0.1:8095` |
 | `pve-service` | Estado e histórico Proxmox | `127.0.0.1:8083` |
 | `charito-service` | Estado consolidado de `charo-daemon` | interno |
 | `modem-link-monitor` | Estado del enlace del módem | `127.0.0.1:8086` |
@@ -26,7 +30,10 @@ Rutas públicas declaradas en `platform/edge-platform/edge-gateway/config/routes
 ```text
 /lechu/       UI y API de operación
 /alarmero/    UI protegida de alarmas
-/api/         contratos HTTP del colector
+/api/grd/     contrato GRD
+/api/ge/      contrato de grupos electrógenos
+/api/reles/   contrato MiCOM
+/api/analizadores/ contrato Janitza
 /pve/         contrato HTTP de Proxmox
 /router/      compatibilidad del monitor de módem
 ```
@@ -68,12 +75,16 @@ forma parte del catálogo.
 
 ## Modbus y MiCOM
 
-`modbus-collector-service` comparte una cola FIFO por endpoint físico entre MW/GRD,
-relés MiCOM y GE Estivariz; GE Fontana usa su propio endpoint. Solo hay una consulta
-en vuelo por endpoint, incluidos sus reintentos. El transporte es de lectura exclusiva.
+`modbus-transport-service` mantiene una cola FIFO por endpoint físico para GRD,
+MiCOM, Janitza y GE Estivariz; GE Fontana usa su propio endpoint. Solo hay una
+consulta en vuelo por endpoint, incluidos sus reintentos. Los colectores de dominio
+no abren sockets Modbus y el transporte es de lectura exclusiva.
 
-La base única `grdconectados.db` debe existir con esquema `8`; el runtime valida
-el contrato y no altera tablas. Las capturas se separan de `fallas_reles` en
+La migración heredada está cerrada. GRD es dueño exclusivo de `grdconectados.db`
+y MiCOM de `micom.db`; cada servicio crea una base vacía cuando falta y valida
+versión, tablas, columnas, claves e integridad antes de iniciar. GRD conserva
+íntegros `grd`, `historicos` y `grd_estado_actual`, mientras MiCOM conserva su
+catálogo, fallas y perturbaciones. Las capturas se separan de `fallas_reles` en
 `osciloperturbogramas_reles`; `actualizacion_registros_reles` guarda vencimiento y
 errores de descarga. Se conservan los registros disponibles en el relé (hasta
 cinco), con UTC explícito para evento y descarga. Solo la pantalla convierte a
@@ -96,7 +107,14 @@ Para MiCOM:
   después de cinco minutos y reutilizan capturas completas vigentes;
 - `services/relay_monitoring.py` coordina el ciclo; `relay_metadata.py` mantiene
   parámetros; `relay_query_diagnostics.py` agrega diagnósticos; el lector MiCOM
-  traduce el protocolo y `modbus/channel_queue.py` serializa el transporte.
+  traduce el protocolo y el servicio de transporte serializa el canal.
+
+Los Janitza UMG96S con IDs 8, 9 y 10 se consultan secuencialmente mediante función
+03. Se leen tensiones y corrientes desde el offset 200 y potencias totales activa,
+reactiva y aparente desde el offset 279. Las relaciones TC/TP se leen una sola vez
+desde los registros 600..603, se validan, se persisten por equipo y luego se usan
+sin política de actualización. El último valor válido se conserva en un archivo
+JSON atómico y todas las estampas se guardan en UTC.
 
 
 APIs principales:
@@ -111,6 +129,7 @@ GET  /api/reles/{id_modbus}/disturbances
 GET  /api/reles/{id_modbus}/disturbances/{registro}
 GET  /internal/v1/modbus/channels
 GET  /api/ge/{edificio}/status
+GET  /api/analizadores
 GET  /api/v1/alarms/catalog
 GET  /api/v1/alarms/events
 POST /api/v1/alarms/events/ack
@@ -123,8 +142,9 @@ POST /api/reles/observer
 
 Los volúmenes son `./volumes/{servicio}`. `mensagelo` persiste solicitudes antes de
 responder `202`, exige `Idempotency-Key` en `/send_async` y evita reintentos SMTP
-ambiguos. `lechu` expone por RPC `get_email_events` los últimos intentos conocidos
-para clientes como Panelito; no expone cuerpo ni destinatarios.
+ambiguos. `lechu` muestra ese historial durable y expone por RPC
+`get_email_events` los últimos despachos para clientes como Panelito; no expone
+cuerpo ni destinatarios por MQTT.
 
 ## Configuración
 

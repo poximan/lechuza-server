@@ -3,26 +3,27 @@ import sys
 import unittest
 
 
-SERVICE_ROOT = Path(__file__).resolve().parents[1] / "modbus-collector-service"
+SERVICE_ROOT = Path(__file__).resolve().parents[1] / "micom-collector-service"
 sys.path.insert(0, str(SERVICE_ROOT))
 
 from src.modbus.micom_relay_reader import MicomRelayReader
+from src.modbus.modbus_driver import ModbusReadResult
 
 
 class FakeReadOnlyDriver:
     def __init__(self):
         self.calls: list[tuple[int, int, int]] = []
 
-    def read_holding_registers(
+    def read_holding_registers_result(
         self,
         address: int,
         count: int,
         relay_id: int,
-    ) -> list[int]:
+    ) -> ModbusReadResult:
         self.calls.append((address, count, relay_id))
         words = [0] * count
         words[0] = address - 14080
-        return words
+        return ModbusReadResult(words)
 
     def disconnect(self) -> None:
         pass

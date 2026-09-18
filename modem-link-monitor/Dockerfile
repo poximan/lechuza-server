@@ -19,7 +19,7 @@ COPY --chown=1000:1000 modem-link-monitor/src /app/src
 
 ENV PYTHONPATH=/app:/shared \
     PYTHONUNBUFFERED=1 \
-    TZ=America/Argentina/Buenos_Aires
+    TZ=UTC
 
 EXPOSE 8086
 

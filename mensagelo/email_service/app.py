@@ -148,6 +148,16 @@ def list_alarm_dispatches(
     _auth_or_401(x_api_key)
     return {"dispatches": db.list_dispatches("alarm_event", limit)}
 
+@app.get("/internal/messages")
+def list_messages(
+    limit: int = 200,
+    offset: int = 0,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    _auth_or_401(x_api_key)
+    items, total = db.list_messages(limit, offset)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
 @app.get("/health")
 def health():
     if worker is None or not worker.is_alive() or worker.last_error:

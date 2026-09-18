@@ -1,0 +1,39 @@
+import os
+
+
+def req(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise EnvironmentError(f"Falta variable obligatoria: {name}")
+    return value
+
+
+MW_EXEMYS = {
+    "unit_id": int(req("GRD_MODBUS_UNIT_ID")),
+    "register_count": int(req("GRD_MODBUS_REGISTER_COUNT")),
+    "interval_seconds": int(req("GRD_POLL_INTERVAL_SECONDS")),
+}
+MODBUS_TRANSPORT_BASE_URL = req("MODBUS_TRANSPORT_BASE_URL")
+MODBUS_TRANSPORT_API_KEY = req("MODBUS_TRANSPORT_API_KEY")
+MODBUS_TRANSPORT_TIMEOUT_SECONDS = int(req("MODBUS_TRANSPORT_TIMEOUT_SECONDS"))
+GRD_FAILURE_THRESHOLD = int(req("GRD_FAILURE_THRESHOLD"))
+HISTORY_PAGE_SIZE = int(req("GRD_HISTORY_PAGE_SIZE"))
+GLOBAL_RED_THRESHOLD = float(req("GLOBAL_THRESHOLD_ROJO"))
+ALARM_INTERNAL_API_KEY = req("ALARM_INTERNAL_API_KEY")
+DATA_DIR = os.path.abspath(req("GRD_DATA_DIR"))
+ALARM_OUTBOX_FILE = os.path.join(DATA_DIR, "alarm-events.json")
+
+MQTT_BROKER_HOST = req("MQTT_BROKER_HOST")
+MQTT_BROKER_PORT = int(req("MQTT_BROKER_PORT"))
+MQTT_BROKER_USERNAME = req("MQTT_BROKER_USERNAME")
+MQTT_BROKER_PASSWORD = req("MQTT_BROKER_PASSWORD")
+MQTT_BROKER_USE_TLS = req("MQTT_BROKER_USE_TLS").lower() in {"1", "true", "yes", "on"}
+MQTT_TLS_INSECURE = req("MQTT_TLS_INSECURE").lower() in {"1", "true", "yes", "on"}
+MQTT_KEEPALIVE = int(req("MQTT_BROKER_KEEPALIVE"))
+MQTT_RECONNECT_DELAY_MIN = int(req("MQTT_RECONNECT_DELAY_MIN"))
+MQTT_RECONNECT_DELAY_MAX = int(req("MQTT_RECONNECT_DELAY_MAX"))
+MQTT_PUBLISH_TIMEOUT_SECONDS = int(req("MQTT_PUBLISH_TIMEOUT_SECONDS"))
+MQTT_TOPIC_GRADO = req("MQTT_TOPIC_GRADO")
+MQTT_TOPIC_GRDS = req("MQTT_TOPIC_GRDS")
+MQTT_PUBLISH_QOS_STATE = int(req("MQTT_PUBLISH_QOS_STATE"))
+MQTT_PUBLISH_RETAIN_STATE = req("MQTT_PUBLISH_RETAIN_STATE").lower() in {"1", "true", "yes", "on"}

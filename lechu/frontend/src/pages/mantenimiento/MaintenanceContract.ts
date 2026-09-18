@@ -12,7 +12,7 @@ export interface MaintenancePhone {
 }
 
 export interface MaintenancePortMapping {
-  external: string;
+  external: string | null;
   internal: string;
   localhost: string;
   service: string;
@@ -77,7 +77,7 @@ export function readMaintenanceContract(data: JsonRecord): MaintenanceContract {
       general: readPhones(phones, "general"),
     },
     portMappings: portMappings.map((item, index) => ({
-      external: reader.string(
+      external: reader.optionalString(
         item.externo,
         mappingContext(index, "externo"),
       ),

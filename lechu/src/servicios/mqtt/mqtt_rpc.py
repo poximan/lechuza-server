@@ -15,8 +15,8 @@ from src.logger import Logosaurio
 from src.utils import timebox
 from src.servicios.email.mensagelo_client import MensageloClient
 from src.servicios.mqtt import mqtt_event_bus
-from src.dao.dao_mensagelo_attempts import MensageloAttemptsDao
-from src.web.clients.modbus_client import modbus_client
+from src.web.clients.grd_client import grd_client
+from src.web.clients.generator_client import generator_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 import config
 
@@ -197,7 +197,7 @@ class MqttRequestRouter:
         """
 
         try:
-            summary_payload = modbus_client.get_summary()
+            summary_payload = grd_client.get_summary()
         except Exception as exc:
             self.log.log(
                 f"RPC global status fallo: {exc}",
@@ -242,10 +242,10 @@ class MqttRequestRouter:
 
     def _handle_get_ge_status(self, corr: str, reply_to: str):
         """
-        devuelve el estado vigente de interruptores GE desde modbus-collector-service
+        devuelve el estado vigente de interruptores desde el colector de generadores
         """
         try:
-            data = modbus_client.get_ge_status()
+            data = generator_client.get_ge_status()
         except Exception as exc:
             self._emit_error(corr, reply_to, "get_ge_status", str(exc))
             return
@@ -255,14 +255,14 @@ class MqttRequestRouter:
     def _handle_get_email_events(self, corr: str, reply_to: str):
         """Devuelve los ultimos intentos de correo sin exponer cuerpo ni destinatarios."""
         try:
-            attempts = MensageloAttemptsDao().latest()
+            attempts = self._mail_client.list_messages(limit=50)
             items = [
                 {
                     "type": "email",
                     "subject": str(item.get("subject") or ""),
-                    "ok": bool(item.get("ok")),
-                    "ts": str(item.get("ts") or ""),
-                    "detail": str(item.get("detail") or ""),
+                    "ok": item.get("status") == "sent",
+                    "ts": str(item.get("updated_at") or item.get("created_at") or ""),
+                    "detail": str(item.get("last_error") or item.get("status") or ""),
                 }
                 for item in attempts
             ]
@@ -455,8 +455,6 @@ class MqttRequestRouter:
             source=self._origen,
 
         )
-
-
 
 
 
