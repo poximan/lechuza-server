@@ -79,7 +79,7 @@ export function RelayModbusQueries({
       <div className={styles.queriesHeader}>
         <strong>Últimas consultas Modbus</strong>
         <Button
-          aria-controls={detailsId}
+          aria-controls={`${detailsId}-queries ${detailsId}`}
           aria-expanded={detailsOpen}
           onClick={onToggleDetails}
           variant="ghost"
@@ -87,83 +87,89 @@ export function RelayModbusQueries({
           {detailsOpen ? "Ocultar detalle" : "Ver detalle"}
         </Button>
       </div>
-      {queries.length === 0 ? (
-        <p>Todavía no salió ninguna consulta para este relé.</p>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Hora</th>
-                <th>Dirección</th>
-                <th>Palabras</th>
-                <th>Resultado</th>
-                <th>Duración</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queries.map((query, index) => {
-                const context = `reles.modbus_queries[${index}]`;
-                const timestamp = reader.string(
-                  query.timestamp,
-                  `${context}.timestamp`,
-                );
-                const address = reader.string(
-                  query.address,
-                  `${context}.address`,
-                );
-                const count = reader.number(query.count, `${context}.count`);
-                const receivedCount = reader.optionalNumber(
-                  query.received_count,
-                  `${context}.received_count`,
-                );
-                const status = reader.string(
-                  query.status,
-                  `${context}.status`,
-                );
-                const exceptionCode = reader.optionalNumber(
-                  query.exception_code,
-                  `${context}.exception_code`,
-                );
-                const durationMs = reader.number(
-                  query.duration_ms,
-                  `${context}.duration_ms`,
-                );
-                const statusLabel = statusLabels[status];
-                if (statusLabel === undefined) {
-                  throw new Error(
-                    `Contrato inválido: estado Modbus desconocido ${status}`,
+      <div
+        className={styles.queryDetails}
+        hidden={!detailsOpen}
+        id={`${detailsId}-queries`}
+      >
+        {queries.length === 0 ? (
+          <p>Todavía no salió ninguna consulta para este relé.</p>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th>Dirección</th>
+                  <th>Palabras</th>
+                  <th>Resultado</th>
+                  <th>Duración</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queries.map((query, index) => {
+                  const context = `reles.modbus_queries[${index}]`;
+                  const timestamp = reader.string(
+                    query.timestamp,
+                    `${context}.timestamp`,
                   );
-                }
-                return (
-                  <tr key={`${timestamp}:${address}:${index}`}>
-                    <td>{time.formatInstant(timestamp)}</td>
-                    <td><code>{address}</code></td>
-                    <td>
-                      {receivedCount === null
-                        ? String(count)
-                        : `${String(receivedCount)}/${String(count)}`}
-                    </td>
-                    <td
-                      className={
-                        status === "ok" || status === "sin_registros"
-                          ? styles.statusOk
-                          : styles.statusError
-                      }
-                    >
-                      {statusLabel}
-                      {exceptionCode === null
-                        ? ""
-                        : ` 0x${exceptionCode.toString(16).toUpperCase().padStart(2, "0")}`}
-                    </td>
-                    <td>{durationMs.toFixed(1)} ms</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  const address = reader.string(
+                    query.address,
+                    `${context}.address`,
+                  );
+                  const count = reader.number(query.count, `${context}.count`);
+                  const receivedCount = reader.optionalNumber(
+                    query.received_count,
+                    `${context}.received_count`,
+                  );
+                  const status = reader.string(
+                    query.status,
+                    `${context}.status`,
+                  );
+                  const exceptionCode = reader.optionalNumber(
+                    query.exception_code,
+                    `${context}.exception_code`,
+                  );
+                  const durationMs = reader.number(
+                    query.duration_ms,
+                    `${context}.duration_ms`,
+                  );
+                  const statusLabel = statusLabels[status];
+                  if (statusLabel === undefined) {
+                    throw new Error(
+                      `Contrato inválido: estado Modbus desconocido ${status}`,
+                    );
+                  }
+                  return (
+                    <tr key={`${timestamp}:${address}:${index}`}>
+                      <td>{time.formatInstant(timestamp)}</td>
+                      <td><code>{address}</code></td>
+                      <td>
+                        {receivedCount === null
+                          ? String(count)
+                          : `${String(receivedCount)}/${String(count)}`}
+                      </td>
+                      <td
+                        className={
+                          status === "ok" || status === "sin_registros"
+                            ? styles.statusOk
+                            : styles.statusError
+                        }
+                      >
+                        {statusLabel}
+                        {exceptionCode === null
+                          ? ""
+                          : ` 0x${exceptionCode.toString(16).toUpperCase().padStart(2, "0")}`}
+                      </td>
+                      <td>{durationMs.toFixed(1)} ms</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

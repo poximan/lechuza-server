@@ -12,6 +12,10 @@ from . import config, db
 _TIME = get_time_authority()
 _STOP = threading.Event()
 _THREAD: threading.Thread | None = None
+_SOURCE_SESSION = requests.Session()
+_MENSAGELO_SESSION = requests.Session()
+_CATALOG_ETAGS: dict[str, str] = {}
+_ACKNOWLEDGED_CURSORS: dict[str, int] = {}
 _STATUS_LOCK = threading.Lock()
 _STATUS: dict[str, Any] = {
     "state": "starting",
@@ -31,8 +35,14 @@ def _mensagelo_headers(dispatch_id: str | None = None) -> dict[str, str]:
     return headers
 
 
-def _get_json(url: str, *, headers: dict[str, str], params=None) -> dict[str, Any]:
-    response = requests.get(
+def _get_json(
+    session: requests.Session,
+    url: str,
+    *,
+    headers: dict[str, str],
+    params=None,
+) -> dict[str, Any]:
+    response = session.get(
         url,
         headers=headers,
         params=params,
@@ -45,11 +55,22 @@ def _get_json(url: str, *, headers: dict[str, str], params=None) -> dict[str, An
     return payload
 
 
-def _sync_source(source: config.AlarmSource) -> None:
-    catalog = _get_json(
+def _sync_catalog(source: config.AlarmSource) -> None:
+    headers = _source_headers()
+    known_etag = _CATALOG_ETAGS.get(source.source_id)
+    if known_etag is not None:
+        headers["If-None-Match"] = known_etag
+    response = _SOURCE_SESSION.get(
         f"{source.base_url}/api/v1/alarms/catalog",
-        headers=_source_headers(),
+        headers=headers,
+        timeout=config.HTTP_TIMEOUT_SECONDS,
     )
+    if response.status_code == 304:
+        return
+    response.raise_for_status()
+    catalog = response.json()
+    if not isinstance(catalog, dict):
+        raise ValueError(f"Catalogo invalido de {source.source_id}")
     if catalog.get("source_id") != source.source_id:
         raise ValueError(
             f"Identidad invalida para fuente {source.source_id}: {catalog.get('source_id')}"
@@ -67,10 +88,18 @@ def _sync_source(source: config.AlarmSource) -> None:
             f"Catalogo con claves invalidas o repetidas de {source.source_id}"
         )
     db.ingest_catalog(source.source_id, alarms)
+    etag = response.headers.get("ETag")
+    if etag:
+        _CATALOG_ETAGS[source.source_id] = etag
+
+
+def _sync_source(source: config.AlarmSource) -> None:
+    _sync_catalog(source)
 
     cursor = db.get_source_cursor(source.source_id)
     while True:
         response = _get_json(
+            _SOURCE_SESSION,
             f"{source.base_url}/api/v1/alarms/events",
             headers=_source_headers(),
             params={"after_event_id": cursor, "limit": 1000},
@@ -84,14 +113,15 @@ def _sync_source(source: config.AlarmSource) -> None:
         if not isinstance(has_more, bool):
             raise ValueError(f"Paginacion invalida de {source.source_id}")
         cursor = db.ingest_events(source.source_id, events)
-        if cursor > 0:
-            acknowledgement = requests.post(
+        if cursor > _ACKNOWLEDGED_CURSORS.get(source.source_id, 0):
+            acknowledgement = _SOURCE_SESSION.post(
                 f"{source.base_url}/api/v1/alarms/events/ack",
                 headers=_source_headers(),
                 json={"through_event_id": cursor},
                 timeout=config.HTTP_TIMEOUT_SECONDS,
             )
             acknowledgement.raise_for_status()
+            _ACKNOWLEDGED_CURSORS[source.source_id] = cursor
         if not has_more:
             break
     db.initialize_catalog_baselines(source.source_id)
@@ -101,7 +131,7 @@ def _dispatch_pending() -> None:
     for item in db.pending_dispatches():
         dispatch_id = str(item["dispatch_id"])
         try:
-            response = requests.post(
+            response = _MENSAGELO_SESSION.post(
                 f"{config.MENSAGELO_BASE_URL}/send_async",
                 headers=_mensagelo_headers(dispatch_id),
                 json={
@@ -125,6 +155,7 @@ def _dispatch_pending() -> None:
 
 def _sync_dispatch_results() -> None:
     response = _get_json(
+        _MENSAGELO_SESSION,
         f"{config.MENSAGELO_BASE_URL}/internal/dispatches",
         headers=_mensagelo_headers(),
         params={"limit": 5000},
@@ -176,6 +207,8 @@ def _run() -> None:
                     last_error=None,
                 )
         _STOP.wait(config.POLL_INTERVAL_SECONDS)
+    _SOURCE_SESSION.close()
+    _MENSAGELO_SESSION.close()
 
 
 def start() -> None:

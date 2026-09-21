@@ -19,12 +19,13 @@ class GrdMiddlewareClient:
     """Monitorea GRD, persiste transiciones y publica snapshots MQTT."""
 
     CATALOG_REFRESH_SECONDS = 300
+    STATE_WORD_OFFSET = 15
 
     def __init__(
         self,
         modbus_driver: ModbusTcpReadOnlyDriver,
         default_unit_id: int,
-        register_count: int,
+        register_stride: int,
         refresh_interval: int,
         logger: Logosaurio,
         mqtt_publisher: GrdMqttPublisher,
@@ -34,7 +35,11 @@ class GrdMiddlewareClient:
     ):
         self.driver = modbus_driver
         self.default_unit_id = default_unit_id
-        self.register_count = register_count
+        if register_stride <= self.STATE_WORD_OFFSET:
+            raise ValueError(
+                "El paso de registros GRD debe incluir la palabra de estado"
+            )
+        self.register_stride = register_stride
         self.refresh_interval = refresh_interval
         self.logger = logger
         self.publisher = mqtt_publisher
@@ -110,15 +115,18 @@ class GrdMiddlewareClient:
                 )
 
     def _read_grd_state(self, grd_id: int, description: str, timestamp: str) -> int | None:
-        address = (grd_id - 1) * self.register_count
+        address = (
+            (grd_id - 1) * self.register_stride
+            + self.STATE_WORD_OFFSET
+        )
         registers = self.driver.read_input_registers(
             address,
-            self.register_count,
+            1,
             unit_id=self.default_unit_id,
         )
-        if registers is not None and len(registers) >= 16:
+        if registers is not None and len(registers) == 1:
             self.state_registry.mark_read_success(grd_id)
-            return self.get_bit(int(registers[15]), 0)
+            return self.get_bit(int(registers[0]), 0)
 
         failures = self.state_registry.mark_read_failure(grd_id, timestamp)
         self.logger.log(

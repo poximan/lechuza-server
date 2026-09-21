@@ -25,6 +25,9 @@
   justify-content: space-between;
   gap: var(--sc-space-3);
 }
+.queryDetails[hidden] {
+  display: none;
+}
 .queries p {
   margin: 0;
   color: var(--sc-color-text-muted);

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from contextlib import contextmanager
+import hashlib
 import hmac
 import json
 import os
@@ -12,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 
 
 _IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
@@ -296,9 +298,23 @@ def create_alarm_generator_router(
     @router.get("/catalog")
     def catalog(
         x_api_key: str | None = Header(None, alias="X-API-Key"),
-    ) -> dict[str, Any]:
+        if_none_match: str | None = Header(None, alias="If-None-Match"),
+    ) -> Response:
         authorize(x_api_key)
-        return outbox.catalog_snapshot()
+        snapshot = outbox.catalog_snapshot()
+        canonical = json.dumps(
+            snapshot,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        etag = f'"{hashlib.sha256(canonical).hexdigest()}"'
+        if if_none_match == etag:
+            return Response(
+                status_code=status.HTTP_304_NOT_MODIFIED,
+                headers={"ETag": etag},
+            )
+        return JSONResponse(content=snapshot, headers={"ETag": etag})
 
     @router.get("/events")
     def events(

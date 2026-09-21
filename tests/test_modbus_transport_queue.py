@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVICE_ROOT = ROOT / "modbus-transport-service" / "src"
+SERVICE_ROOT = ROOT / "modbus" / "modbus-transport-service" / "src"
 os.environ.setdefault("MODBUS_TRANSPORT_API_KEY", "test-key")
 os.environ.setdefault("MODBUS_TRANSPORT_QUEUE_MAXSIZE", "8")
 os.environ.setdefault("MODBUS_TRANSPORT_WAIT_TIMEOUT_SECONDS", "2")

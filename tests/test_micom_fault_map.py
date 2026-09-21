@@ -3,7 +3,12 @@ import sys
 import unittest
 
 
-SERVICE_ROOT = Path(__file__).resolve().parents[1] / "micom-collector-service"
+SERVICE_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "modbus"
+    / "colectores"
+    / "micom-collector-service"
+)
 sys.path.insert(0, str(SERVICE_ROOT))
 
 from src.modbus.micom_relay_reader import MicomRelayReader

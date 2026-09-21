@@ -65,12 +65,12 @@ def _history_payload(
 
     today = timebox.utc_today_iso()
     if window == "1sem":
-        frame = historicos_dao.get_weekly_data_for_grd(grd_id, today, page)
+        rows = historicos_dao.get_weekly_data_for_grd(grd_id, today, page)
         total_periods = historicos_dao.get_total_weeks_for_grd(grd_id, today)
         plot_start, plot_end = _compute_range(window, page)
     elif window == "1mes":
         plot_start, plot_end = _compute_range(window, page)
-        frame = historicos_dao.get_data_for_grd_range(
+        rows = historicos_dao.get_data_for_grd_range(
             grd_id,
             plot_start,
             plot_end,
@@ -79,17 +79,16 @@ def _history_payload(
             grd_id,
         )
     else:
-        frame, total_rows = historicos_dao.get_data_page_for_grd(
+        rows, total_rows = historicos_dao.get_data_page_for_grd(
             grd_id,
             page,
             config.HISTORY_PAGE_SIZE,
         )
         total_periods = math.ceil(total_rows / config.HISTORY_PAGE_SIZE)
-        if not frame.empty:
-            first = frame["timestamp"].min()
-            last = frame["timestamp"].max()
-            plot_start = first.to_pydatetime() if hasattr(first, "to_pydatetime") else first
-            plot_end = last.to_pydatetime() if hasattr(last, "to_pydatetime") else last
+        if rows:
+            instants = [_as_datetime(row["timestamp"]) for row in rows]
+            plot_start = min(instants)
+            plot_end = max(instants)
             if plot_end <= plot_start:
                 plot_end = plot_start + timedelta(seconds=1)
         else:
@@ -106,24 +105,18 @@ def _history_payload(
         "range_start": timebox.utc_iso(plot_start),
         "range_end": timebox.utc_iso(plot_end),
         "connected_before": connected_before,
-        "data": _frame_records(frame),
+        "data": _history_records(rows),
     }
 
 
-def _frame_records(frame) -> list[dict]:
-    if frame.empty:
-        return []
-    records = []
-    for _, row in frame.iterrows():
-        timestamp = row.get("timestamp")
-        value = timestamp if isinstance(timestamp, datetime) else timestamp.to_pydatetime()
-        records.append(
-            {
-                "timestamp": timebox.utc_iso(value),
-                "conectado": int(row["conectado"]),
-            }
-        )
-    return records
+def _history_records(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "timestamp": timebox.utc_iso(_as_datetime(row["timestamp"])),
+            "conectado": int(row["conectado"]),
+        }
+        for row in rows
+    ]
 
 
 def _compute_range(window: str, page: int):

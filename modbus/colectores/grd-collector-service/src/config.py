@@ -10,7 +10,7 @@ def req(name: str) -> str:
 
 MW_EXEMYS = {
     "unit_id": int(req("GRD_MODBUS_UNIT_ID")),
-    "register_count": int(req("GRD_MODBUS_REGISTER_COUNT")),
+    "register_stride": int(req("GRD_MODBUS_REGISTER_STRIDE")),
     "interval_seconds": int(req("GRD_POLL_INTERVAL_SECONDS")),
 }
 MODBUS_TRANSPORT_BASE_URL = req("MODBUS_TRANSPORT_BASE_URL")

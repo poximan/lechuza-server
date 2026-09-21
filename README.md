@@ -80,6 +80,11 @@ MiCOM, Janitza y GE Estivariz; GE Fontana usa su propio endpoint. Solo hay una
 consulta en vuelo por endpoint, incluidos sus reintentos. Los colectores de dominio
 no abren sockets Modbus y el transporte es de lectura exclusiva.
 
+El código Modbus está agrupado en `modbus/`: el transporte compartido vive en
+`modbus/modbus-transport-service/` y los cuatro colectores especializados en
+`modbus/colectores/`. Los nombres de servicio de Compose y los volúmenes de datos
+se mantienen estables.
+
 La migración heredada está cerrada. GRD es dueño exclusivo de `grdconectados.db`
 y MiCOM de `micom.db`; cada servicio crea una base vacía cuando falta y valida
 versión, tablas, columnas, claves e integridad antes de iniciar. GRD conserva

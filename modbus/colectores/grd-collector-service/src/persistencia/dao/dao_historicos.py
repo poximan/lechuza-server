@@ -2,7 +2,6 @@ import math
 import sqlite3
 from datetime import datetime, timedelta
 
-import pandas as pd
 from logosaurio import logger
 
 from src.utils import timebox
@@ -72,7 +71,7 @@ class HistoricosDAO:
         grd_id: int,
         reference_date_str: str,
         page_number: int = 0,
-    ) -> pd.DataFrame:
+    ) -> list[dict]:
         reference_date = timebox.parse_format(reference_date_str, "%Y-%m-%d")
         week_end = reference_date - timedelta(weeks=page_number)
         week_start = week_end - timedelta(days=6)
@@ -81,7 +80,7 @@ class HistoricosDAO:
             if page_number == 0
             else week_end + timedelta(days=1)
         )
-        return self._read_frame(
+        return self._read_records(
             """
             SELECT timestamp, id_grd, conectado
             FROM historicos
@@ -101,8 +100,8 @@ class HistoricosDAO:
         grd_id: int,
         range_start: datetime,
         range_end: datetime,
-    ) -> pd.DataFrame:
-        return self._read_frame(
+    ) -> list[dict]:
+        return self._read_records(
             """
             SELECT timestamp, id_grd, conectado
             FROM historicos
@@ -122,7 +121,7 @@ class HistoricosDAO:
         grd_id: int,
         page_number: int,
         page_size: int,
-    ) -> tuple[pd.DataFrame, int]:
+    ) -> tuple[list[dict], int]:
         conn = get_db_connection()
         try:
             total = int(
@@ -131,7 +130,7 @@ class HistoricosDAO:
                     (grd_id,),
                 ).fetchone()["total"]
             )
-            frame = pd.read_sql_query(
+            rows = conn.execute(
                 """
                 SELECT timestamp, id_grd, conectado
                 FROM historicos
@@ -139,14 +138,10 @@ class HistoricosDAO:
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
                 """,
-                conn,
-                params=(grd_id, page_size, max(0, page_number) * page_size),
-            )
-            if not frame.empty:
-                frame["timestamp"] = timebox.utc_series(frame["timestamp"])
-                frame = frame.sort_values(by="timestamp").reset_index(drop=True)
-            return frame, total
-        except (sqlite3.Error, pd.errors.DatabaseError, ValueError) as exc:
+                (grd_id, page_size, max(0, page_number) * page_size),
+            ).fetchall()
+            return [dict(row) for row in reversed(rows)], total
+        except (sqlite3.Error, ValueError) as exc:
             self._raise_query_error(f"pagina historica del GRD {grd_id}", exc)
         finally:
             conn.close()
@@ -180,19 +175,17 @@ class HistoricosDAO:
             ).fetchone()
             value = row["min_timestamp"] if row else None
             return timebox.parse(value, legacy=True) if value else None
-        except (sqlite3.Error, pd.errors.DatabaseError, ValueError) as exc:
+        except (sqlite3.Error, ValueError) as exc:
             self._raise_query_error(f"primer historico del GRD {grd_id}", exc)
         finally:
             conn.close()
 
-    def _read_frame(self, query: str, params: tuple, operation: str) -> pd.DataFrame:
+    def _read_records(self, query: str, params: tuple, operation: str) -> list[dict]:
         conn = get_db_connection()
         try:
-            frame = pd.read_sql_query(query, conn, params=params)
-            if not frame.empty:
-                frame["timestamp"] = timebox.utc_series(frame["timestamp"])
-            return frame
-        except (sqlite3.Error, pd.errors.DatabaseError, ValueError) as exc:
+            rows = conn.execute(query, params).fetchall()
+            return [dict(row) for row in rows]
+        except (sqlite3.Error, ValueError) as exc:
             self._raise_query_error(operation, exc)
         finally:
             conn.close()

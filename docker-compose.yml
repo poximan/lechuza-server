@@ -241,7 +241,7 @@ services:
     logging: *default-logging
     build:
       context: .
-      dockerfile: modbus-transport-service/Dockerfile
+      dockerfile: modbus/modbus-transport-service/Dockerfile
     image: lechu-modbus-transport-service:1.0.0
     container_name: lechu-modbus-transport-service
     environment:
@@ -265,7 +265,7 @@ services:
     logging: *default-logging
     build:
       context: .
-      dockerfile: grd-collector-service/Dockerfile
+      dockerfile: modbus/colectores/grd-collector-service/Dockerfile
     image: lechu-grd-collector-service:1.0.0
     container_name: lechu-grd-collector-service
     depends_on:
@@ -275,7 +275,7 @@ services:
       GRD_DATA_DIR: /app/data
       GRD_DATABASE_NAME: grdconectados.db
       GRD_MODBUS_UNIT_ID: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_ID}
-      GRD_MODBUS_REGISTER_COUNT: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_COUNT}
+      GRD_MODBUS_REGISTER_STRIDE: ${MODBUS_COLLECTOR_GRD_REGISTER_STRIDE}
       GRD_POLL_INTERVAL_SECONDS: ${MODBUS_COLLECTOR_MW_EXEMYS_MB_INTERVAL_SECONDS}
       GRD_FAILURE_THRESHOLD: ${MODBUS_COLLECTOR_GRD_FAILURE_THRESHOLD}
       GRD_HISTORY_PAGE_SIZE: ${MODBUS_HISTORY_PAGE_SIZE}
@@ -315,7 +315,7 @@ services:
     logging: *default-logging
     build:
       context: .
-      dockerfile: generator-collector-service/Dockerfile
+      dockerfile: modbus/colectores/generator-collector-service/Dockerfile
     image: lechu-generator-collector-service:1.0.0
     container_name: lechu-generator-collector-service
     depends_on:
@@ -371,7 +371,7 @@ services:
     logging: *default-logging
     build:
       context: .
-      dockerfile: micom-collector-service/Dockerfile
+      dockerfile: modbus/colectores/micom-collector-service/Dockerfile
     image: lechu-micom-collector-service:1.0.0
     container_name: lechu-micom-collector-service
     depends_on:
@@ -401,7 +401,7 @@ services:
     logging: *default-logging
     build:
       context: .
-      dockerfile: janitza-collector-service/Dockerfile
+      dockerfile: modbus/colectores/janitza-collector-service/Dockerfile
     image: lechu-janitza-collector-service:1.0.0
     container_name: lechu-janitza-collector-service
     depends_on:

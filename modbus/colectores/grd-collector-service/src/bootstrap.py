@@ -80,7 +80,7 @@ def create_context(alarm_generator: GrdAlarmGenerator) -> ApplicationContext:
     worker = GrdMiddlewareClient(
         driver,
         int(config.MW_EXEMYS["unit_id"]),
-        int(config.MW_EXEMYS["register_count"]),
+        int(config.MW_EXEMYS["register_stride"]),
         int(config.MW_EXEMYS["interval_seconds"]),
         logger,
         publisher,
