@@ -49,15 +49,16 @@ def publish_proxmox_state(payload: dict) -> None:
     )
 
 
-def publish_email_event(subject: str, ok: bool) -> None:
+def publish_email_event(message_id: str, subject: str, status: str, detail: str = "") -> None:
     """
-    Evento de envio de email (no retain).
-    payload: {"type":"email","subject":"...","ok":true|false,"ts":"..."}
+    Publica el estado conocido de la solicitud. "accepted" no implica entrega SMTP.
     """
     obj = {
         "type": "email",
+        "id": message_id,
         "subject": subject,
-        "ok": bool(ok),
+        "status": status,
+        "detail": detail,
         "ts": timebox.utc_iso(),
     }
     _safe_publish(

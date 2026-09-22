@@ -40,16 +40,22 @@ class EmailService:
             backoff_initial=float(config.MENSAGELO_BACKOFF_INITIAL),
             backoff_max=float(config.MENSAGELO_BACKOFF_MAX),
         )
+        idempotency_key = str(uuid.uuid4())
         ok, detail = client.enqueue_email(
             recipients=recipient,
             subject=subject,
             body=body,
             message_type="maintenance_test",
-            idempotency_key=str(uuid.uuid4()),
+            idempotency_key=idempotency_key,
         )
         event_error = None
         try:
-            mqtt_event_bus.publish_email_event(subject=subject, ok=ok)
+            mqtt_event_bus.publish_email_event(
+                message_id=idempotency_key,
+                subject=subject,
+                status="accepted" if ok else "rejected",
+                detail=detail,
+            )
         except Exception as exc:
             event_error = f"{type(exc).__name__}: {exc}"
         return {

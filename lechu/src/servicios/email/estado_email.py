@@ -128,13 +128,14 @@ def start_email_health_monitor(logger: Logosaurio, mqtt_manager) -> None:
                 "ts": timebox.utc_iso(),
             }
             if estados != last_payload:
-                publisher.publish_json(
+                published = publisher.publish_json(
                     config.MQTT_TOPIC_EMAIL_ESTADO,
                     enriched_payload,
                     qos=config.MQTT_PUBLISH_QOS_STATE,
                     retain=config.MQTT_PUBLISH_RETAIN_STATE,
                 )
-                last_payload = dict(estados)
+                if published:
+                    last_payload = dict(estados)
             try:
                 logger.log(f"server_email_estado: {enriched_payload}", origin="EMAIL/CHK")
             except Exception:

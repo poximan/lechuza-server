@@ -50,6 +50,7 @@ _poller = Poller(
     on_failure=_handle_collection_failure,
     publish_fn=publish_snapshot,
     publish_every=cfg.PVE_MQTT_PUBLISH_FACTOR,
+    initial_snapshot=_repository.read(),
 )
 
 

@@ -15,6 +15,7 @@ class Poller:
         on_failure: Callable[[Dict[str, Any]], None],
         publish_fn: Callable[[Dict[str, Any]], None],
         publish_every: int,
+        initial_snapshot: Dict[str, Any] | None = None,
     ) -> None:
         self._interval = interval_seconds
         self._collect = collect_fn
@@ -24,6 +25,7 @@ class Poller:
         self._publish_every = max(1, publish_every)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._last_successful_snapshot = dict(initial_snapshot) if initial_snapshot else None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -46,15 +48,28 @@ class Poller:
                 snapshot = self._collect()
                 if isinstance(snapshot, tuple):
                     snapshot = snapshot[0]
+                snapshot = {
+                    **snapshot,
+                    "source_status": "online",
+                    "source_error": None,
+                    "last_attempt_at": snapshot.get("ts"),
+                }
+                self._last_successful_snapshot = dict(snapshot)
                 self._on_snapshot(snapshot)
             except Exception as exc:
                 logger.log(f"Error en ciclo PVE: {exc}", "PVE/POLL")
+                attempted_at = self._collect_failure_ts()
+                previous = self._last_successful_snapshot or {}
                 snapshot = {
-                    "ts": self._collect_failure_ts(),
-                    "node": "desconocido",
+                    **previous,
+                    "ts": previous.get("ts") or attempted_at,
+                    "node": previous.get("node") or "desconocido",
                     "status": "offline",
-                    "vms": [],
-                    "missing": [],
+                    "source_status": "offline",
+                    "source_error": str(exc),
+                    "last_attempt_at": attempted_at,
+                    "vms": previous.get("vms", []),
+                    "missing": previous.get("missing", []),
                     "error": str(exc),
                 }
                 try:

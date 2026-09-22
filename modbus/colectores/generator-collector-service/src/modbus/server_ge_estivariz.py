@@ -34,7 +34,7 @@ class EdifEstivarizGeneratorClient:
         self.publisher = mqtt_publisher
         self.state_cache = state_cache
         self.alarm_generator = alarm_generator
-        self._last_line_bit: Optional[int] = None
+        self._last_signature: tuple[str, int | None] | None = None
 
         ge_cfg = config.EDIF_ESTIVARIZ_GE
         self._name = str(ge_cfg["name"])
@@ -78,9 +78,19 @@ class EdifEstivarizGeneratorClient:
     def _build_line_payload(self, payload: dict) -> dict:
         return {
             "edificio": payload["edificio"],
-            "interruptor_linea": dict(payload["interruptor_linea"]),
-            "ts": payload["ts"],
+            "interruptor_linea": dict(payload["interruptor_linea"]) if payload.get("interruptor_linea") else None,
+            "ts": payload.get("last_attempt_at") or payload.get("ts"),
+            "measured_at": payload.get("measured_at"),
+            "last_attempt_at": payload.get("last_attempt_at"),
+            "source_status": payload.get("status"),
+            "source_error": payload.get("error"),
         }
+
+    def _publish_if_changed(self, payload: dict) -> None:
+        line = payload.get("interruptor_linea") or {}
+        signature = (payload.get("status", "unavailable"), line.get("bit"))
+        if signature != self._last_signature and self.publisher.publish_ge_status(self._topic, self._build_line_payload(payload)):
+            self._last_signature = signature
 
     def _run_cycle(self) -> None:
         attempted_at = timebox.utc_iso()
@@ -91,23 +101,21 @@ class EdifEstivarizGeneratorClient:
         )
         if registers is None or not registers:
             self.logger.log("Lectura edif-estivariz sin registros.", origin="OBS/GE")
-            self.state_cache.mark_failure(
+            failed = self.state_cache.mark_failure(
                 self._name,
                 "lectura Modbus sin registros",
                 attempted_at,
             )
+            self._publish_if_changed(failed)
             return
 
         raw_value = int(registers[0])
         payload = self._build_payload(raw_value)
         self.state_cache.update(self._name, payload)
         self.alarm_generator.observe_generator(self._name, payload)
-        line_bit = int(payload["interruptor_linea"]["bit"])
-        if line_bit != self._last_line_bit and self.publisher.publish_ge_status(
-            self._topic,
-            self._build_line_payload(payload),
-        ):
-            self._last_line_bit = line_bit
+        previous_signature = self._last_signature
+        self._publish_if_changed(payload)
+        if self._last_signature != previous_signature:
             self.logger.log(
                 "edif-estivariz linea: "
                 f"{payload['interruptor_linea']['estado']} "

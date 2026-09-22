@@ -52,19 +52,21 @@ class GeneratorStateCache:
             finally:
                 if temporary and os.path.exists(temporary): os.remove(temporary)
 
-    def mark_failure(self, key: str, error: str, attempted_at: str) -> None:
+    def mark_failure(self, key: str, error: str, attempted_at: str) -> Dict[str, Any]:
         with self._lock:
             current = dict(self._snapshots.get(key, {}))
+        failed = {
+            **current,
+            "edificio": key,
+            "status": "stale" if current.get("measured_at") else "unavailable",
+            "last_attempt_at": attempted_at,
+            "error": error,
+        }
         self.update(
             key,
-            {
-                **current,
-                "edificio": key,
-                "status": "stale" if current.get("measured_at") else "unavailable",
-                "last_attempt_at": attempted_at,
-                "error": error,
-            },
+            failed,
         )
+        return failed
 
     def snapshot(self, key: str) -> Dict[str, Any]:
         with self._lock:

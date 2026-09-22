@@ -36,20 +36,21 @@ class MqttTopicPublisher:
         return ok
 
     def publish(self, topic: str, payload: Any,
-                qos: Optional[int] = None, retain: Optional[bool] = None):
+                qos: Optional[int] = None, retain: Optional[bool] = None) -> bool:
         if not self._ensure_started():
             self.log.log(f"No se pudo conectar para publicar en '{topic}'.", origin=self._origen)
-            return
+            return False
         q = self._qos_state if qos is None else int(qos)
         r = self._retain_state if retain is None else bool(retain)
         try:
             data = payload if isinstance(payload, str) else str(payload)
             self._manager.publish(topic, data, qos=q, retain=r, source=self._origen)
+            return True
         except Exception as e:
             self.log.log(f"Error publicando en '{topic}': {e}", origin=self._origen)
+            return False
 
     def publish_json(self, topic: str, obj: dict,
-                     qos: Optional[int] = None, retain: Optional[bool] = None):
-        self.publish(topic, json.dumps(obj, ensure_ascii=False), qos=qos, retain=retain)
-
+                     qos: Optional[int] = None, retain: Optional[bool] = None) -> bool:
+        return self.publish(topic, json.dumps(obj, ensure_ascii=False), qos=qos, retain=retain)
 

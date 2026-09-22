@@ -111,6 +111,10 @@ services:
       MQTT_RPC_REQ_ROOT: ${MQTT_RPC_REQ_ROOT}
       MQTT_RPC_RES_ROOT: ${MQTT_RPC_RES_ROOT}
       MQTT_RPC_QUEUE_MAXSIZE: ${MQTT_RPC_QUEUE_MAXSIZE}
+      PANELITO_ARTIFACT_RELEASE_URL: ${PANELITO_ARTIFACT_RELEASE_URL}
+      PANELITO_APK_URL: ${PANELITO_APK_URL}
+      PANELITO_ARTIFACT_APP_NAME: ${PANELITO_ARTIFACT_APP_NAME}
+      ARTIFACT_REPOSITORY_TIMEOUT_SECONDS: ${ARTIFACT_REPOSITORY_TIMEOUT_SECONDS}
     volumes:
       - ./volumes/lechu:/app/data
     restart: unless-stopped
@@ -121,6 +125,37 @@ services:
     networks:
       - backend
       - edge
+
+  wol-service:
+    pids_limit: 64
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: wol-service/Dockerfile
+    image: lechu-wol-service:1.0.0
+    container_name: lechu-wol-service
+    environment:
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
+      MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
+      MQTT_BROKER_PASSWORD: ${MQTT_BROKER_PASSWORD}
+      MQTT_BROKER_KEEPALIVE: ${MQTT_BROKER_KEEPALIVE}
+      MQTT_RECONNECT_DELAY_MIN: ${MQTT_RECONNECT_DELAY_MIN}
+      MQTT_RECONNECT_DELAY_MAX: ${MQTT_RECONNECT_DELAY_MAX}
+      MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
+      MQTT_WOL_REQUEST_TOPIC: ${MQTT_WOL_REQUEST_TOPIC}
+      MQTT_RPC_RES_ROOT: ${MQTT_RPC_RES_ROOT}
+      MQTT_PUBLISH_QOS_STATE: ${MQTT_PUBLISH_QOS_STATE}
+      WOL_TARGET_IP: ${WOL_TARGET_IP}
+      WOL_TARGET_MAC: ${WOL_TARGET_MAC}
+      WOL_BROADCAST_IP: ${WOL_BROADCAST_IP}
+      WOL_SSH_TIMEOUT_SECONDS: ${WOL_SSH_TIMEOUT_SECONDS}
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
 
   alarmero-service:
     pids_limit: 256
@@ -189,6 +224,7 @@ services:
       MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
       MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
       MQTT_BROKER_KEEPALIVE: ${MQTT_BROKER_KEEPALIVE}
+      MQTT_PUBLISH_TIMEOUT_SECONDS: ${MQTT_PUBLISH_TIMEOUT_SECONDS}
     volumes:
       - ./volumes/charito-service:/app/data
     restart: unless-stopped

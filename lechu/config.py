@@ -155,6 +155,11 @@ EMAIL_HEALTH_PING_REMOTE_HOST = _req("EMAIL_HEALTH_PING_REMOTE_HOST")
 MQTT_RPC_REQ_ROOT = _req("MQTT_RPC_REQ_ROOT")
 MQTT_RPC_RES_ROOT = _req("MQTT_RPC_RES_ROOT")
 MQTT_RPC_QUEUE_MAXSIZE = _req_int("MQTT_RPC_QUEUE_MAXSIZE")
+PANELITO_ARTIFACT_RELEASE_URL = _req("PANELITO_ARTIFACT_RELEASE_URL")
+PANELITO_APK_URL = _req("PANELITO_APK_URL")
+PANELITO_ARTIFACT_APP_NAME = _req("PANELITO_ARTIFACT_APP_NAME")
+ARTIFACT_REPOSITORY_TIMEOUT_SECONDS = _req_int("ARTIFACT_REPOSITORY_TIMEOUT_SECONDS")
+
 # Acciones soportadas (para validacion/evolucion)
 MQTT_RPC_ALLOWED_ACTIONS = {
     "get_global_status",   # responde en estado/exemys con resumen + ultimos estados por GRD
@@ -162,6 +167,7 @@ MQTT_RPC_ALLOWED_ACTIONS = {
     "get_ge_status",       # responde con estado actual de interruptores GE Estivariz
     "get_email_events",    # devuelve los ultimos intentos de correo conocidos por Lechu
     "send_email_test",     # dispara un correo de prueba via mensagelo
+    "get_mobile_release",  # devuelve el contrato de actualizacion de Panelito
 }
 
 # ---------------------------------------------------------

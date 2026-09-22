@@ -15,6 +15,7 @@ from src.logger import Logosaurio
 from src.utils import timebox
 from src.servicios.email.mensagelo_client import MensageloClient
 from src.servicios.mqtt import mqtt_event_bus
+from src.servicios.mobile.artifact_release_client import ArtifactReleaseClient
 from src.web.clients.grd_client import grd_client
 from src.web.clients.generator_client import generator_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
@@ -62,6 +63,12 @@ class MqttRequestRouter:
             backoff_max=float(config.MENSAGELO_BACKOFF_MAX)
 
             )
+        self._artifact_client = ArtifactReleaseClient(
+            release_url=config.PANELITO_ARTIFACT_RELEASE_URL,
+            apk_url=config.PANELITO_APK_URL,
+            app_name=config.PANELITO_ARTIFACT_APP_NAME,
+            timeout_seconds=config.ARTIFACT_REPOSITORY_TIMEOUT_SECONDS,
+        )
 
 
 
@@ -159,6 +166,10 @@ class MqttRequestRouter:
             elif action == "send_email_test":
 
                 self._handle_send_email_test(corr, reply_to, params)
+
+            elif action == "get_mobile_release":
+
+                self._handle_get_mobile_release(corr, reply_to, params)
 
             else:
 
@@ -258,9 +269,10 @@ class MqttRequestRouter:
             attempts = self._mail_client.list_messages(limit=50)
             items = [
                 {
+                    "id": str(item.get("idempotency_key") or ""),
                     "type": "email",
                     "subject": str(item.get("subject") or ""),
-                    "ok": item.get("status") == "sent",
+                    "status": str(item.get("status") or ""),
                     "ts": str(item.get("updated_at") or item.get("created_at") or ""),
                     "detail": str(item.get("last_error") or item.get("status") or ""),
                 }
@@ -270,6 +282,24 @@ class MqttRequestRouter:
             self._emit_error(corr, reply_to, "get_email_events", str(exc))
             return
         self._emit_ok(corr, reply_to, "get_email_events", {"items": items})
+
+    def _handle_get_mobile_release(self, corr: str, reply_to: str, params: dict):
+        valid_contract = (
+            isinstance(params, dict)
+            and params.get("contract_version") == 1
+            and params.get("app") == config.PANELITO_ARTIFACT_APP_NAME
+            and params.get("platform") == "android"
+            and type(params.get("current_version_code")) is int
+        )
+        if not valid_contract:
+            self._emit_error(corr, reply_to, "get_mobile_release", "contrato de solicitud invalido")
+            return
+        try:
+            data = self._artifact_client.current_release(params["current_version_code"])
+        except Exception as exc:
+            self._emit_error(corr, reply_to, "get_mobile_release", str(exc))
+            return
+        self._emit_ok(corr, reply_to, "get_mobile_release", data)
 
 
     def _handle_send_email_test(self, corr: str, reply_to: str, params: dict):
@@ -344,6 +374,8 @@ class MqttRequestRouter:
 
 
 
+        idempotency_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"lechu:mqtt:{corr}"))
+
         try:
 
             ok, msg = self._mail_client.enqueue_email(
@@ -356,11 +388,7 @@ class MqttRequestRouter:
 
                 message_type="maintenance_test",
 
-                idempotency_key=str(
-
-                    uuid.uuid5(uuid.NAMESPACE_URL, f"lechu:mqtt:{corr}")
-
-                ),
+                idempotency_key=idempotency_key,
 
             )
 
@@ -374,7 +402,12 @@ class MqttRequestRouter:
 
         try:
 
-            mqtt_event_bus.publish_email_event(full_subject, ok)
+            mqtt_event_bus.publish_email_event(
+                message_id=idempotency_key,
+                subject=full_subject,
+                status="accepted" if ok else "rejected",
+                detail=msg,
+            )
 
         except Exception:
 
@@ -392,7 +425,7 @@ class MqttRequestRouter:
 
                 "send_email_test",
 
-                {"ok": True, "message": msg or "ok"},
+                {"accepted": True, "status": "accepted", "message": msg or "pedido aceptado"},
 
             )
 
@@ -455,12 +488,6 @@ class MqttRequestRouter:
             source=self._origen,
 
         )
-
-
-
-
-
-
 
 
 

@@ -43,7 +43,7 @@ class EdifFontanaGeneratorClient:
         self.topic = topic
         self.name = name
         self.alarm_generator = alarm_generator
-        self._last_bits: tuple[int, int] | None = None
+        self._last_signature: tuple[str, int | None, int | None] | None = None
 
     @staticmethod
     def _decode_breaker(raw_value: int, bit_index: int) -> dict:
@@ -70,10 +70,21 @@ class EdifFontanaGeneratorClient:
     def _build_line_payload(self, payload: dict) -> dict:
         return {
             "edificio": payload["edificio"],
-            "interruptor_linea": dict(payload["interruptor_linea"]),
-            "interruptor_grupo": dict(payload["interruptor_grupo"]),
-            "ts": payload["ts"],
+            "interruptor_linea": dict(payload["interruptor_linea"]) if payload.get("interruptor_linea") else None,
+            "interruptor_grupo": dict(payload["interruptor_grupo"]) if payload.get("interruptor_grupo") else None,
+            "ts": payload.get("last_attempt_at") or payload.get("ts"),
+            "measured_at": payload.get("measured_at"),
+            "last_attempt_at": payload.get("last_attempt_at"),
+            "source_status": payload.get("status"),
+            "source_error": payload.get("error"),
         }
+
+    def _publish_if_changed(self, payload: dict) -> None:
+        line = payload.get("interruptor_linea") or {}
+        group = payload.get("interruptor_grupo") or {}
+        signature = (payload.get("status", "unavailable"), line.get("bit"), group.get("bit"))
+        if signature != self._last_signature and self.publisher.publish_ge_status(self.topic, self._build_line_payload(payload)):
+            self._last_signature = signature
 
     def _run_cycle(self) -> None:
         attempted_at = timebox.utc_iso()
@@ -84,26 +95,21 @@ class EdifFontanaGeneratorClient:
         )
         if registers is None or not registers:
             self.logger.log("Lectura edif-fontana sin registros.", origin="OBS/GE")
-            self.state_cache.mark_failure(
+            failed = self.state_cache.mark_failure(
                 self.name,
                 "lectura Modbus sin registros",
                 attempted_at,
             )
+            self._publish_if_changed(failed)
             return
 
         raw_value = int(registers[0])
         payload = self._build_payload(raw_value)
         self.state_cache.update(self.name, payload)
         self.alarm_generator.observe_generator(self.name, payload)
-        current_bits = (
-            int(payload["interruptor_linea"]["bit"]),
-            int(payload["interruptor_grupo"]["bit"]),
-        )
-        if current_bits != self._last_bits and self.publisher.publish_ge_status(
-            self.topic,
-            self._build_line_payload(payload),
-        ):
-            self._last_bits = current_bits
+        previous_signature = self._last_signature
+        self._publish_if_changed(payload)
+        if self._last_signature != previous_signature:
             self.logger.log(
                 "edif-fontana linea: "
                 f"{payload['interruptor_linea']['estado']} "

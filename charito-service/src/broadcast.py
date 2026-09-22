@@ -10,7 +10,7 @@ MQTT_STATE_TOPIC = None
 
 _lock = threading.RLock()
 _client: mqtt.Client | None = None
-_last_state_payload: str | None = None
+_last_state_signature: str | None = None
 
 
 def broadcast_state(snapshot: dict) -> None:
@@ -19,22 +19,27 @@ def broadcast_state(snapshot: dict) -> None:
     items = snapshot.get("items")
     if not isinstance(items, list):
         raise ValueError("El snapshot charito debe contener una lista 'items'")
-    if not items:
-        return
-
     body = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
-    global _last_state_payload
-    if _last_state_payload == body:
+    signature = json.dumps(
+        _without_transport_timestamps(items),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    global _last_state_signature
+    if _last_state_signature == signature:
         return
     _publish_once(body)
-    _last_state_payload = body
+    _last_state_signature = signature
 
 
 def _publish_once(body: str) -> None:
     client = _get_client()
     topic = _state_topic()
     info = client.publish(topic, payload=body, qos=1, retain=True)
-    info.wait_for_publish()
+    info.wait_for_publish(timeout=float(_require("MQTT_PUBLISH_TIMEOUT_SECONDS")))
+    if not info.is_published():
+        raise TimeoutError("Timeout publicando estado charito por MQTT")
 
 
 def close_mqtt() -> None:
@@ -53,6 +58,14 @@ def _get_client() -> mqtt.Client:
     with _lock:
         if _client is not None and _client.is_connected():
             return _client
+        previous = _client
+        _client = None
+        if previous is not None:
+            try:
+                previous.loop_stop()
+                previous.disconnect()
+            except Exception:
+                pass
         client = mqtt.Client(clean_session=True)
         host = _require("MQTT_BROKER_HOST")
         port = int(_require("MQTT_BROKER_PORT"))
@@ -94,3 +107,15 @@ def _require(name: str) -> str:
 
 def _truthy(value: str) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _without_transport_timestamps(value):
+    if isinstance(value, list):
+        return [_without_transport_timestamps(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _without_transport_timestamps(item)
+            for key, item in value.items()
+            if key not in {"receivedAt", "generatedAt"}
+        }
+    return value
