@@ -37,6 +37,7 @@ class GrdService:
         total = len(states)
         connected = sum(1 for value in states.values() if value == 1)
         unavailable = self._serialize_unavailable(descriptions, states)
+        unavailable_ids = {int(item["id_grd"]) for item in unavailable}
         return {
             "summary": {
                 "porcentaje": round((connected * 100.0 / total), 2) if total else 0.0,
@@ -53,7 +54,7 @@ class GrdService:
                     "last_disconnected_timestamp": self._timestamp_iso(row["timestamp"]),
                 }
                 for row in rows
-                if row["conectado"] == 0
+                if row["conectado"] == 0 and int(row["id_grd"]) not in unavailable_ids
             ],
             "unavailable": unavailable,
         }
@@ -70,7 +71,7 @@ class GrdService:
                 "consecutive_failures": 0,
                 "confirmable_failures": 0,
                 "failure_threshold": config.GRD_FAILURE_THRESHOLD,
-                "disconnect_confirmed": False,
+                "unavailability_confirmed": False,
                 "reason": "sin_estado_confirmado",
                 "since": "",
             }
@@ -78,6 +79,8 @@ class GrdService:
             if grd_id not in states
         }
         for grd_id, details in self._state_registry.unavailable_snapshot().items():
+            if grd_id not in descriptions:
+                continue
             confirmable_failures = int(details["confirmable_failures"])
             result[grd_id] = {
                 "id_grd": grd_id,
@@ -85,7 +88,7 @@ class GrdService:
                 "consecutive_failures": int(details["consecutive_failures"]),
                 "confirmable_failures": confirmable_failures,
                 "failure_threshold": config.GRD_FAILURE_THRESHOLD,
-                "disconnect_confirmed": (
+                "unavailability_confirmed": (
                     confirmable_failures >= config.GRD_FAILURE_THRESHOLD
                 ),
                 "reason": str(details["reason"]),

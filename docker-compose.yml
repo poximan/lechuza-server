@@ -55,6 +55,8 @@ services:
         condition: service_started
       janitza-collector-service:
         condition: service_started
+      wol-service:
+        condition: service_healthy
     environment:
       LECHU_DATA_DIR: ${LECHU_DATA_DIR}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
@@ -115,8 +117,10 @@ services:
       PANELITO_APK_URL: ${PANELITO_APK_URL}
       PANELITO_ARTIFACT_APP_NAME: ${PANELITO_ARTIFACT_APP_NAME}
       ARTIFACT_REPOSITORY_TIMEOUT_SECONDS: ${ARTIFACT_REPOSITORY_TIMEOUT_SECONDS}
+      WOL_CONTROL_SOCKET: /run/wol/wol-control.sock
     volumes:
       - ./volumes/lechu:/app/data
+      - ./volumes/wol-control:/run/wol
     restart: unless-stopped
     tmpfs:
       - /tmp
@@ -151,6 +155,9 @@ services:
       WOL_TARGET_MAC: ${WOL_TARGET_MAC}
       WOL_BROADCAST_IP: ${WOL_BROADCAST_IP}
       WOL_SSH_TIMEOUT_SECONDS: ${WOL_SSH_TIMEOUT_SECONDS}
+      WOL_CONTROL_SOCKET: /run/wol/wol-control.sock
+    volumes:
+      - ./volumes/wol-control:/run/wol
     network_mode: host
     restart: unless-stopped
     read_only: true

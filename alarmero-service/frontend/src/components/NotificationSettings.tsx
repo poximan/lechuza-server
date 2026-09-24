@@ -7,6 +7,10 @@ import styles from "./NotificationSettings.module.css";
 
 const CATALOG_REFRESH_MILLISECONDS = 20_000;
 
+function duration(seconds: number): string {
+  return seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds} s`;
+}
+
 export function NotificationSettings() {
   const client = useMemo(
     () => new AlarmeroApiClient(new URL("./", document.baseURI)),
@@ -58,29 +62,46 @@ export function NotificationSettings() {
     }
   };
 
+  const split = Math.ceil(items.length / 2);
+  const columns = [items.slice(0, split), items.slice(split)];
+
   return (
     <Card>
       <div className={styles.heading}>
         <div><h2>Notificaciones</h2><p>Envío selectivo para los flancos confirmados.</p></div>
         <StatusBadge tone={error ? "danger" : "neutral"}>{error ?? `${items.length} alarmas`}</StatusBadge>
       </div>
-      <div className={styles.tableWrap}>
-        <table>
-          <thead><tr><th>Fuente</th><th>Alarma</th><th>Inicio</th><th>Fin</th></tr></thead>
-          <tbody>
-            {items.map((item) => {
+      <div className={styles.columns}>
+        {columns.map((column, columnIndex) => (
+          <div className={styles.list} key={columnIndex}>
+            {column.map((item) => {
               const rowKey = `${item.source_id}/${item.alarm_key}`;
               return (
-                <tr key={rowKey}>
-                  <td>{item.source_id}</td>
-                  <td><strong>{item.title}</strong><code>{item.alarm_key}</code></td>
-                  <td><input aria-label={`Enviar inicio de ${item.title}`} checked={item.send_start === 1} disabled={saving === rowKey} onChange={(event) => void update(item, "send_start", event.target.checked)} type="checkbox" /></td>
-                  <td><input aria-label={`Enviar fin de ${item.title}`} checked={item.send_end === 1} disabled={saving === rowKey} onChange={(event) => void update(item, "send_end", event.target.checked)} type="checkbox" /></td>
-                </tr>
+                <div className={styles.row} key={rowKey}>
+                  <div className={styles.identity}>
+                    <span>{item.source_id}</span>
+                    <strong>{item.title}</strong>
+                    <code>{item.alarm_key}</code>
+                  </div>
+                  <div className={styles.timing}>
+                    <span>Confirmación: {duration(item.activation_seconds)}</span>
+                    <span>Reset: {duration(item.recovery_seconds)}</span>
+                  </div>
+                  <div className={styles.switches}>
+                    <label>
+                      <input aria-label={`Enviar inicio de ${item.title}`} checked={item.send_start === 1} disabled={saving === rowKey} onChange={(event) => void update(item, "send_start", event.target.checked)} type="checkbox" />
+                      Inicio
+                    </label>
+                    <label>
+                      <input aria-label={`Enviar fin de ${item.title}`} checked={item.send_end === 1} disabled={saving === rowKey} onChange={(event) => void update(item, "send_end", event.target.checked)} type="checkbox" />
+                      Fin
+                    </label>
+                  </div>
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
     </Card>
   );

@@ -13,33 +13,63 @@
 }
 
 .heading p,
-.tableWrap code {
+.identity span,
+.identity code,
+.timing {
   color: var(--sc-color-text-muted);
   font-size: var(--sc-font-size-sm);
 }
 
-.tableWrap {
-  overflow-x: auto;
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-space-4);
+  padding: var(--sc-space-4) var(--sc-space-5);
 }
 
-.tableWrap table {
-  width: 100%;
-  border-collapse: collapse;
+.list {
+  min-width: 0;
 }
 
-.tableWrap th,
-.tableWrap td {
-  padding: var(--sc-space-3) var(--sc-space-4);
+.row {
+  display: grid;
+  gap: var(--sc-space-3);
+  padding: var(--sc-space-3) 0;
   border-bottom: 1px solid var(--sc-color-border);
-  text-align: left;
 }
 
-.tableWrap strong,
-.tableWrap code {
-  display: block;
+.identity {
+  display: grid;
+  gap: var(--sc-space-1);
+  min-width: 0;
 }
 
-.tableWrap input {
+.identity strong,
+.identity code {
+  overflow-wrap: anywhere;
+}
+
+.timing,
+.switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sc-space-3);
+}
+
+.switches label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc-space-2);
+  cursor: pointer;
+}
+
+.switches input {
   width: 1.2rem;
   height: 1.2rem;
+}
+
+@media (max-width: 65rem) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
 }

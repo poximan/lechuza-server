@@ -302,8 +302,9 @@ def ingest_catalog(source_id: str, alarms: list[dict[str, Any]]) -> None:
         connection.commit()
 
 
-def initialize_catalog_baselines(source_id: str) -> None:
+def initialize_catalog_baselines(source_id: str) -> list[dict[str, str]]:
     # El historial se aplica antes del estado actual, para no adelantar el ciclo.
+    observations: list[dict[str, str]] = []
     with _LOCK, _connect() as connection:
         connection.execute("BEGIN IMMEDIATE;")
         rows = connection.execute(
@@ -315,10 +316,18 @@ def initialize_catalog_baselines(source_id: str) -> None:
             _apply_condition(connection, source_id, row["alarm_key"], bool(row["current_condition"]),
                              row["condition_since_at"], source_event_id=None,
                              payload={"origin": "catalog_baseline"})
+            observations.append({
+                "source_id": source_id,
+                "alarm_key": str(row["alarm_key"]),
+                "occurred_at": str(row["condition_since_at"]),
+            })
         connection.commit()
+    return observations
 
 
-def ingest_events(source_id: str, events: list[dict[str, Any]]) -> int:
+def ingest_events(source_id: str, events: list[dict[str, Any]]) -> tuple[int, list[dict[str, str]], list[dict[str, str]]]:
+    qualifications: list[dict[str, str]] = []
+    observations: list[dict[str, str]] = []
     with _LOCK, _connect() as connection:
         connection.execute("BEGIN IMMEDIATE;")
         cursor_row = connection.execute(
@@ -336,12 +345,12 @@ def ingest_events(source_id: str, events: list[dict[str, Any]]) -> int:
                     f"Secuencia incompleta de {source_id}: "
                     f"esperado={cursor + 1}, recibido={event_id}"
                 )
-            _process_due_transitions(
+            qualifications.extend(_process_due_transitions(
                 connection,
                 event["occurred_at"],
                 list(config.ALARM_RECIPIENTS),
                 (source_id, event["alarm_key"]),
-            )
+            ))
             _apply_condition(
                 connection,
                 source_id,
@@ -369,6 +378,11 @@ def ingest_events(source_id: str, events: list[dict[str, Any]]) -> int:
                     event["alarm_key"],
                 ),
             )
+            observations.append({
+                "source_id": source_id,
+                "alarm_key": event["alarm_key"],
+                "occurred_at": event["occurred_at"],
+            })
             cursor = event_id
         connection.execute(
             """
@@ -381,18 +395,20 @@ def ingest_events(source_id: str, events: list[dict[str, Any]]) -> int:
             (source_id, cursor, _TIME.utc_iso()),
         )
         connection.commit()
-        return cursor
+        return cursor, qualifications, observations
 
 
-def process_due_transitions(now_iso: str, recipients: list[str], source_ids: set[str]) -> None:
+def process_due_transitions(now_iso: str, recipients: list[str], source_ids: set[str]) -> list[dict[str, str]]:
     with _LOCK, _connect() as connection:
         connection.execute("BEGIN IMMEDIATE;")
-        _process_due_transitions(connection, now_iso, recipients, source_ids=source_ids)
+        qualifications = _process_due_transitions(connection, now_iso, recipients, source_ids=source_ids)
         connection.commit()
+    return qualifications
 
 
-def _process_due_transitions(connection, now_iso, recipients, alarm_identity=None, source_ids=None) -> None:
+def _process_due_transitions(connection, now_iso, recipients, alarm_identity=None, source_ids=None) -> list[dict[str, str]]:
     _parse_instant(now_iso)
+    qualifications: list[dict[str, str]] = []
     rows = connection.execute(
         """
         SELECT s.*, c.title, c.category, c.activation_seconds,
@@ -414,9 +430,10 @@ def _process_due_transitions(connection, now_iso, recipients, alarm_identity=Non
             continue
         action, occurred_at = transition
         if action == "activate":
-            _activate_incident(connection, row, occurred_at, recipients)
+            qualifications.append(_activate_incident(connection, row, occurred_at, recipients))
         else:
             _resolve_incident(connection, row, occurred_at, recipients)
+    return qualifications
 
 
 def pending_dispatches(limit: int = 100) -> list[dict[str, Any]]:
@@ -741,7 +758,7 @@ def _activate_incident(
     row: sqlite3.Row,
     now_iso: str,
     recipients: list[str],
-) -> None:
+) -> dict[str, str]:
     incident_id = str(row["incident_id"])
     connection.execute(
         """
@@ -780,6 +797,12 @@ def _activate_incident(
             str(row["body"]),
             now_iso,
         )
+    return {
+        "incident_id": incident_id,
+        "source_id": str(row["source_id"]),
+        "alarm_key": str(row["alarm_key"]),
+        "first_seen_at": str(row["condition_since_at"]),
+    }
 
 
 def _resolve_incident(

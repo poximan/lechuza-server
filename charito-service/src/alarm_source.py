@@ -4,6 +4,7 @@ from alarm_generator import AlarmDefinition, AlarmGeneratorOutbox
 from timeauthority import get_time_authority
 
 from config import Target
+from process_alarm_service import ProcessAlarmService
 
 
 _TIME = get_time_authority()
@@ -17,6 +18,7 @@ class CharitoAlarmSource:
             activation_seconds=1200,
             recovery_seconds=20,
         )
+        self.process_alarms = ProcessAlarmService(data_dir, self.outbox)
         for target in targets:
             self._register(target.instance_id, target.alias)
 
@@ -47,11 +49,12 @@ class CharitoAlarmSource:
                         f"charo-daemon {alias} (ID {instance_id}) responde; "
                         f"sus metricas presentan estado '{status}'."
                         if host_reachable
-                        else f"charo-daemon {alias} (ID {instance_id}) no responde."
+                        else f"charo-daemon {alias} (ID {instance_id}) no confirma disponibilidad por /metrics."
                     )
                     + (f" Detalle: {detail}" if detail else "")
                 ),
             )
+            self.process_alarms.observe(item, timestamp)
 
     def _register(self, instance_id: str, alias: str) -> None:
         self.outbox.register(

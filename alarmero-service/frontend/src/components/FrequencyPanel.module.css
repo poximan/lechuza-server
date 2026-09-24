@@ -44,3 +44,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.unknown {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}

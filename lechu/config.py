@@ -160,6 +160,11 @@ PANELITO_APK_URL = _req("PANELITO_APK_URL")
 PANELITO_ARTIFACT_APP_NAME = _req("PANELITO_ARTIFACT_APP_NAME")
 ARTIFACT_REPOSITORY_TIMEOUT_SECONDS = _req_int("ARTIFACT_REPOSITORY_TIMEOUT_SECONDS")
 
+# ---------------------------------------------------------
+# --- Control local de Wake-on-LAN ------------------------
+# ---------------------------------------------------------
+WOL_CONTROL_SOCKET = _req("WOL_CONTROL_SOCKET")
+
 # Acciones soportadas (para validacion/evolucion)
 MQTT_RPC_ALLOWED_ACTIONS = {
     "get_global_status",   # responde en estado/exemys con resumen + ultimos estados por GRD

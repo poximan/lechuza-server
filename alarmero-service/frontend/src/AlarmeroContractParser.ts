@@ -61,10 +61,10 @@ export class AlarmeroContractParser {
           title: this.requireString(entry, "title", `dashboard.frequent[${index}]`),
           category: this.requireString(entry, "category", `dashboard.frequent[${index}]`),
           total: this.requireNonNegativeInteger(entry, "total", `dashboard.frequent[${index}]`),
-          daily: this.requireNonNegativeInteger(entry, "daily", `dashboard.frequent[${index}]`),
-          weekly: this.requireNonNegativeInteger(entry, "weekly", `dashboard.frequent[${index}]`),
-          monthly: this.requireNonNegativeInteger(entry, "monthly", `dashboard.frequent[${index}]`),
-          annual: this.requireNonNegativeInteger(entry, "annual", `dashboard.frequent[${index}]`),
+          daily: this.requireNullableNonNegativeInteger(entry, "daily", `dashboard.frequent[${index}]`),
+          weekly: this.requireNullableNonNegativeInteger(entry, "weekly", `dashboard.frequent[${index}]`),
+          monthly: this.requireNullableNonNegativeInteger(entry, "monthly", `dashboard.frequent[${index}]`),
+          annual: this.requireNullableNonNegativeInteger(entry, "annual", `dashboard.frequent[${index}]`),
         };
       }),
       clearance: record.clearance.map((item, index) => {
@@ -160,6 +160,11 @@ export class AlarmeroContractParser {
   private requireNullableNonNegativeNumber(record: Record<string, unknown>, key: string, path: string): number | null {
     if (record[key] === null) return null;
     return this.requireNonNegativeNumber(record, key, path);
+  }
+
+  private requireNullableNonNegativeInteger(record: Record<string, unknown>, key: string, path: string): number | null {
+    if (record[key] === null) return null;
+    return this.requireNonNegativeInteger(record, key, path);
   }
 
   private requireNonNegativeInteger(record: Record<string, unknown>, key: string, path: string): number {

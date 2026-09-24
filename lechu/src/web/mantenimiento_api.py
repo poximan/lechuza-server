@@ -21,3 +21,15 @@ class MantenimientoApi:
         if denied is not None:
             return denied
         return self.response(self.service.get_contract)
+
+    def start_wol(self) -> Any:
+        denied = self.require_protected()
+        if denied is not None:
+            return denied
+        return self.response(self.service.start_wol)
+
+    def get_wol(self, request_id: str) -> Any:
+        denied = self.require_protected()
+        if denied is not None:
+            return denied
+        return self.response(lambda: self.service.get_wol(request_id))

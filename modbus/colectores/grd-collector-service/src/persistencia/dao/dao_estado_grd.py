@@ -68,7 +68,6 @@ class GrdStateDAO:
                 LEFT JOIN grd_estado_actual e ON e.id_grd = g.id
                 WHERE g.activo = 1
                   AND g.descripcion <> 'reserva'
-                  AND g.descripcion <> 'SE - CD45 Murchison'
                 ORDER BY g.id
                 """
             ).fetchall()

@@ -19,9 +19,11 @@ pertenece a `platform`; este Compose consume `servicoop-edge-net` y crea
 | `modem-link-monitor` | Estado del enlace del módem | `127.0.0.1:8086` |
 | `alarmero-service` | Ciclo de vida y despacho de alarmas | `127.0.0.1:8094` |
 | `mensagelo` | Cola durable y entrega SMTP | interno |
+| `wol-service` | Emisión Wake-on-LAN y confirmación por SSH | socket Unix interno |
 
 Las imágenes y contenedores usan `lechu-*`, excepto `lechu`. Cada servicio corre
-sin privilegios y usa exclusivamente su volumen propio.
+sin privilegios. Los volúmenes de datos son exclusivos; `lechu` y `wol-service`
+comparten únicamente el directorio del socket de control.
 
 ## Interfaces
 
@@ -41,13 +43,29 @@ Rutas públicas declaradas en `platform/edge-platform/edge-gateway/config/routes
 El MQTT usa únicamente `lechu/v1/...`:
 
 ```text
-lechu/v1/{modem,exemys,email,proxmox,services, charito}/...
+lechu/v1/{modem,exemys,email,proxmox,services,charito}/...
+lechu/v1/wol/request
 lechu/v1/rpc/request/{action}
 lechu/v1/rpc/response/{client_id}/{corr}
 ```
 
 Los estados operativos se publican retenidos. Los clientes no acceden a bases ni
 archivos de otros servicios.
+
+## Wake-on-LAN
+
+`wol-service` es el único componente que emite el paquete mágico y comprueba la
+apertura de SSH. Acepta órdenes por MQTT para Panelito y por una API HTTP sobre el
+socket Unix compartido `/run/wol/wol-control.sock` para la acción **wololo** de
+la solapa Mantenimiento de Lechu. Ambas entradas usan el mismo gestor
+de operaciones, por lo que la ruta directa permite aislar MQTT sin alterar el
+destino, el broadcast ni el criterio de éxito.
+
+Las operaciones se identifican con `request_id`, son idempotentes y conservan los
+estados `accepted`, `packet_sent`, `ssh_open` y `failed`. Solo puede existir una
+operación activa. El estado informa destino, broadcast, bytes UDP enviados,
+marcas UTC y el error final. El socket solo se monta en `lechu` y `wol-service` y
+la API de Lechu exige acceso protegido.
 
 ## Alarmas
 
@@ -66,12 +84,37 @@ usa los dos destinatarios de `ALARM_RECIPIENTS` mediante Mensagelo.
 
 Tiempos actuales:
 
-- conectividad global roja, GRD individual, módem, Proxmox y Charito: `20 min`;
+- conectividad global roja, GRD individual, módem, Proxmox y daemon Charito: `20 min`;
+- proceso monitoreado por Charito: `10 min`;
 - grupo electrógeno en marcha: `60 s`;
 - confirmación de recuperación: `20 s`.
 
-La alarma individual de GRD no existe dentro de la zona roja global. RL1 aún no
-forma parte del catálogo.
+Cada proceso de Charito tiene una alarma propia. Solo una respuesta HTTP exitosa y no
+vacía de `/metrics` confirma que su daemon está vivo; un fallo de métricas con esa
+respuesta conserva la última condición conocida del proceso. Si el daemon deja de
+confirmar disponibilidad, los procesos pasan a condición inactiva y siguen los
+tiempos normales de recuperación. Por defecto se envían correos de inicio; las
+opciones de inicio y fin se configuran por alarma.
+
+Frecuencia cuenta incidentes confirmados según el comienzo de la caída en ventanas
+móviles exactas de 24 horas, 7, 30 y 365 días. Alarmero carga su historial desde
+su propia base al iniciar y cada medianoche local; entre recargas incorpora las
+confirmaciones en memoria. Si la primera observación registrada de una alarma no
+cubre una ventana completa, la pantalla muestra `!?` en lugar de un cero no
+verificado.
+
+El mapa de fuentes de estas capacidades es: `charito-service/src/poller.py` adapta
+`/metrics`, `charito-service/src/process_alarm_service.py` decide las alarmas de
+procesos, `alarmero-service/backend/frequency_repository.py` consulta el historial
+propio de Alarmero, `alarmero-service/backend/frequency_service.py` conserva la
+proyección diaria en memoria y `alarmero-service/frontend/src/components/` presenta
+las frecuencias y la configuración de avisos.
+
+No se inicia una alarma individual de GRD mientras la conectividad global está
+en zona roja. Si un GRD ya estaba en alarma, su incidente se conserva hasta una
+lectura válida de recuperación. Tampoco se cierra por un fallo temporal de lectura;
+una caída continua genera un solo aviso de inicio. RL1 aún no forma parte del
+catálogo.
 
 ## Modbus y MiCOM
 
@@ -79,6 +122,15 @@ forma parte del catálogo.
 MiCOM, Janitza y GE Estivariz; GE Fontana usa su propio endpoint. Solo hay una
 consulta en vuelo por endpoint, incluidos sus reintentos. Los colectores de dominio
 no abren sockets Modbus y el transporte es de lectura exclusiva.
+
+En todos los GRD activos se usa el mismo criterio: el bit `0` de la palabra de
+estado indica conexión cuando vale `1` y caída cuando vale `0`. Un fallo de lectura
+deja el estado actual como desconocido y conserva el último valor confirmado como
+referencia. Solo una lectura válida del bit `0` puede iniciar una transición a
+desconectado. La lista de desconectados omite los equipos con lectura actualmente
+no disponible; sus
+incidentes permanecen abiertos hasta confirmar la recuperación. La UI muestra los
+fallos de lectura por separado.
 
 El código Modbus está agrupado en `modbus/`: el transporte compartido vive en
 `modbus/modbus-transport-service/` y los cuatro colectores especializados en
@@ -109,7 +161,8 @@ Para MiCOM:
 - se descargan todas las perturbaciones disponibles, sin asociarlas por cercanía a
   una falla. El usuario selecciona la TS del evento en pantalla;
 - el vencimiento sobrevive a reinicios. Las descargas incompletas se reintentan
-  después de cinco minutos y reutilizan capturas completas vigentes;
+  con esperas de 30 minutos, 2 horas, 12 horas y luego 24 horas, y reutilizan
+  capturas completas vigentes;
 - `services/relay_monitoring.py` coordina el ciclo; `relay_metadata.py` mantiene
   parámetros; `relay_query_diagnostics.py` agrega diagnósticos; el lector MiCOM
   traduce el protocolo y el servicio de transporte serializa el canal.

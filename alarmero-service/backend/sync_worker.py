@@ -7,6 +7,7 @@ import requests
 from timeauthority import get_time_authority
 
 from . import config, db
+from .frequency_service import FrequencyService
 
 
 _TIME = get_time_authority()
@@ -55,7 +56,7 @@ def _get_json(
     return payload
 
 
-def _sync_catalog(source: config.AlarmSource) -> None:
+def _sync_catalog(source: config.AlarmSource, frequency: FrequencyService) -> None:
     headers = _source_headers()
     known_etag = _CATALOG_ETAGS.get(source.source_id)
     if known_etag is not None:
@@ -88,13 +89,14 @@ def _sync_catalog(source: config.AlarmSource) -> None:
             f"Catalogo con claves invalidas o repetidas de {source.source_id}"
         )
     db.ingest_catalog(source.source_id, alarms)
+    frequency.update_catalog(source.source_id, alarms)
     etag = response.headers.get("ETag")
     if etag:
         _CATALOG_ETAGS[source.source_id] = etag
 
 
-def _sync_source(source: config.AlarmSource) -> None:
-    _sync_catalog(source)
+def _sync_source(source: config.AlarmSource, frequency: FrequencyService) -> None:
+    _sync_catalog(source, frequency)
 
     cursor = db.get_source_cursor(source.source_id)
     while True:
@@ -112,7 +114,9 @@ def _sync_source(source: config.AlarmSource) -> None:
         has_more = response.get("has_more")
         if not isinstance(has_more, bool):
             raise ValueError(f"Paginacion invalida de {source.source_id}")
-        cursor = db.ingest_events(source.source_id, events)
+        cursor, qualifications, observations = db.ingest_events(source.source_id, events)
+        frequency.record_observations(observations)
+        frequency.record_qualifications(qualifications)
         if cursor > _ACKNOWLEDGED_CURSORS.get(source.source_id, 0):
             acknowledgement = _SOURCE_SESSION.post(
                 f"{source.base_url}/api/v1/alarms/events/ack",
@@ -124,7 +128,7 @@ def _sync_source(source: config.AlarmSource) -> None:
             _ACKNOWLEDGED_CURSORS[source.source_id] = cursor
         if not has_more:
             break
-    db.initialize_catalog_baselines(source.source_id)
+    frequency.record_observations(db.initialize_catalog_baselines(source.source_id))
 
 
 def _dispatch_pending() -> None:
@@ -166,20 +170,23 @@ def _sync_dispatch_results() -> None:
     db.ingest_dispatches(dispatches)
 
 
-def sync_once() -> None:
+def sync_once(frequency: FrequencyService) -> None:
+    frequency.refresh_if_new_day()
     failures = []
     synchronized_sources = set()
-    db.reconcile_configured_sources(
-        {source.source_id for source in config.ALARM_SOURCES}
-    )
+    configured_sources = {source.source_id for source in config.ALARM_SOURCES}
+    db.reconcile_configured_sources(configured_sources)
+    frequency.retain_sources(configured_sources)
     for source in config.ALARM_SOURCES:
         try:
-            _sync_source(source)
+            _sync_source(source, frequency)
             synchronized_sources.add(source.source_id)
         except Exception as exc:
             failures.append(f"{source.source_id}: {type(exc).__name__}: {exc}")
 
-    db.process_due_transitions(_TIME.utc_iso(), list(config.ALARM_RECIPIENTS), synchronized_sources)
+    frequency.record_qualifications(
+        db.process_due_transitions(_TIME.utc_iso(), list(config.ALARM_RECIPIENTS), synchronized_sources)
+    )
     _dispatch_pending()
     try:
         _sync_dispatch_results()
@@ -189,10 +196,10 @@ def sync_once() -> None:
         raise RuntimeError("; ".join(failures))
 
 
-def _run() -> None:
+def _run(frequency: FrequencyService) -> None:
     while not _STOP.is_set():
         try:
-            sync_once()
+            sync_once(frequency)
         except Exception as exc:
             with _STATUS_LOCK:
                 _STATUS.update(
@@ -211,11 +218,11 @@ def _run() -> None:
     _MENSAGELO_SESSION.close()
 
 
-def start() -> None:
+def start(frequency: FrequencyService) -> None:
     global _THREAD
     if _THREAD is None or not _THREAD.is_alive():
         _STOP.clear()
-        _THREAD = threading.Thread(target=_run, name="alarmero-sync", daemon=True)
+        _THREAD = threading.Thread(target=_run, args=(frequency,), name="alarmero-sync", daemon=True)
         _THREAD.start()
 
 

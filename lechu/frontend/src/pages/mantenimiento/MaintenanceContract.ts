@@ -28,6 +28,21 @@ export interface MaintenanceContract {
   topology: MaintenanceTopology;
 }
 
+export type WakeStatus = "accepted" | "packet_sent" | "ssh_open" | "failed";
+
+export interface WakeOperation {
+  broadcastIp: string;
+  error: string | null;
+  packetBytes: number | null;
+  requestId: string;
+  source: string;
+  startedAt: string;
+  status: WakeStatus;
+  targetIp: string;
+  targetPort: number;
+  updatedAt: string;
+}
+
 const reader = new JsonContractReader();
 
 function phoneContext(group: string, index?: number, field?: string): string {
@@ -94,5 +109,35 @@ export function readMaintenanceContract(data: JsonRecord): MaintenanceContract {
         mappingContext(index, "servicio"),
       ),
     })),
+  };
+}
+
+export function readWakeOperation(data: JsonRecord): WakeOperation {
+  const context = "mantenimiento.wol";
+  const contractVersion = reader.number(
+    data.contract_version,
+    `${context}.contract_version`,
+  );
+  if (contractVersion !== 1) {
+    throw new Error(`Contrato inválido: ${context}.contract_version desconocida`);
+  }
+  const status = reader.string(data.status, `${context}.status`);
+  if (!["accepted", "packet_sent", "ssh_open", "failed"].includes(status)) {
+    throw new Error(`Contrato inválido: ${context}.status desconocido`);
+  }
+  return {
+    broadcastIp: reader.string(data.broadcast_ip, `${context}.broadcast_ip`),
+    error: reader.optionalString(data.error, `${context}.error`),
+    packetBytes: reader.optionalNumber(
+      data.packet_bytes,
+      `${context}.packet_bytes`,
+    ),
+    requestId: reader.string(data.request_id, `${context}.request_id`),
+    source: reader.string(data.source, `${context}.source`),
+    startedAt: reader.string(data.started_at, `${context}.started_at`),
+    status: status as WakeStatus,
+    targetIp: reader.string(data.target_ip, `${context}.target_ip`),
+    targetPort: reader.number(data.target_port, `${context}.target_port`),
+    updatedAt: reader.string(data.updated_at, `${context}.updated_at`),
   };
 }

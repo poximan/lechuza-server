@@ -27,18 +27,18 @@ function unavailableDescription(item: JsonRecord): string {
     return "gateway Modbus no disponible; se conserva el último estado";
   const failures = Number(item.confirmable_failures);
   const threshold = Number(item.failure_threshold);
-  if (item.disconnect_confirmed === true)
+  if (item.unavailability_confirmed === true)
     return (
       failures +
       "/" +
       threshold +
-      " fallos individuales; desconexión confirmada"
+      " fallos de lectura persistentes; estado actual desconocido"
     );
   return (
     failures +
     "/" +
     threshold +
-    " fallos individuales; pendiente de confirmación"
+    " fallos de lectura; conservando el último estado confirmado"
   );
 }
 

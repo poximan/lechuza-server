@@ -43,10 +43,10 @@ export interface FrequentIncident {
   title: string;
   category: string;
   total: number;
-  daily: number;
-  weekly: number;
-  monthly: number;
-  annual: number;
+  daily: number | null;
+  weekly: number | null;
+  monthly: number | null;
+  annual: number | null;
 }
 
 export interface ClearanceMetric {

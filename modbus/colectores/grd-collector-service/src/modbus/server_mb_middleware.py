@@ -134,15 +134,7 @@ class GrdMiddlewareClient:
             f"fallos consecutivos={failures}/{self.failure_threshold}.",
             origin="OBS/MW",
         )
-        if failures < self.failure_threshold:
-            return None
-
-        self.logger.log(
-            f"GRD {grd_id} ({description}) declarado desconectado luego de "
-            f"{failures} fallos consecutivos.",
-            origin="OBS/MW",
-        )
-        return 0
+        return None
 
     def _run_cycle(self, stop_event: threading.Event) -> None:
         unavailable_before = self.state_registry.unavailable_snapshot()
@@ -156,22 +148,25 @@ class GrdMiddlewareClient:
         timestamp = timebox.utc_iso()
         if not self.driver.is_connected() and not self.driver.connect():
             for grd_id in grd_data:
-                if grd_id != 4:
-                    self.state_registry.mark_read_failure(
-                        grd_id,
-                        timestamp,
-                        confirmable=False,
-                    )
+                self.state_registry.mark_read_failure(
+                    grd_id,
+                    timestamp,
+                    confirmable=False,
+                )
             self.logger.log(
                 "Servidor Modbus no disponible; se conserva el ultimo estado confirmado.",
                 origin="OBS/MW",
             )
             if unavailable_before != self.state_registry.unavailable_snapshot():
                 self._publish_snapshots_if_changed()
+            self.alarm_generator.observe_grd_snapshot(
+                self.grd_service.summary(),
+                grd_data,
+            )
             return
 
         changed = False
-        monitored = [item for item in grd_data.items() if item[0] != 4]
+        monitored = list(grd_data.items())
         for index, (grd_id, description) in enumerate(monitored):
             if stop_event.is_set():
                 break

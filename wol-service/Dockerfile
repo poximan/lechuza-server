@@ -16,4 +16,6 @@ RUN groupadd --gid 1000 appgroup \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/sh appuser
 COPY --chown=1000:1000 wol-service/src /app/src
 USER 1000:1000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python", "-m", "src.healthcheck"]
 CMD ["python", "-m", "src.app"]

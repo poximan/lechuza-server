@@ -83,6 +83,7 @@ class CharitoPoller:
                 self._log.exception("No se pudo persistir estado offline para %s", effective_id, origin="CHARITO/POLLER")
             return
 
+        host_reachable = 200 <= response.status_code < 300 and bool(response.content)
         payload = None
         issue = None
         metrics: dict[str, Any] | None = None
@@ -95,7 +96,7 @@ class CharitoPoller:
         except Exception as exc:
             issue = f"invalid_json: {exc}"
 
-        if issue is None and metrics is not None and response.status_code < 400:
+        if issue is None and metrics is not None and host_reachable:
             try:
                 payload = self._build_payload(effective_id, metrics, alias)
             except Exception as exc:
@@ -119,6 +120,7 @@ class CharitoPoller:
                 alias=alias,
                 http_status=response.status_code,
                 reason=reason,
+                host_reachable=host_reachable,
             )
 
         self._state.upsert_observation(payload, key_hint=key_hint, alias=alias)
@@ -132,6 +134,12 @@ class CharitoPoller:
             latest = self._latest_sample(metrics, network_info)
         else:
             latest.setdefault("networkInterfaces", network_info)
+        watched_processes = latest.get("watchedProcesses")
+        if not isinstance(watched_processes, list):
+            watched_processes = metrics.get("watchedProcesses")
+        if not isinstance(watched_processes, list):
+            watched_processes = []
+        latest["watchedProcesses"] = watched_processes
         samples = int(metrics["samples"])
         window_seconds = int(metrics["windowSeconds"])
         timeout_seconds = int(metrics["timeoutSeconds"])
@@ -157,7 +165,7 @@ class CharitoPoller:
             "freeMemoryBytes": free_bytes,
             "totalMemoryBytes": total_bytes,
             "networkInterfaces": network_info,
-            "watchedProcesses": latest.get("watchedProcesses", []),
+            "watchedProcesses": watched_processes,
             "latestSample": latest,
         }
         return payload
@@ -213,7 +221,10 @@ class CharitoPoller:
             )
         return cleaned
 
-    def _build_error_payload(self, instance_id: str, alias: str, http_status: int, reason: str) -> dict:
+    def _build_error_payload(
+        self, instance_id: str, alias: str, http_status: int, reason: str,
+        host_reachable: bool,
+    ) -> dict:
         now_iso = _AUTH.utc_iso()
         latest = {
             "timestamp": now_iso,
@@ -228,7 +239,7 @@ class CharitoPoller:
             "instanceId": instance_id,
             "alias": alias,
             "status": "error",
-            "hostReachable": True,
+            "hostReachable": host_reachable,
             "generatedAt": now_iso,
             "receivedAt": now_iso,
             "samples": 0,

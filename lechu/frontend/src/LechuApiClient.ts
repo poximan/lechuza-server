@@ -85,6 +85,26 @@ export class LechuApiClient {
     );
   }
 
+  public async startWakeOnLan(): Promise<JsonRecord> {
+    return this.parser.record(
+      await this.send("mantenimiento/wol", "POST", {}),
+      "mantenimiento wol",
+    );
+  }
+
+  public async wakeOnLanStatus(
+    requestId: string,
+    signal?: AbortSignal,
+  ): Promise<JsonRecord> {
+    return this.parser.record(
+      await this.get(
+        `mantenimiento/wol/${encodeURIComponent(requestId)}`,
+        signal,
+      ),
+      "mantenimiento wol status",
+    );
+  }
+
   private async get(path: string, signal?: AbortSignal): Promise<unknown> {
     const response = await fetch(new URL(path, this.apiBase), {
       cache: "no-store",

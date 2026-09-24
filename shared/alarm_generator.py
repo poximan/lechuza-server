@@ -26,6 +26,7 @@ class AlarmDefinition:
     title: str
     category: str
     expected_clearance_minutes: int
+    activation_seconds: int | None = None
 
     def validate(self) -> None:
         if not _IDENTIFIER_PATTERN.fullmatch(self.alarm_key):
@@ -34,6 +35,12 @@ class AlarmDefinition:
             raise ValueError(f"Catalogo incompleto para {self.alarm_key}")
         if self.expected_clearance_minutes < 0:
             raise ValueError(f"Tiempo de despeje invalido para {self.alarm_key}")
+        if self.activation_seconds is not None and (
+            isinstance(self.activation_seconds, bool)
+            or not isinstance(self.activation_seconds, int)
+            or self.activation_seconds < 0
+        ):
+            raise ValueError(f"Tiempo de confirmacion invalido para {self.alarm_key}")
 
 
 class AlarmGeneratorOutbox:
@@ -121,7 +128,11 @@ class AlarmGeneratorOutbox:
             alarms = []
             for alarm_key in sorted(self._catalog):
                 definition = asdict(self._catalog[alarm_key])
-                definition["activation_seconds"] = self.activation_seconds
+                definition["activation_seconds"] = (
+                    self.activation_seconds
+                    if definition["activation_seconds"] is None
+                    else definition["activation_seconds"]
+                )
                 definition["recovery_seconds"] = self.recovery_seconds
                 observed = conditions.get(alarm_key)
                 definition["condition_active"] = (

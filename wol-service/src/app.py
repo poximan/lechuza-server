@@ -2,14 +2,15 @@ import ipaddress
 import json
 import os
 import re
-import socket
 import ssl
-import threading
 import time
+from pathlib import Path
 
 import certifi
 import paho.mqtt.client as mqtt
-from timeauthority import get_time_authority
+
+from .control_api import ControlApi
+from .wake_operation import WakeOperationBusy, WakeOperationManager
 
 
 def required(name: str) -> str:
@@ -34,19 +35,18 @@ QOS = int(required("MQTT_PUBLISH_QOS_STATE"))
 TARGET_IP = str(ipaddress.ip_address(required("WOL_TARGET_IP")))
 BROADCAST_IP = str(ipaddress.ip_address(required("WOL_BROADCAST_IP")))
 SSH_TIMEOUT_SECONDS = int(required("WOL_SSH_TIMEOUT_SECONDS"))
+CONTROL_SOCKET = Path(required("WOL_CONTROL_SOCKET"))
 MAC_TEXT = required("WOL_TARGET_MAC")
 if not re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", MAC_TEXT):
     raise ValueError("WOL_TARGET_MAC invalida")
 if SSH_TIMEOUT_SECONDS <= 0:
     raise ValueError("WOL_SSH_TIMEOUT_SECONDS debe ser positivo")
 MAC_BYTES = bytes.fromhex(MAC_TEXT.replace(":", ""))
-TIME = get_time_authority()
 
 
 class WakeOnLanResponder:
-    def __init__(self) -> None:
-        self._busy_lock = threading.Lock()
-        self._busy = False
+    def __init__(self, manager: WakeOperationManager) -> None:
+        self.manager = manager
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id="lechu-wol-service",
@@ -82,6 +82,8 @@ class WakeOnLanResponder:
     def _on_message(self, _client, _userdata, message) -> None:
         try:
             request = json.loads(message.payload.decode("utf-8"))
+            if not isinstance(request, dict):
+                raise ValueError("la solicitud no es un objeto")
             correlation = str(request.get("corr") or "").strip()
             reply_to = str(request.get("reply_to") or "").strip()
             params = request.get("params")
@@ -95,46 +97,21 @@ class WakeOnLanResponder:
             print("wol-service: solicitud JSON invalida", flush=True)
             return
 
-        with self._busy_lock:
-            if self._busy:
-                self._publish_error(correlation, reply_to, "ya hay un encendido en seguimiento")
-                return
-            self._busy = True
-        threading.Thread(
-            target=self._wake_and_watch,
-            args=(correlation, reply_to),
-            name="wol-ssh-watch",
-            daemon=True,
-        ).start()
-
-    def _wake_and_watch(self, correlation: str, reply_to: str) -> None:
         try:
-            packet = b"\xff" * 6 + MAC_BYTES * 16
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-                udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                sent = udp_socket.sendto(packet, (BROADCAST_IP, 9))
-            if sent != len(packet):
-                raise OSError(f"envio UDP incompleto: {sent}/{len(packet)} bytes")
-            self._publish_ok(correlation, reply_to, "packet_sent")
-
-            deadline = time.monotonic() + SSH_TIMEOUT_SECONDS
-            while time.monotonic() < deadline:
-                try:
-                    with socket.create_connection((TARGET_IP, 22), timeout=1.0):
-                        self._publish_ok(correlation, reply_to, "ssh_open", port=22)
-                        return
-                except OSError:
-                    time.sleep(2.0)
+            self.manager.trigger(
+                correlation,
+                "panelito-mqtt",
+                observer=lambda operation: self._publish_operation(reply_to, operation),
+            )
+        except WakeOperationBusy as exc:
             self._publish_error(
                 correlation,
                 reply_to,
-                f"el puerto 22 de {TARGET_IP} no abrio dentro del plazo",
+                "ya hay un encendido en seguimiento",
+                operation=exc.operation,
             )
-        except Exception as exc:
-            self._publish_error(correlation, reply_to, f"no se pudo emitir WoL: {exc}")
-        finally:
-            with self._busy_lock:
-                self._busy = False
+        except ValueError as exc:
+            self._publish_error(correlation, reply_to, str(exc))
 
     def _valid_reply_to(self, reply_to: str, correlation: str) -> bool:
         prefix = f"{RESPONSE_ROOT}/"
@@ -143,23 +120,44 @@ class WakeOnLanResponder:
         parts = reply_to[len(prefix):].split("/")
         return len(parts) == 2 and bool(parts[0]) and parts[1] == correlation
 
-    def _publish_ok(self, correlation: str, reply_to: str, status: str, **extra) -> None:
-        data = {
-            "contract_version": 1,
-            "status": status,
-            "target_ip": TARGET_IP,
-            "ts": TIME.utc_iso(),
-            **extra,
-        }
+    def _publish_operation(self, reply_to: str, operation: dict) -> None:
+        correlation = str(operation["request_id"])
+        if operation["status"] == "failed":
+            self._publish_error(
+                correlation,
+                reply_to,
+                str(operation.get("error") or "fallo WoL sin detalle"),
+                operation=operation,
+            )
+            return
         self._publish(
             reply_to,
-            {"type": "rpc", "action": "wake_host", "corr": correlation, "ok": True, "data": data},
+            {
+                "type": "rpc",
+                "action": "wake_host",
+                "corr": correlation,
+                "ok": True,
+                "data": operation,
+            },
         )
 
-    def _publish_error(self, correlation: str, reply_to: str, error: str) -> None:
+    def _publish_error(
+        self,
+        correlation: str,
+        reply_to: str,
+        error: str,
+        **extra,
+    ) -> None:
         self._publish(
             reply_to,
-            {"type": "rpc", "action": "wake_host", "corr": correlation, "ok": False, "error": error},
+            {
+                "type": "rpc",
+                "action": "wake_host",
+                "corr": correlation,
+                "ok": False,
+                "error": error,
+                **extra,
+            },
         )
 
     def _publish(self, topic: str, payload: dict) -> None:
@@ -173,5 +171,20 @@ class WakeOnLanResponder:
             raise RuntimeError(f"publicacion MQTT fallo rc={result.rc}")
 
 
+def main() -> None:
+    manager = WakeOperationManager(
+        target_ip=TARGET_IP,
+        target_mac=MAC_BYTES,
+        broadcast_ip=BROADCAST_IP,
+        ssh_timeout_seconds=SSH_TIMEOUT_SECONDS,
+    )
+    control_api = ControlApi(CONTROL_SOCKET, manager)
+    control_api.start()
+    try:
+        WakeOnLanResponder(manager).run()
+    finally:
+        control_api.stop()
+
+
 if __name__ == "__main__":
-    WakeOnLanResponder().run()
+    main()

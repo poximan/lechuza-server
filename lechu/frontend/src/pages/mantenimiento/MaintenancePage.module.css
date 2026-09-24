@@ -1,3 +1,16 @@
+.wolTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-space-2);
+}
+
+.monkIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  fill: currentColor;
+}
+
 .phoneList {
   margin: 0;
   padding-left: 1.25rem;
@@ -33,6 +46,42 @@
   display: block;
   width: 100%;
   height: auto;
+}
+
+.wolStatus,
+.wolError {
+  display: grid;
+  gap: var(--sc-space-2);
+  padding: var(--sc-space-3);
+  border: 1px solid var(--sc-color-success);
+  border-radius: var(--sc-radius-md);
+  background: var(--sc-color-surface-raised);
+}
+
+.wolError {
+  border-color: var(--sc-color-danger);
+  color: var(--sc-color-danger);
+}
+
+.wolDetails {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--sc-space-2);
+  margin: 0;
+}
+
+.wolDetails div {
+  min-width: 0;
+}
+
+.wolDetails dt {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}
+
+.wolDetails dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 46rem) {

@@ -29,6 +29,7 @@ from src.web.clients.micom_client import micom_client
 from src.web.clients.janitza_client import janitza_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
 from src.web.clients.proxmox_client import ProxmoxClient
+from src.web.clients.wol_control_client import WolControlClient
 from src.web.email_api import EmailApi
 from src.web.generadores_api import GeneradoresApi
 from src.web.mantenimiento_api import MantenimientoApi
@@ -81,6 +82,7 @@ class ReactApi:
                 dao=MantenimientoDao(),
                 public_base_url=config.PUBLIC_BASE_URL,
                 topology_url="/lechu/topologia.png",
+                wol_client=WolControlClient(config.WOL_CONTROL_SOCKET),
             ),
             require_protected=self._require_protected,
             response=self._response,
@@ -172,6 +174,18 @@ class ReactApi:
             "/mantenimiento",
             "mantenimiento",
             self.mantenimiento_api.get,
+            methods=["GET"],
+        )
+        self.blueprint.add_url_rule(
+            "/mantenimiento/wol",
+            "mantenimiento_wol_start",
+            self.mantenimiento_api.start_wol,
+            methods=["POST"],
+        )
+        self.blueprint.add_url_rule(
+            "/mantenimiento/wol/<string:request_id>",
+            "mantenimiento_wol_status",
+            self.mantenimiento_api.get_wol,
             methods=["GET"],
         )
         self.blueprint.add_url_rule(

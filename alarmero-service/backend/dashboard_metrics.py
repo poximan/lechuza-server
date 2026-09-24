@@ -3,7 +3,7 @@ import statistics
 from typing import Any
 from .alarm_time import _minutes_between
 
-def summarize_dashboard(count_rows, condition_row, frequency_rows, lifetime_rows):
+def summarize_dashboard(count_rows, condition_row, lifetime_rows, frequency_rows):
     metrics: dict[tuple[str, str], dict[str, Any]] = {}
     for row in lifetime_rows:
         source_id = str(row["source_id"])
