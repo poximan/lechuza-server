@@ -1,3 +1,4 @@
+import math
 import time
 from timeauthority import get_time_authority
 from typing import Any, Dict, Optional
@@ -39,7 +40,6 @@ class TcpProbe:
             return "desconocido"
 
         deadline = time_provider.monotonic() + self.result_timeout
-        failure_detected = False
 
         while time_provider.monotonic() < deadline:
             try:
@@ -54,40 +54,31 @@ class TcpProbe:
                 continue
 
             pending = False
+            successful_nodes = 0
             for node_name, results in nodes.items():
-                if results is None:
+                if not isinstance(results, list) or not results or not isinstance(results[0], dict):
                     pending = True
-                    continue
-                if not isinstance(results, list) or not results:
                     continue
 
                 first = results[0]
-                if not isinstance(first, dict):
-                    continue
-
-                latency = self._extract_latency(first)
-                if latency is not None:
-                    logger.info("Nodo %s reporto tiempo %.2f s", node_name, latency, origin="ROUTER-TELEF/TCP")
-                    if latency <= self.success_latency:
-                        return "abierto"
-                    failure_detected = True
-                    continue
-
                 error_msg = first.get("error")
                 if error_msg:
                     logger.warning("Nodo %s reporto error: %s", node_name, error_msg, origin="ROUTER-TELEF/TCP")
-                    failure_detected = True
+                    return "cerrado"
+
+                latency = self._extract_latency(first)
+                if latency is None:
+                    pending = True
                     continue
+                logger.info("Nodo %s reporto tiempo %.2f s", node_name, latency, origin="ROUTER-TELEF/TCP")
+                if latency > self.success_latency:
+                    return "cerrado"
+                successful_nodes += 1
 
-                pending = True
-
-            if failure_detected and not pending:
-                return "cerrado"
-
+            if not pending and successful_nodes == len(nodes):
+                return "abierto"
             time.sleep(self.poll_interval)
 
-        if failure_detected:
-            return "cerrado"
         return "desconocido"
 
     def _start_check(self, host: str, port: int) -> str:
@@ -123,6 +114,11 @@ class TcpProbe:
     @staticmethod
     def _extract_latency(entry: Dict[str, Any]) -> Optional[float]:
         value = entry.get("time")
-        if isinstance(value, (int, float)):
+        if (
+            not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and math.isfinite(value)
+            and value >= 0
+        ):
             return float(value)
         return None

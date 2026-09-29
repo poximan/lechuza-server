@@ -89,6 +89,16 @@ Tiempos actuales:
 - grupo electrógeno en marcha: `60 s`;
 - confirmación de recuperación: `20 s`.
 
+El monitor del router inicia `modem:link` cuando el chequeo externo confirma
+puerto cerrado. No inicia esa alarma solo por conectividad global roja, ya que
+Exemys tiene una alarma propia. Una vez iniciada, el router solo se considera
+recuperado tras dos chequeos externos consecutivos con todos los nodos exitosos
+y con el porcentaje GRD fuera de zona roja. Un resultado desconocido o una
+consulta GRD fallida conserva el estado anterior y reinicia la confirmacion de
+recuperacion. `modem-link-monitor/src/tcp_probe.py` interpreta el test externo,
+`connectivity_client.py` adapta el resumen HTTP GRD y `alarm_source.py` decide
+los flancos; Alarmero sigue siendo el unico propietario del historial.
+
 Cada proceso de Charito tiene una alarma propia. Solo una respuesta HTTP exitosa y no
 vacía de `/metrics` confirma que su daemon está vivo; un fallo de métricas con esa
 respuesta conserva la última condición conocida del proceso. Si el daemon deja de

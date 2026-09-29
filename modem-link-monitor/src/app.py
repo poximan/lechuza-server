@@ -9,6 +9,7 @@ from .logger import logger
 from .mqtt_publisher import MqttPublisher
 from .tcp_probe import TcpProbe
 from .alarm_source import ModemAlarmSource
+from .connectivity_client import GrdConnectivityClient
 from .state_store import ConnectionStateStore
 from alarm_generator import create_alarm_generator_router
 
@@ -29,6 +30,10 @@ _probe = TcpProbe(
     result_timeout=config.CHECK_HOST_RESULT_TIMEOUT_SECONDS,
     poll_interval=config.CHECK_HOST_POLL_INTERVAL_SECONDS,
     request_timeout=config.CHECK_HOST_REQUEST_TIMEOUT_SECONDS,
+)
+_connectivity_client = GrdConnectivityClient(
+    config.GRD_COLLECTOR_API_BASE,
+    config.GRD_SUMMARY_TIMEOUT_SECONDS,
 )
 _publisher: MqttPublisher | None = None
 _monitor_task: asyncio.Task | None = None
@@ -65,9 +70,21 @@ async def _monitor_loop():
             state = await asyncio.to_thread(_probe.check, config.TARGET_IP, config.TARGET_PORT)
             if state not in {"abierto", "cerrado", "desconocido"}:
                 state = "desconocido"
+            connectivity_percentage = None
+            if state == "abierto":
+                try:
+                    connectivity_percentage = await asyncio.to_thread(
+                        _connectivity_client.percentage
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "No se pudo confirmar conectividad GRD; se conserva la alarma: %s",
+                        exc,
+                        origin="ROUTER-TELEF/GRD",
+                    )
             await _state.set_state(state)
             snapshot = await _state.snapshot()
-            _alarm_source.observe(state, str(snapshot["ts"]))
+            _alarm_source.observe(state, connectivity_percentage, str(snapshot["ts"]))
             if _publisher and state != _last_published:
                 published = _publisher.publish_state(state)
                 if published:
