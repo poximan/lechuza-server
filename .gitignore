@@ -1,5 +1,6 @@
 # entorno local
 .env
+**/sentryx.env
 .venv/
 venv/
 

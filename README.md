@@ -16,6 +16,7 @@ pertenece a `platform`; este Compose consume `servicoop-edge-net` y crea
 | `janitza-collector-service` | Magnitudes de analizadores Janitza UMG96S | `127.0.0.1:8095` |
 | `pve-service` | Estado e histórico Proxmox | `127.0.0.1:8083` |
 | `charito-service` | Estado consolidado de `charo-daemon` | interno |
+| `i20api-service` | Histórico de caudalímetros i2O y sincronización Sentryx | interno |
 | `modem-link-monitor` | Estado del enlace del módem | `127.0.0.1:8086` |
 | `alarmero-service` | Ciclo de vida y despacho de alarmas | `127.0.0.1:8094` |
 | `mensagelo` | Cola durable y entrega SMTP | interno |
@@ -67,6 +68,15 @@ operación activa. El estado informa destino, broadcast, bytes UDP enviados,
 marcas UTC y el error final. El socket solo se monta en `lechu` y `wol-service` y
 la API de Lechu exige acceso protegido.
 
+## Destino del monitor del router
+
+`modem-link-monitor` toma la IP pública y el puerto exclusivamente de `TARGET_IP`
+y `TARGET_PORT` en `.env`, transmitidos por Compose. Al cambiar el destino hay que
+recrear ese contenedor para aplicar las nuevas variables. El estado operativo
+persistido se descarta si pertenece a otra IP o puerto; el incidente de alarma
+conserva su identidad hasta que el nuevo destino confirme recuperación, evitando
+un nuevo aviso causado solo por el cambio de dirección.
+
 ## Alarmas
 
 Cada generador experto expone:
@@ -89,15 +99,28 @@ Tiempos actuales:
 - grupo electrógeno en marcha: `60 s`;
 - confirmación de recuperación: `20 s`.
 
-El monitor del router inicia `modem:link` cuando el chequeo externo confirma
-puerto cerrado. No inicia esa alarma solo por conectividad global roja, ya que
-Exemys tiene una alarma propia. Una vez iniciada, el router solo se considera
-recuperado tras dos chequeos externos consecutivos con todos los nodos exitosos
-y con el porcentaje GRD fuera de zona roja. Un resultado desconocido o una
-consulta GRD fallida conserva el estado anterior y reinicia la confirmacion de
-recuperacion. `modem-link-monitor/src/tcp_probe.py` interpreta el test externo,
-`connectivity_client.py` adapta el resumen HTTP GRD y `alarm_source.py` decide
-los flancos; Alarmero sigue siendo el unico propietario del historial.
+El monitor del router inicia `modem:link` solo cuando los tres nodos elegidos
+por Check-Host informan fallos de conexion durante al menos 10 segundos. Una
+conexion exitosa en cualquiera de ellos declara el puerto abierto, incluso si
+los otros dos fallan o la conexion es lenta. Los nodos sin resultado y una
+seleccion de menos de tres nodos nunca confirman el cierre. La vista Exemys
+muestra el ultimo resultado y la identidad de cada nodo. No inicia esa alarma
+solo por conectividad global roja, ya que Exemys tiene una alarma propia. Una
+vez iniciada, el router solo se considera recuperado tras dos chequeos externos
+consecutivos abiertos y con el porcentaje GRD fuera de zona roja. Un resultado
+desconocido o una consulta GRD fallida conserva el estado anterior y reinicia
+la confirmacion de recuperacion. `modem-link-monitor/src/tcp_probe.py` interpreta
+el test externo, `connectivity_client.py` adapta el resumen HTTP GRD y
+`alarm_source.py` decide los flancos; Alarmero sigue siendo el unico propietario
+del historial.
+
+La misma vista muestra una traza UDP hacia el destino, originada dentro del
+contenedor `lechu` por `tracepath`, y una prueba TCP directa desde ese contenedor
+al puerto configurado. Se actualizan en segundo plano como maximo una vez cada
+cinco minutos y no bloquean la consulta HTTP de Exemys. La secuencia muestra
+solo los routers que respondieron; agrupa los saltos sin respuesta en un tramo
+no observable. Un tramo gris no indica que el trafico se detuvo alli. La prueba
+TCP confirma por separado si `lechu` pudo conectar al destino.
 
 Cada proceso de Charito tiene una alarma propia. Solo una respuesta HTTP exitosa y no
 vacía de `/metrics` confirma que su daemon está vivo; un fallo de métricas con esa

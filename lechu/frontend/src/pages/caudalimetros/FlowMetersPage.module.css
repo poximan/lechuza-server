@@ -1,0 +1,32 @@
+.stack, .status { display: grid; gap: var(--sc-space-3); }
+.header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sc-space-4); }
+.header h2 { margin: 0; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-space-3); margin: var(--sc-space-4) 0; }
+.controls label, .navigator label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-space-2); }
+.controls input[type="datetime-local"], .header select { padding: var(--sc-space-2); border: 1px solid var(--sc-color-border); border-radius: var(--sc-radius-md); color: var(--sc-color-text); background: var(--sc-color-surface); color-scheme: dark light; }
+.status { padding: var(--sc-space-3); border-left: 3px solid var(--sc-color-primary); background: var(--sc-color-surface-raised); }
+.muted, .readout { color: var(--sc-color-text-muted); }
+.error { color: var(--sc-color-danger); }
+.chartWrap { min-width: 0; overflow-x: auto; }
+.chart, .overview { display: block; width: 100%; touch-action: pan-y; }
+.chart { min-height: 12rem; }
+.overview { height: 7rem; cursor: ew-resize; touch-action: none; }
+.chart text, .overview text { fill: var(--sc-color-text-muted); font-size: 12px; }
+.gridLine { stroke: var(--sc-color-border); }
+.line { stroke: var(--sc-color-primary); stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; }
+.point { fill: var(--sc-color-primary); }
+.cursor { stroke: var(--sc-color-text-muted); stroke-dasharray: 4 4; }
+.readout { min-height: 1.5rem; font-variant-numeric: tabular-nums; }
+.navigator { padding-top: var(--sc-space-4); border-top: 1px solid var(--sc-color-border); }
+.navigator input[type="range"] { flex: 1; min-width: 10rem; accent-color: var(--sc-color-primary); }
+.selectionTrack { height: 0.8rem; position: relative; margin: 0 5% 1rem 6%; background: var(--sc-color-surface-raised); }
+.selectionTrack div { position: absolute; height: 100%; border: 1px solid var(--sc-color-primary); background: color-mix(in srgb, var(--sc-color-primary) 25%, transparent); }
+.tableWrap { overflow: auto; max-height: 32rem; }
+.tableWrap th { position: sticky; top: 0; background: var(--sc-color-surface); z-index: 1; }
+.tableWrap table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tableWrap th, .tableWrap td { padding: var(--sc-space-3); text-align: right; white-space: nowrap; border-bottom: 1px solid var(--sc-color-border); }
+.tableWrap th:first-child, .tableWrap td:first-child { text-align: left; }
+
+@media (max-width: 45rem) {
+  .chart { min-width: 40rem; touch-action: auto; }
+}

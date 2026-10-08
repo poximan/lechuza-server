@@ -10,6 +10,7 @@ import { MensageloPage } from "./MensageloPage";
 import { ProxmoxPage } from "./ProxmoxPage";
 import { RelaysPage } from "./RelaysPage";
 import { NetworkAnalyzersPage } from "./NetworkAnalyzersPage";
+import { FlowMetersPage } from "./caudalimetros/FlowMetersPage";
 
 export interface PageRendererProps {
   client: LechuApiClient;
@@ -29,6 +30,8 @@ export function PageRenderer({
   protectedMode,
 }: PageRendererProps) {
   switch (page) {
+    case "caudalimetros":
+      return <FlowMetersPage client={client} data={data} onChanged={onChanged} />;
     case "exemys":
       return <ExemysPage client={client} data={data} />;
     case "charito":

@@ -12,9 +12,13 @@ class RouterStatusClient:
         resp = requests.get(url, timeout=self.timeout)
         resp.raise_for_status()
         data = resp.json()
-        for key in ("ip", "port", "state"):
+        if not isinstance(data, dict) or data.get("schema_version") != 2:
+            raise ValueError("Contrato de estado del monitor del modem incompatible")
+        for key in ("ip", "port", "state", "nodes", "ts"):
             if key not in data:
-                raise ValueError(f"Respuesta invalida de router-service: falta {key}")
+                raise ValueError(f"Respuesta invalida del monitor del modem: falta {key}")
+        if not isinstance(data["nodes"], list):
+            raise ValueError("Respuesta invalida del monitor del modem: nodes no es lista")
         data["ip"] = str(data["ip"])
         data["port"] = int(data["port"])
         data["state"] = str(data["state"])

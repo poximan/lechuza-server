@@ -13,6 +13,15 @@ export class LechuApiClient {
     return this.parser.navigation(await this.get("navigation", signal));
   }
 
+  public async flowMeasurements(locationId: string, start: string, end: string, signal?: AbortSignal): Promise<JsonRecord> {
+    const query = new URLSearchParams({ location_id: locationId, start, end });
+    return this.parser.record(await this.get(`caudalimetros/measurements?${query}`, signal), "caudalímetros");
+  }
+
+  public async synchronizeFlowMeters(): Promise<JsonRecord> {
+    return this.parser.record(await this.send("caudalimetros/sync", "POST", {}), "sincronización Sentryx");
+  }
+
   public async page(name: string, signal?: AbortSignal): Promise<JsonRecord> {
     return this.parser.record(await this.get(name, signal), name);
   }

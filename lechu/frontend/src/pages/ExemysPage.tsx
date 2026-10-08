@@ -9,6 +9,7 @@ import { ConnectivityGauge } from "../components/ConnectivityGauge";
 import { ConnectivityTrafficLight } from "../components/ConnectivityTrafficLight";
 import { DisconnectedEquipmentTable } from "../components/DisconnectedEquipmentTable";
 import { OutageCards } from "../components/OutageCards";
+import { ModemDiagnostics } from "../components/ModemDiagnostics";
 
 function record(value: JsonValue | undefined): JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -117,32 +118,9 @@ export function ExemysPage({
       : windowName === "1mes"
         ? `Período de 30 días ${page + 1}`
         : "Todos los datos";
-  const modemEndpoint =
-    modem.ip === null || modem.port === null
-      ? "sin datos"
-      : `${String(modem.ip)}:${String(modem.port)}`;
   return (
     <>
-      <Card className={styles.modemBar}>
-        <span>
-          Estado [{modemEndpoint}] = <strong>{String(modem.state)}</strong>
-        </span>
-        <div>
-          <a
-            href={String(links.external_check)}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Check desde afuera
-          </a>
-          <a href={String(links.modem_admin)} rel="noreferrer" target="_blank">
-            Visitar MODEM
-          </a>
-        </div>
-      </Card>
-      {modem.error && (
-        <p className={styles.error}>Monitor del módem: {String(modem.error)}</p>
-      )}
+      <ModemDiagnostics modem={modem} links={links} />
       <div className={styles.exemysKpis}>
         <Card className={styles.exemysGauge}>
           <h3>Grado conectividad</h3>

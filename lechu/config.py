@@ -142,6 +142,7 @@ MODEM_ADMIN_URL = _req("MODEM_ADMIN_URL")
 # --- charito (frontend) ----------------------------------
 # ---------------------------------------------------------
 CHARITO_API_BASE = _req("CHARITO_API_BASE")
+I20_API_BASE = _req("I20_API_BASE")
 
 # ---------------------------------------------------------
 # --- salud de correo -------------------------------------

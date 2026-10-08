@@ -37,7 +37,7 @@ RUN set -eux; \
     printf "deb https://deb.debian.org/debian bookworm-updates main\n" >> /etc/apt/sources.list; \
     printf "deb https://security.debian.org/debian-security bookworm-security main\n" >> /etc/apt/sources.list; \
     apt-get update && \
-    apt-get install -y --no-install-recommends iputils-ping curl tzdata && \
+    apt-get install -y --no-install-recommends iputils-ping iputils-tracepath curl tzdata && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -26,7 +26,7 @@ app.add_middleware(
 _probe = TcpProbe(
     base_url=config.CHECK_HOST_BASE_URL,
     max_nodes=config.CHECK_HOST_MAX_NODES,
-    success_latency=config.CHECK_HOST_SUCCESS_LATENCY_SECONDS,
+    failure_confirmation=config.CHECK_HOST_FAILURE_CONFIRMATION_SECONDS,
     result_timeout=config.CHECK_HOST_RESULT_TIMEOUT_SECONDS,
     poll_interval=config.CHECK_HOST_POLL_INTERVAL_SECONDS,
     request_timeout=config.CHECK_HOST_REQUEST_TIMEOUT_SECONDS,
@@ -48,9 +48,12 @@ class ConnectionState:
     def _iso_now() -> str:
         return time_provider.utc_iso()
 
-    async def set_state(self, state: str) -> None:
+    async def set_state(self, result: dict) -> None:
         async with self._lock:
-            self._state["state"] = state
+            self._state["state"] = result["state"]
+            self._state["nodes"] = result["nodes"]
+            self._state["request_id"] = result.get("request_id")
+            self._state["error"] = result.get("error")
             self._state["ts"] = self._iso_now()
             self._store.save(self._state)
 
@@ -67,9 +70,10 @@ async def _monitor_loop():
     global _last_published
     while True:
         try:
-            state = await asyncio.to_thread(_probe.check, config.TARGET_IP, config.TARGET_PORT)
+            result = await asyncio.to_thread(_probe.check, config.TARGET_IP, config.TARGET_PORT)
+            state = result["state"]
             if state not in {"abierto", "cerrado", "desconocido"}:
-                state = "desconocido"
+                raise ValueError(f"Estado TCP fuera de contrato: {state}")
             connectivity_percentage = None
             if state == "abierto":
                 try:
@@ -82,7 +86,7 @@ async def _monitor_loop():
                         exc,
                         origin="ROUTER-TELEF/GRD",
                     )
-            await _state.set_state(state)
+            await _state.set_state(result)
             snapshot = await _state.snapshot()
             _alarm_source.observe(state, connectivity_percentage, str(snapshot["ts"]))
             if _publisher and state != _last_published:

@@ -89,24 +89,6 @@
   font-size: var(--sc-font-size-lg);
 }
 
-.modemBar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sc-space-4);
-}
-
-.modemBar > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sc-space-3);
-}
-
-.modemBar a {
-  color: var(--sc-color-info);
-  font-weight: 700;
-}
-
 .outages {
   margin-top: var(--sc-space-4);
 }
@@ -157,7 +139,6 @@
 }
 
 @media (max-width: 42rem) {
-  .modemBar,
   .exemysFocusHeader {
     align-items: flex-start;
     flex-direction: column;

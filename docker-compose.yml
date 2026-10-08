@@ -57,6 +57,8 @@ services:
         condition: service_started
       wol-service:
         condition: service_healthy
+      i20api-service:
+        condition: service_started
     environment:
       LECHU_DATA_DIR: ${LECHU_DATA_DIR}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
@@ -72,6 +74,7 @@ services:
       MENSAGELO_BACKOFF_INITIAL: ${MENSAGELO_BACKOFF_INITIAL}
       MENSAGELO_BACKOFF_MAX: ${MENSAGELO_BACKOFF_MAX}
       CHARITO_API_BASE: ${CHARITO_API_BASE}
+      I20_API_BASE: http://i20api-service:8096
       PVE_API_BASE: ${PVE_API_BASE}
       GRD_COLLECTOR_API_BASE: http://grd-collector-service:8087
       GENERATOR_COLLECTOR_API_BASE: http://generator-collector-service:8088
@@ -209,6 +212,29 @@ services:
     networks:
       - backend
       - edge
+
+  i20api-service:
+    pids_limit: 256
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: i20api-service/Dockerfile
+    image: lechu-i20api-service:1.0.0
+    container_name: lechu-i20api-service
+    environment:
+      I20_CONFIG_FILE: /app/config/settings.json
+      I20_CREDENTIALS_FILE: /app/config/sentryx.env
+      I20_DATABASE_PATH: /app/data/measurements.sqlite3
+    volumes:
+      - ./i20api-service/config/settings.json:/app/config/settings.json:ro
+      - ./i20api-service/config/sentryx.env:/app/config/sentryx.env:ro
+      - ./volumes/i20api-service:/app/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - backend
 
   charito-service:
     pids_limit: 256
@@ -484,7 +510,7 @@ services:
       ALARM_INTERNAL_API_KEY: ${ALARM_INTERNAL_API_KEY}
       CHECK_HOST_BASE_URL: ${CHECK_HOST_BASE_URL}
       CHECK_HOST_MAX_NODES: ${CHECK_HOST_MAX_NODES}
-      CHECK_HOST_SUCCESS_LATENCY_SECONDS: ${CHECK_HOST_SUCCESS_LATENCY_SECONDS}
+      CHECK_HOST_FAILURE_CONFIRMATION_SECONDS: ${CHECK_HOST_FAILURE_CONFIRMATION_SECONDS}
       CHECK_HOST_RESULT_TIMEOUT_SECONDS: ${CHECK_HOST_RESULT_TIMEOUT_SECONDS}
       CHECK_HOST_POLL_INTERVAL_SECONDS: ${CHECK_HOST_POLL_INTERVAL_SECONDS}
       CHECK_HOST_REQUEST_TIMEOUT_SECONDS: ${CHECK_HOST_REQUEST_TIMEOUT_SECONDS}

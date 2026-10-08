@@ -23,9 +23,13 @@ class ConnectionStateStore:
             raise RuntimeError("Estado persistido del modem invalido")
         if value.get("ip") != self.ip or value.get("port") != self.port:
             return self._unknown()
+        if value.get("schema_version") != 2:
+            return self._unknown()
         if value.get("state") not in {"abierto", "cerrado", "desconocido"}:
             raise RuntimeError("Estado persistido del modem fuera de contrato")
         _TIME.parse(str(value.get("ts")))
+        if not isinstance(value.get("nodes"), list):
+            raise RuntimeError("Resultados por nodo persistidos invalidos")
         return dict(value)
 
     def save(self, value: dict) -> None:
@@ -49,8 +53,12 @@ class ConnectionStateStore:
 
     def _unknown(self) -> dict:
         return {
+            "schema_version": 2,
             "ip": self.ip,
             "port": self.port,
             "state": "desconocido",
+            "nodes": [],
+            "request_id": None,
+            "error": None,
             "ts": _TIME.utc_iso(),
         }

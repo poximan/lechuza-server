@@ -1,0 +1,149 @@
+.card {
+  display: grid;
+  gap: var(--sc-space-4);
+  min-width: 0;
+}
+
+.header,
+.nodeHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sc-space-3);
+}
+
+.header h2,
+.details h3 {
+  margin: 0;
+}
+
+.header h2 {
+  font-size: var(--sc-font-size-lg);
+}
+
+.header p,
+.details p {
+  margin: var(--sc-space-2) 0 0;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sc-space-3);
+}
+
+.links a {
+  color: var(--sc-color-info);
+  font-weight: 700;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-space-4);
+}
+
+.details section {
+  min-width: 0;
+}
+
+.nodes {
+  display: grid;
+  gap: var(--sc-space-2);
+  margin: var(--sc-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.node {
+  display: grid;
+  gap: var(--sc-space-1);
+  padding: var(--sc-space-2);
+  border: 1px solid var(--sc-color-border);
+  border-radius: var(--sc-radius-md);
+  overflow-wrap: anywhere;
+}
+
+.connected,
+.disconnected,
+.pending {
+  flex: none;
+  font-weight: 700;
+}
+
+.connected {
+  color: var(--sc-color-success);
+}
+
+.disconnected,
+.error {
+  color: var(--sc-color-danger);
+}
+
+.pending,
+.muted {
+  color: var(--sc-color-text-muted);
+}
+
+.route {
+  display: grid;
+  gap: var(--sc-space-2);
+  margin: var(--sc-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.routeReached,
+.routeUnknown {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sc-space-1) var(--sc-space-3);
+  padding: var(--sc-space-2) var(--sc-space-3);
+  border: 1px solid var(--sc-color-border);
+  border-left-width: 0.25rem;
+  border-radius: var(--sc-radius-md);
+  overflow-wrap: anywhere;
+}
+
+.routeReached {
+  border-left-color: var(--sc-color-success);
+  background: color-mix(in srgb, var(--sc-color-success) 8%, transparent);
+}
+
+.routeUnknown {
+  border-left-color: var(--sc-color-text-muted);
+  background: color-mix(in srgb, var(--sc-color-text-muted) 6%, transparent);
+}
+
+.route li > span {
+  color: var(--sc-color-text-muted);
+  font-size: var(--sc-font-size-sm);
+}
+
+.route li > small {
+  grid-column: 2;
+  color: var(--sc-color-text-muted);
+}
+
+@media (max-width: 70rem) {
+  .details {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 42rem) {
+  .header,
+  .nodeHeading {
+    flex-direction: column;
+  }
+
+  .routeReached,
+  .routeUnknown {
+    grid-template-columns: 1fr;
+  }
+
+  .route li > small {
+    grid-column: 1;
+  }
+}

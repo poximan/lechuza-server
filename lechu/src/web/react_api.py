@@ -16,6 +16,7 @@ from src.servicios.generadores.generadores_service import GeneradoresService
 from src.servicios.mantenimiento.mantenimiento_service import MantenimientoService
 from src.servicios.mensagelo.mensagelo_service import MensageloService
 from src.servicios.exemys.exemys_service import ExemysService
+from src.servicios.exemys.route_trace_service import RouteTraceService
 from src.servicios.proxmox.proxmox_service import ProxmoxService
 from src.servicios.reles.reles_service import RelesService
 from src.servicios.analizadores.analizadores_service import AnalizadoresService
@@ -28,6 +29,7 @@ from src.web.clients.generator_client import generator_client
 from src.web.clients.micom_client import micom_client
 from src.web.clients.janitza_client import janitza_client
 from src.web.clients.modem_link_monitor_client import modem_link_monitor_client
+from src.web.clients.route_diagnostics_client import RouteDiagnosticsClient
 from src.web.clients.proxmox_client import ProxmoxClient
 from src.web.clients.wol_control_client import WolControlClient
 from src.web.email_api import EmailApi
@@ -38,18 +40,22 @@ from src.web.navigation import lechu_navigation
 from src.web.exemys_api import ExemysApi
 from src.web.proxmox_api import ProxmoxApi
 from src.web.reles_api import RelesApi
+from src.web.caudalimetros_api import CaudalimetrosApi
+from src.web.clients.i20_client import I20Client
 
 
 class ReactApi:
     """Registra rutas generales y conecta cada vista con su controlador propio."""
 
     def __init__(self, mqtt_client_manager: Any):
+        self.caudalimetros_api = CaudalimetrosApi(I20Client(config.I20_API_BASE), self._response)
         charito_client = CharitoClient(config.CHARITO_API_BASE)
         proxmox_client = ProxmoxClient(config.PVE_API_BASE)
         self.exemys_api = ExemysApi(
             service=ExemysService(
                 modbus_client=grd_client,
                 modem_client=modem_link_monitor_client,
+                route_trace_service=RouteTraceService(RouteDiagnosticsClient()),
             ),
             require_protected=self._require_protected,
             response=self._response,
@@ -113,6 +119,9 @@ class ReactApi:
         self._register_routes()
 
     def _register_routes(self) -> None:
+        self.blueprint.add_url_rule("/caudalimetros", "caudalimetros", self.caudalimetros_api.get, methods=["GET"])
+        self.blueprint.add_url_rule("/caudalimetros/measurements", "caudalimetros_measurements", self.caudalimetros_api.measurements, methods=["GET"])
+        self.blueprint.add_url_rule("/caudalimetros/sync", "caudalimetros_sync", self.caudalimetros_api.sync, methods=["POST"])
         self.blueprint.add_url_rule(
             "/navigation", "navigation", self.navigation, methods=["GET"]
         )

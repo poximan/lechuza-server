@@ -7,9 +7,10 @@ from src.utils import timebox
 
 
 class ExemysService:
-    def __init__(self, modbus_client: Any, modem_client: Any):
+    def __init__(self, modbus_client: Any, modem_client: Any, route_trace_service: Any):
         self.modbus_client = modbus_client
         self.modem_client = modem_client
+        self.route_trace_service = route_trace_service
 
     def get_contract(self) -> dict[str, Any]:
         try:
@@ -21,6 +22,7 @@ class ExemysService:
                 "state": "desconocido",
                 "error": f"{type(exc).__name__}: {exc}",
             }
+        modem["route_trace"] = self.route_trace_service.snapshot(modem["ip"], modem["port"])
         return {
             "reference_now": timebox.utc_iso(),
             "summary": self.modbus_client.get_summary(),

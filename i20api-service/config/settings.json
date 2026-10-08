@@ -1,0 +1,11 @@
+{
+  "locations": [
+    {"id": "urn:mwp:location:ZBXsa-8MqEOCtFIaSShmZA", "name": "LogAluar"}
+  ],
+  "resolution": "PT15M",
+  "retention_months": 2,
+  "daily_time": "00:10",
+  "retry_hours": [1, 2],
+  "http_timeout_seconds": 30,
+  "page_size": 5000
+}

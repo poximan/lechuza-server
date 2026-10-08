@@ -14,6 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
   proxmox: "proxmox",
   reles: "estado reles MiCOM",
   analizadores: "analiz. red",
+  caudalimetros: "Caudalímetros",
   mantenimiento: "mantenimiento",
   mensagelo: "mensagelo",
   broker: "broker mqtt",
