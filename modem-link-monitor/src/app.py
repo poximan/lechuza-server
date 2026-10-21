@@ -8,6 +8,7 @@ from . import config
 from .logger import logger
 from .mqtt_publisher import MqttPublisher
 from .tcp_probe import TcpProbe
+from .globalping_probe import ExternalTcpProbe, GlobalpingTcpProbe
 from .alarm_source import ModemAlarmSource
 from .connectivity_client import GrdConnectivityClient
 from .state_store import ConnectionStateStore
@@ -23,13 +24,23 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-_probe = TcpProbe(
+_check_host_probe = TcpProbe(
     base_url=config.CHECK_HOST_BASE_URL,
     max_nodes=config.CHECK_HOST_MAX_NODES,
     failure_confirmation=config.CHECK_HOST_FAILURE_CONFIRMATION_SECONDS,
     result_timeout=config.CHECK_HOST_RESULT_TIMEOUT_SECONDS,
     poll_interval=config.CHECK_HOST_POLL_INTERVAL_SECONDS,
     request_timeout=config.CHECK_HOST_REQUEST_TIMEOUT_SECONDS,
+    max_attempts=config.CHECK_HOST_MAX_ATTEMPTS,
+    node_cooldown=config.CHECK_HOST_NODE_COOLDOWN_SECONDS,
+    nodes_refresh=config.CHECK_HOST_NODES_REFRESH_SECONDS,
+)
+_probe = ExternalTcpProbe(
+    GlobalpingTcpProbe(config.GLOBALPING_BASE_URL, config.GLOBALPING_RESULT_TIMEOUT_SECONDS,
+                       config.CHECK_HOST_POLL_INTERVAL_SECONDS, config.CHECK_HOST_REQUEST_TIMEOUT_SECONDS,
+                       config.CHECK_HOST_FAILURE_CONFIRMATION_SECONDS, config.CHECK_HOST_MAX_NODES),
+    _check_host_probe,
+    primary=config.MODEM_EXTERNAL_PROVIDER,
 )
 _connectivity_client = GrdConnectivityClient(
     config.GRD_COLLECTOR_API_BASE,
@@ -54,7 +65,14 @@ class ConnectionState:
             self._state["nodes"] = result["nodes"]
             self._state["request_id"] = result.get("request_id")
             self._state["error"] = result.get("error")
+            self._state["attempts"] = result.get("attempts", [])
+            self._state["elapsed_seconds"] = result.get("elapsed_seconds")
+            self._state["provider"] = result.get("provider")
             self._state["ts"] = self._iso_now()
+            if result["state"] in {"abierto", "cerrado"}:
+                self._state["last_confirmed"] = {
+                    "state": result["state"], "ts": self._state["ts"],
+                }
             self._store.save(self._state)
 
     async def snapshot(self) -> dict:

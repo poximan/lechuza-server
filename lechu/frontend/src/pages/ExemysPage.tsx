@@ -56,6 +56,7 @@ export function ExemysPage({
   const modem = record(data.modem);
   const thresholds = record(data.thresholds);
   const links = record(data.links);
+  const externalCheckUrl = typeof links.external_check === "string" ? links.external_check : null;
   const disconnected = array(summaryEnvelope.disconnected);
   const unavailable = array(summaryEnvelope.unavailable);
   const referenceNow =
@@ -120,7 +121,7 @@ export function ExemysPage({
         : "Todos los datos";
   return (
     <>
-      <ModemDiagnostics modem={modem} links={links} />
+      <ModemDiagnostics modem={modem} externalCheckUrl={externalCheckUrl} />
       <div className={styles.exemysKpis}>
         <Card className={styles.exemysGauge}>
           <h3>Grado conectividad</h3>

@@ -30,6 +30,12 @@ class ConnectionStateStore:
         _TIME.parse(str(value.get("ts")))
         if not isinstance(value.get("nodes"), list):
             raise RuntimeError("Resultados por nodo persistidos invalidos")
+        value.setdefault("attempts", [])
+        value.setdefault("elapsed_seconds", None)
+        value.setdefault("last_confirmed", (
+            {"state": value["state"], "ts": value["ts"]}
+            if value["state"] in {"abierto", "cerrado"} else None
+        ))
         return dict(value)
 
     def save(self, value: dict) -> None:
@@ -60,5 +66,8 @@ class ConnectionStateStore:
             "nodes": [],
             "request_id": None,
             "error": None,
+            "attempts": [],
+            "elapsed_seconds": None,
+            "last_confirmed": None,
             "ts": _TIME.utc_iso(),
         }

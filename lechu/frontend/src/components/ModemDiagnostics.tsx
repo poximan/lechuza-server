@@ -27,7 +27,68 @@ function timestamp(value: JsonValue | undefined): string | null {
 function nodeStatus(value: JsonValue | undefined): string {
   if (value === "conectado") return "Conectó";
   if (value === "desconectado") return "No conectó";
-  return "Sin resultado";
+  if (value === "error_nodo") return "Falla de la sonda";
+  if (value === "sin_resultado") return "Sonda sin respuesta";
+  if (value === "no_esperado") return "No se esperó: conexión ya confirmada";
+  return "Consulta pendiente";
+}
+
+function StatusIcon({ state, label, large = false }: {
+  state: string;
+  label: string;
+  large?: boolean;
+}) {
+  const connected = state === "abierto" || state === "conectado";
+  const disconnected = state === "cerrado" || state === "desconectado";
+  return (
+    <svg
+      aria-label={label}
+      className={`${styles.statusIcon} ${large ? styles.mainIcon : ""} ${connected
+        ? styles.connected : disconnected ? styles.disconnected : styles.pending}`}
+      fill="none"
+      role="img"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <title>{label}</title>
+      <circle cx="12" cy="12" r="10" />
+      {connected ? <path d="m7 12 3 3 7-7" />
+        : disconnected ? <path d="m8 8 8 8M16 8l-8 8" />
+          : <><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></>}
+    </svg>
+  );
+}
+
+function ProbeNodes({ nodes }: { nodes: JsonRecord[] }) {
+  return (
+    <ol className={styles.nodes}>
+      {nodes.map((node) => {
+        const status = String(node.status ?? "pendiente");
+        const place = [node.city, node.country]
+          .filter((part) => typeof part === "string" && part.length > 0).join(", ");
+        const probeIp = typeof node.probe_ip === "string" ? node.probe_ip : "";
+        const error = typeof node.error === "string" ? node.error : "";
+        const latency = typeof node.latency_seconds === "number"
+          ? `${(node.latency_seconds * 1000).toFixed(0)} ms` : "";
+        return (
+          <li className={styles.node} key={String(node.id)}>
+            <div className={styles.nodeHeading}>
+              <strong>{String(node.id)}</strong>
+              <span className={styles.nodeResult}>
+                <StatusIcon state={status} label={nodeStatus(node.status)} />
+                {latency && <span>{latency}</span>}
+              </span>
+            </div>
+            {(place || probeIp) && <small>{place}{place && probeIp ? " · " : ""}{probeIp}</small>}
+            {error && <small className={status === "desconectado" ? styles.error : styles.muted}>{error}</small>}
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 type RouteSegment =
@@ -53,16 +114,24 @@ function routeSegments(hops: JsonRecord[], attempted: number): RouteSegment[] {
 
 export function ModemDiagnostics({
   modem,
-  links,
+  externalCheckUrl,
 }: {
   modem: JsonRecord;
-  links: JsonRecord;
+  externalCheckUrl: string | null;
 }) {
   const endpoint =
     modem.ip == null || modem.port == null
       ? "sin datos"
       : `${String(modem.ip)}:${String(modem.port)}`;
   const nodes = records(modem.nodes);
+  const attempts = records(modem.attempts);
+  const lastConfirmed = record(modem.last_confirmed);
+  const lastConfirmedAt = timestamp(lastConfirmed.ts);
+  const state = String(modem.state ?? "desconocido");
+  const stateLabel = state === "abierto" ? "Conectado"
+    : state === "cerrado" ? "Sin conexión" : "Sin confirmar";
+  const connectedNodes = nodes.filter((node) => node.status === "conectado").length;
+  const answeredNodes = nodes.filter((node) => node.status === "conectado" || node.status === "desconectado").length;
   const trace = record(modem.route_trace);
   const hops = records(trace.hops);
   const checkedAt = timestamp(modem.ts);
@@ -74,6 +143,8 @@ export function ModemDiagnostics({
   const segments = routeSegments(hops, attempted);
   const tcp = record(trace.tcp);
   const tcpStatus = String(tcp.status ?? "sin_datos");
+  const lanState = ["rechazado", "sin_respuesta", "error"].includes(tcpStatus)
+    ? "desconectado" : tcpStatus;
   const destinationObserved =
     trace.reached === true || tcpStatus === "conectado" || tcpStatus === "rechazado";
   const tcpDescription =
@@ -90,77 +161,72 @@ export function ModemDiagnostics({
     <Card className={styles.card}>
       <div className={styles.header}>
         <div>
-          <h2>
-            Estado [{endpoint}] = <strong>{String(modem.state ?? "desconocido")}</strong>
-          </h2>
-          <p>{checkedAt ? `Último chequeo externo: ${checkedAt}` : "Sin chequeo externo confirmado"}</p>
+          <h2>Verificación TCP</h2>
+          <p><strong>Módem · {endpoint}</strong></p>
         </div>
         <div className={styles.links}>
-          <a href={String(links.external_check)} rel="noreferrer" target="_blank">
+          {externalCheckUrl && <a href={externalCheckUrl} rel="noreferrer" target="_blank">
             Check desde afuera
-          </a>
-          <a href={String(links.modem_admin)} rel="noreferrer" target="_blank">
-            Visitar MODEM
-          </a>
+          </a>}
         </div>
       </div>
       <div className={styles.details}>
         <section aria-label="Nodos del chequeo externo">
-          <h3>Nodos de Check-Host ({nodes.length} seleccionados)</h3>
-          {nodes.length === 0 ? (
-            <p className={styles.muted}>Todavía no hay resultados por nodo.</p>
-          ) : (
-            <ol className={styles.nodes}>
-              {nodes.map((node) => {
-                const status = String(node.status ?? "pendiente");
-                const place = [node.city, node.country]
-                  .filter((part) => typeof part === "string" && part.length > 0)
-                  .join(", ");
-                const probeIp = typeof node.probe_ip === "string" ? node.probe_ip : "";
-                const error = typeof node.error === "string" ? node.error : "";
-                const latency =
-                  typeof node.latency_seconds === "number"
-                    ? ` · ${node.latency_seconds.toFixed(2)} s`
-                    : "";
-                return (
-                  <li className={styles.node} key={String(node.id)}>
-                    <div className={styles.nodeHeading}>
-                      <strong>{String(node.id)}</strong>
-                      <span
-                        className={
-                          status === "conectado"
-                            ? styles.connected
-                            : status === "desconectado"
-                              ? styles.disconnected
-                              : styles.pending
-                        }
-                      >
-                        {nodeStatus(node.status)}{latency}
-                      </span>
-                    </div>
-                    {(place || probeIp) && (
-                      <small>{place}{place && probeIp ? " · " : ""}{probeIp}</small>
-                    )}
-                    {error && <small className={styles.error}>{error}</small>}
-                  </li>
-                );
-              })}
-            </ol>
+          <h3 className={styles.resultHeading}>
+            <StatusIcon state={state} label={stateLabel} large />
+            <span>{String(modem.provider ?? "Internet")}</span>
+          </h3>
+          <p className={styles.muted}>{checkedAt ? `Último chequeo: ${checkedAt}` : "Sin chequeo confirmado"}</p>
+          <p className={styles.muted}>
+            {connectedNodes > 0 ? `${connectedNodes} sonda${connectedNodes === 1 ? " confirmó" : "s confirmaron"} conexión.`
+              : `${answeredNodes} de ${nodes.length} sondas entregaron un resultado TCP.`}
+            {typeof modem.elapsed_seconds === "number" ? ` Duración: ${modem.elapsed_seconds.toFixed(1)} s.` : ""}
+          </p>
+          {state === "desconocido" && (
+            <p className={styles.notice}>Faltan respuestas concluyentes de las sondas; este chequeo no confirma una caída del módem.</p>
+          )}
+          {state === "desconocido" && lastConfirmedAt && (
+            <p>Última confirmación: {lastConfirmed.state === "abierto" ? "accesible" : "sin conexión"} · {lastConfirmedAt}</p>
+          )}
+          <details className={styles.routeDetails}>
+            <summary>Diagnóstico de ruta</summary>
+            <p className={styles.muted}>
+              Verificación TCP desde sondas externas hacia el módem.
+            </p>
+          {attempts.length > 0 ? attempts.map((attempt, index) => (
+            <div className={styles.attempt} key={index}>
+              <h4>Intento {String(attempt.number ?? index + 1)} · {String(attempt.provider ?? "Check-Host")}{index > 0 ? " · otras sondas" : ""}</h4>
+              <ProbeNodes nodes={records(attempt.nodes)} />
+              {typeof attempt.error === "string" && attempt.error && <p className={styles.muted}>{attempt.error}</p>}
+            </div>
+          )) : nodes.length > 0 ? <ProbeNodes nodes={nodes} /> : (
+            <p className={styles.muted}>Todavía no hay resultados por sonda.</p>
           )}
           {typeof modem.error === "string" && modem.error && (
             <p className={styles.error}>{modem.error}</p>
           )}
+          </details>
         </section>
-        <section aria-label="Camino desde Lechu">
-          <h3>Camino desde el contenedor lechu</h3>
+        <section aria-label="Verificación TCP desde la red LAN">
+          <h3 className={styles.resultHeading}>
+            <StatusIcon state={lanState} label={tcpDescription} large />
+            <span>Red LAN</span>
+          </h3>
           <p className={styles.muted}>
-            Los routers intermedios se buscan con una traza UDP. El destino se comprueba
-            aparte con TCP al puerto {String(modem.port ?? "?")}.
-          </p>
-          <p className={styles.muted}>
-            {tracedAt ? `Último diagnóstico: ${tracedAt}` : "Sin diagnóstico completado"}
+            {tracedAt ? `Último chequeo: ${tracedAt}` : "Sin chequeo confirmado"}
             {trace.running === true ? " · Actualizando…" : ""}
           </p>
+          {typeof tcp.latency_ms === "number" && (
+            <p>{tcp.latency_ms.toFixed(2)} ms</p>
+          )}
+          {typeof tcp.error === "string" && tcp.error && (
+            <p className={styles.error}>{tcp.error}</p>
+          )}
+          <details className={styles.routeDetails}>
+            <summary>Diagnóstico de ruta</summary>
+            <p className={styles.muted}>
+              Traza UDP desde Lechu. Los tramos sin respuesta no indican una caída.
+            </p>
           <ol className={styles.route}>
             <li className={styles.routeReached}>
               <span>Origen</span>
@@ -201,6 +267,7 @@ export function ModemDiagnostics({
           {typeof trace.error === "string" && trace.error && (
             <p className={styles.error}>Traza: {trace.error}</p>
           )}
+          </details>
         </section>
       </div>
     </Card>

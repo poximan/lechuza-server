@@ -43,8 +43,8 @@ class SentryxClient:
     def _token(self):
         if self.token and time.monotonic() < self.expires:
             return
-        response = self.session.post("https://auth.api.sentryx.cloud/oauth2/token", data={
-            "grant_type": "client_credentials", "scope": "https://inet.api.sentryx.cloud/read",
+        response = self.session.post("https://auth.api.gwf.i2owater.com/oauth2/token", data={
+            "grant_type": "client_credentials", "scope": "https://inet.api.gwf.i2owater.com/read",
             "client_id": self.client_id, "client_secret": self.client_secret,
         }, timeout=self.settings.http_timeout_seconds)
         if not response.ok:
@@ -64,7 +64,7 @@ class SentryxClient:
         while True:
             for attempt in range(2):
                 self._token()
-                response = self.session.post("https://inet.api.sentryx.cloud/graphql",
+                response = self.session.post("https://inet.api.gwf.i2owater.com/graphql",
                     json={"query": QUERY, "variables": {"where": where,
                           "first": self.settings.page_size, "after": after}},
                     headers={"Authorization": f"Bearer {self.token}"},

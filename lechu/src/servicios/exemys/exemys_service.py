@@ -34,7 +34,6 @@ class ExemysService:
             },
             "links": {
                 "external_check": config.MODEM_EXTERNAL_CHECK_URL,
-                "modem_admin": config.MODEM_ADMIN_URL,
             },
         }
 

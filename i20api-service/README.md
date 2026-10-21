@@ -15,6 +15,21 @@ Copiar `config/sentryx.env.example` a `config/sentryx.env`, completar credencial
 dar permiso `0600`. Este archivo está excluido de Git y del contexto de build y se monta
 en solo lectura. El proceso y el directorio de datos usan UID/GID 1000.
 
+## Contrato de la API del proveedor
+
+Se utilizan las URL de `gwf.i2owater.com` indicadas en el aviso de migración del
+proveedor; el dominio anterior se descontinúa el 1 de noviembre de 2026:
+
+| Uso | URL |
+| --- | --- |
+| Autorización OAuth2 | `https://auth.api.gwf.i2owater.com/oauth2/token` |
+| Scope de lectura | `https://inet.api.gwf.i2owater.com/read` |
+| Endpoint GraphQL | `https://inet.api.gwf.i2owater.com/graphql` |
+
+Según el aviso, las credenciales, las estructuras de solicitud/respuesta y el uso
+de cursores se mantienen. Después de actualizar el código, se debe reconstruir
+la imagen y recrear `i20api-service` para aplicar estas URL.
+
 ## Sincronización
 
 El logger comunica a las 00:00 UTC−3. El primer intento comienza a las 00:10.
@@ -59,7 +74,10 @@ referencia GraphQL de 2024 y guías de recepción/extracción. `receivedAt` requ
 recuperación si su cursor envejece siete días; la consulta por fechas del rango retenido
 evita depender de ese cursor para recuperar demoras del logger.
 
-Las pruebas del 7 de octubre de 2026 autenticaron y encontraron LogAluar, pero
-`measuredAt` en RAW y PT15M y `receivedAt` devolvieron `ServerError`. El frontend
-muestra este error y no presenta mediciones simuladas. El proveedor debe resolver
-el acceso a las series para validar datos reales de extremo a extremo.
+Las pruebas del 7 de octubre de 2026 sobre el dominio anterior autenticaron y
+encontraron LogAluar, pero `measuredAt` en RAW y PT15M y `receivedAt` devolvieron
+`ServerError`. La validación del 9 de octubre de 2026 sobre `gwf.i2owater.com`
+confirmó la autenticación con el nuevo scope; tanto `measuredAt` (últimas 24 horas,
+PT15M) como `receivedAt(first: 1)` volvieron a devolver `ServerError`.
+El frontend muestra este error y no presenta mediciones simuladas. El proveedor
+debe resolver el acceso a las series para validar datos reales de extremo a extremo.

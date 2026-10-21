@@ -99,18 +99,48 @@ Tiempos actuales:
 - grupo electrógeno en marcha: `60 s`;
 - confirmación de recuperación: `20 s`.
 
-El monitor del router inicia `modem:link` solo cuando los tres nodos elegidos
-por Check-Host informan fallos de conexion durante al menos 10 segundos. Una
-conexion exitosa en cualquiera de ellos declara el puerto abierto, incluso si
-los otros dos fallan o la conexion es lenta. Los nodos sin resultado y una
-seleccion de menos de tres nodos nunca confirman el cierre. La vista Exemys
-muestra el ultimo resultado y la identidad de cada nodo. No inicia esa alarma
-solo por conectividad global roja, ya que Exemys tiene una alarma propia. Una
+El monitor del router usa Globalping como proveedor principal mediante mediciones
+`ping` con `protocol=TCP`, el puerto configurado y una conexion por sonda. La
+API elige hasta tres sondas distribuidas entre Sudamerica, Norteamerica y Europa.
+Se interpreta la cantidad de conexiones TCP establecidas en las estadisticas;
+una respuesta ICMP no confirma la disponibilidad del puerto. La primera conexion
+exitosa confirma el acceso inmediatamente. El plazo de resultados es 35 segundos,
+para que tambien alcance la confirmacion de fallos TCP que llegan con demora.
+Si la medicion es inconclusa, se usa Check-Host como respaldo. El proveedor usado
+y todos los intentos se muestran en Exemys. `MODEM_EXTERNAL_PROVIDER=check-host`
+permite seleccionar explicitamente el proveedor anterior; el valor inicial es
+`globalping`. `GLOBALPING_BASE_URL` y `GLOBALPING_RESULT_TIMEOUT_SECONDS`
+configuran el nuevo proveedor. Referencia: https://globalping.io/docs/api.globalping.io.
+
+Para el respaldo, el monitor consulta el catalogo oficial de Check-Host y selecciona
+tres sondas explicitas, rotando primero las menos usadas y procurando diversidad
+de paises y redes. El catalogo se conserva una hora; si falla su actualizacion,
+se reutiliza el anterior. Cuando no se obtuvo ningun catalogo, la primera consulta
+puede utilizar la seleccion del proveedor.
+
+Cada intento de Check-Host espera resultados asincronos hasta 45 segundos. Una conexion
+exitosa declara el puerto abierto inmediatamente; las otras sondas pendientes
+se muestran como no esperadas porque la conexion ya esta confirmada. Si el
+intento queda inconcluso, se realiza un segundo con otras sondas disponibles.
+Las sondas sin resultado o con errores internos (por ejemplo, `Too many open files`)
+descansan 15 minutos. Un error de ese tipo nunca confirma una caida del destino.
+Una respuesta HTTP 429 detiene el ciclo, evitando reiterar solicitudes limitadas.
+Los limites se configuran mediante `CHECK_HOST_MAX_ATTEMPTS`,
+`CHECK_HOST_NODE_COOLDOWN_SECONDS`, `CHECK_HOST_NODES_REFRESH_SECONDS` y los
+plazos de consulta existentes. El intervalo entre ciclos sigue siendo 300 segundos.
+
+El monitor inicia `modem:link` solo cuando las tres sondas de un mismo intento
+informan fallos explicitos de conexion y ese conjunto permanece confirmado
+durante al menos 10 segundos desde su primera observacion completa. Las sondas
+sin resultado, sus errores internos y una seleccion de menos de tres sondas
+nunca confirman el cierre. La vista Exemys muestra cada intento, la identidad de
+las sondas y, si el chequeo es inconcluso, la ultima confirmacion con su fecha.
+No inicia esa alarma solo por conectividad global roja, ya que Exemys tiene una alarma propia. Una
 vez iniciada, el router solo se considera recuperado tras dos chequeos externos
 consecutivos abiertos y con el porcentaje GRD fuera de zona roja. Un resultado
 desconocido o una consulta GRD fallida conserva el estado anterior y reinicia
-la confirmacion de recuperacion. `modem-link-monitor/src/tcp_probe.py` interpreta
-el test externo, `connectivity_client.py` adapta el resumen HTTP GRD y
+la confirmacion de recuperacion. `globalping_probe.py` y `tcp_probe.py` interpretan
+los tests externos, `connectivity_client.py` adapta el resumen HTTP GRD y
 `alarm_source.py` decide los flancos; Alarmero sigue siendo el unico propietario
 del historial.
 

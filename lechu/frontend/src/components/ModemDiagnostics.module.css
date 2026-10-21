@@ -17,8 +17,39 @@
   margin: 0;
 }
 
+.nodeHeading {
+  flex-wrap: wrap;
+}
+
 .header h2 {
   font-size: var(--sc-font-size-lg);
+}
+
+.resultHeading,
+.nodeResult {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-space-2);
+}
+
+.resultHeading {
+  overflow-wrap: anywhere;
+}
+
+.statusIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+}
+
+.mainIcon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.nodeResult {
+  flex: none;
+  white-space: nowrap;
 }
 
 .header p,
@@ -55,6 +86,20 @@
   list-style: none;
 }
 
+.attempt {
+  margin-top: var(--sc-space-3);
+}
+
+.attempt h4 {
+  margin: 0;
+}
+
+.notice {
+  padding: var(--sc-space-2) var(--sc-space-3);
+  border-left: 0.25rem solid var(--sc-color-info);
+  background: color-mix(in srgb, var(--sc-color-info) 8%, transparent);
+}
+
 .node {
   display: grid;
   gap: var(--sc-space-1);
@@ -68,6 +113,7 @@
 .disconnected,
 .pending {
   flex: none;
+  max-width: 100%;
   font-weight: 700;
 }
 
@@ -91,6 +137,16 @@
   margin: var(--sc-space-3) 0 0;
   padding: 0;
   list-style: none;
+}
+
+.routeDetails {
+  margin-top: var(--sc-space-3);
+}
+
+.routeDetails summary {
+  color: var(--sc-color-info);
+  cursor: pointer;
+  font-weight: 700;
 }
 
 .routeReached,

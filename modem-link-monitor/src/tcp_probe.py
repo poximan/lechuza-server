@@ -21,6 +21,9 @@ class TcpProbe:
         result_timeout: float,
         poll_interval: float,
         request_timeout: float,
+        max_attempts: int = 2,
+        node_cooldown: float = 900,
+        nodes_refresh: float = 3600,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.max_nodes = max_nodes
@@ -28,23 +31,124 @@ class TcpProbe:
         self.result_timeout = result_timeout
         self.poll_interval = poll_interval
         self.request_timeout = request_timeout
+        self.max_attempts = max_attempts
+        self.node_cooldown = node_cooldown
+        self.nodes_refresh = nodes_refresh
+        self._catalog: dict[str, Any] = {}
+        self._catalog_expires = 0.0
+        self._last_used: dict[str, float] = {}
+        self._cooldown_until: dict[str, float] = {}
         self.session = requests.Session()
         self.session.verify = certifi.where()
         self.headers = {"Accept": "application/json"}
 
     def check(self, host: str, port: int) -> dict[str, Any]:
-        try:
-            request_id, selected = self._start_check(host, port)
-        except Exception as exc:
-            logger.error("No se pudo iniciar el chequeo TCP: %s", exc, origin="ROUTER-TELEF/TCP")
-            return {"state": "desconocido", "nodes": [], "error": str(exc)}
+        started_at = time_provider.monotonic()
+        attempts = []
+        excluded: set[str] = set()
+        self._refresh_nodes()
+        for number in range(1, self.max_attempts + 1):
+            candidates = self._choose_nodes(excluded)
+            # Do not ask the provider to choose again if it could reuse a failed batch.
+            if number > 1 and not candidates:
+                break
+            if self._catalog and not candidates:
+                break
+            try:
+                request_id, selected = self._start_check(host, port, candidates)
+                used_at = time_provider.monotonic()
+                for name in selected:
+                    self._last_used[name] = used_at
+                excluded.update(selected)
+                attempt = self._poll_check(request_id, selected)
+            except Exception as exc:
+                logger.warning("No se pudo completar el chequeo TCP: %s", exc, origin="ROUTER-TELEF/TCP")
+                excluded.update(candidates)
+                attempt = {"state": "desconocido", "nodes": [], "error": str(exc)}
+                # A rate limit applies to the API, not to one particular node.
+                if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 429:
+                    attempt["number"] = number
+                    attempt["provider"] = "Check-Host"
+                    attempts.append(attempt)
+                    break
+            attempt["number"] = number
+            attempt["provider"] = "Check-Host"
+            attempts.append(attempt)
+            now = time_provider.monotonic()
+            for node in attempt["nodes"]:
+                if node["status"] in {"sin_resultado", "error_nodo"}:
+                    self._cooldown_until[node["id"]] = now + self.node_cooldown
+                elif node["status"] == "conectado":
+                    self._cooldown_until.pop(node["id"], None)
+            if attempt["state"] != "desconocido":
+                break
+        latest = attempts[-1] if attempts else {
+            "state": "desconocido", "nodes": [],
+            "error": "No hay sondas disponibles fuera del periodo de descanso",
+        }
+        result = {**latest, "provider": "Check-Host", "attempts": attempts,
+                  "elapsed_seconds": round(time_provider.monotonic() - started_at, 3)}
+        result.pop("number", None)
+        return result
 
+    def _refresh_nodes(self) -> None:
+        now = time_provider.monotonic()
+        if now < self._catalog_expires:
+            return
+        try:
+            response = self.session.get(
+                f"{self.base_url}/nodes/hosts", headers=self.headers, timeout=self.request_timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            catalog = payload.get("nodes") if isinstance(payload, dict) else None
+            if not isinstance(catalog, dict) or not catalog:
+                raise ValueError("Catalogo de sondas invalido")
+            parsed_catalog = {
+                name: data for name, data in catalog.items()
+                if isinstance(name, str) and name and isinstance(data, dict)
+                and isinstance(data.get("location"), list)
+            }
+            if not parsed_catalog:
+                raise ValueError("Catalogo sin sondas utilizables")
+            self._catalog = parsed_catalog
+            self._catalog_expires = now + self.nodes_refresh
+        except Exception as exc:
+            self._catalog_expires = now + min(60, self.nodes_refresh)
+            logger.warning("No se pudo actualizar el catalogo de sondas: %s", exc, origin="ROUTER-TELEF/TCP")
+
+    def _choose_nodes(self, excluded: set[str]) -> list[str]:
+        now = time_provider.monotonic()
+        available = [name for name in self._catalog
+                     if name not in excluded and self._cooldown_until.get(name, 0) <= now]
+        chosen: list[str] = []
+        countries: set[str] = set()
+        networks: set[str] = set()
+        while available and len(chosen) < self.max_nodes:
+            def rank(name: str) -> tuple:
+                metadata = self._catalog[name]
+                location = metadata["location"]
+                country = str(location[0]) if location else ""
+                return (self._last_used.get(name, -1),
+                        country in countries, str(metadata.get("asn", "")) in networks, name)
+            name = min(available, key=rank)
+            available.remove(name)
+            chosen.append(name)
+            metadata = self._catalog[name]
+            countries.add(str(metadata["location"][0]) if metadata["location"] else "")
+            networks.add(str(metadata.get("asn", "")))
+        return chosen
+
+    def _poll_check(self, request_id: str, selected: dict[str, Any]) -> dict[str, Any]:
         started_at = time_provider.monotonic()
         deadline = started_at + self.result_timeout
         nodes = self._describe_nodes(selected, {})
+        failure_since = None
+        last_error = None
         while time_provider.monotonic() < deadline:
             try:
-                results = self._fetch_results(request_id)
+                results = self._fetch_results(request_id, deadline)
+                last_error = None
                 latest = self._describe_nodes(selected, results)
                 previous = {node["id"]: node for node in nodes}
                 for node in latest:
@@ -55,6 +159,9 @@ class TcpProbe:
                         node.update(earlier)
                 nodes = latest
             except Exception as exc:
+                if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 429:
+                    raise
+                last_error = str(exc)
                 logger.warning(
                     "Error obteniendo resultados para %s: %s",
                     request_id,
@@ -66,31 +173,43 @@ class TcpProbe:
 
             connected = any(node["status"] == "conectado" for node in nodes)
             completed = all(node["status"] != "pendiente" for node in nodes)
-            if completed and connected:
+            if connected:
+                for node in nodes:
+                    if node["status"] == "pendiente":
+                        node["status"] = "no_esperado"
                 return {"state": "abierto", "nodes": nodes, "request_id": request_id}
-            if (
-                len(nodes) == self.max_nodes
-                and completed
-                and not connected
-                and time_provider.monotonic() - started_at >= self.failure_confirmation
-            ):
-                return {"state": "cerrado", "nodes": nodes, "request_id": request_id}
-            if completed and len(nodes) < self.max_nodes:
-                return {"state": "desconocido", "nodes": nodes, "request_id": request_id}
+            all_failed = len(nodes) == self.max_nodes and all(
+                node["status"] == "desconectado" for node in nodes)
+            if all_failed:
+                if failure_since is None:
+                    failure_since = time_provider.monotonic()
+                if time_provider.monotonic() - failure_since >= self.failure_confirmation:
+                    return {"state": "cerrado", "nodes": nodes, "request_id": request_id}
+            else:
+                failure_since = None
+                if completed:
+                    break
             self._wait_until_next_poll(deadline)
 
-        state = "abierto" if any(node["status"] == "conectado" for node in nodes) else "desconocido"
-        return {"state": state, "nodes": nodes, "request_id": request_id}
+        for node in nodes:
+            if node["status"] == "pendiente":
+                node["status"] = "sin_resultado"
+                node["error"] = "La sonda no entrego un resultado dentro del plazo"
+        return {"state": "desconocido", "nodes": nodes, "request_id": request_id,
+                "error": last_error or "El proveedor no completo un chequeo concluyente"}
 
     def _wait_until_next_poll(self, deadline: float) -> None:
         remaining = deadline - time_provider.monotonic()
         if remaining > 0:
             time.sleep(min(self.poll_interval, remaining))
 
-    def _start_check(self, host: str, port: int) -> tuple[str, dict[str, Any]]:
+    def _start_check(self, host: str, port: int, nodes: list[str]) -> tuple[str, dict[str, Any]]:
+        params: dict[str, Any] = {"host": f"{host}:{port}", "max_nodes": self.max_nodes}
+        if nodes:
+            params["node"] = nodes
         response = self.session.get(
             f"{self.base_url}/check-tcp",
-            params={"host": f"{host}:{port}", "max_nodes": self.max_nodes},
+            params=params,
             headers=self.headers,
             timeout=self.request_timeout,
         )
@@ -103,13 +222,15 @@ class TcpProbe:
             raise ValueError("Check-Host no informo un conjunto valido de nodos")
         if any(not isinstance(name, str) or not name for name in selected):
             raise ValueError("Check-Host informo un identificador de nodo invalido")
+        if nodes and not set(selected).issubset(nodes):
+            raise ValueError("Check-Host no respeto la seleccion de sondas")
         return str(data["request_id"]), selected
 
-    def _fetch_results(self, request_id: str) -> dict[str, Any]:
+    def _fetch_results(self, request_id: str, deadline: float) -> dict[str, Any]:
         response = self.session.get(
             f"{self.base_url}/check-result/{request_id}",
             headers=self.headers,
-            timeout=self.request_timeout,
+            timeout=min(self.request_timeout, max(0.001, deadline - time_provider.monotonic())),
         )
         response.raise_for_status()
         data = response.json()
@@ -139,7 +260,11 @@ class TcpProbe:
                 error = first.get("error")
                 latency = cls._extract_latency(first)
                 if error:
-                    node["status"] = "desconectado"
+                    # Unknown/internal node errors cannot establish a target outage.
+                    target_errors = {"connection timed out", "connection refused", "no route to host",
+                                     "host is down", "network is unreachable"}
+                    node["status"] = ("desconectado" if str(error).strip().lower() in target_errors
+                                      else "error_nodo")
                     node["error"] = str(error)
                 elif latency is not None:
                     node["status"] = "conectado"

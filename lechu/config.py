@@ -136,7 +136,6 @@ MQTT_PUBLISH_RETAIN_EVENT = _req_bool("MQTT_PUBLISH_RETAIN_EVENT")
 MODEM_LINK_MONITOR_URL = _req("MODEM_LINK_MONITOR_URL").rstrip("/")
 MODEM_LINK_MONITOR_TIMEOUT_SECONDS = _req_int("MODEM_LINK_MONITOR_TIMEOUT_SECONDS")
 MODEM_EXTERNAL_CHECK_URL = _req("MODEM_EXTERNAL_CHECK_URL")
-MODEM_ADMIN_URL = _req("MODEM_ADMIN_URL")
 
 # ---------------------------------------------------------
 # --- charito (frontend) ----------------------------------
