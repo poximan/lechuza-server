@@ -5,6 +5,24 @@ integraciones operativas, la autorizacion y los contratos JSON consumidos por el
 frontend. El contenedor construye React en una etapa Node y copia solamente el
 resultado estatico a la imagen Python final.
 
+## Identidad y entrada
+
+`src/assets/icono.png` es la lechuza original recuperada de
+`f627dee^:panelexemys/src/assets/icono.png`, sin modificar. Se utiliza en el
+encabezado, el icono del navegador, el landing y el splash de entrada.
+
+El componente compartido `StartupSplash` de `platform/frontend-foundation`
+permite que la navegación y el contrato de la página se carguen detrás del
+splash. Permanece al menos 2000 ms; después se retira al completarse ambas
+consultas iniciales, incluyendo sus errores. A los 5000 ms se retira incluso
+si alguna consulta sigue pendiente: la vista mantiene sus indicadores de carga
+y sus errores. No espera futuros refrescos ni vuelve a aparecer durante ellos.
+El logo se precarga y la animación respeta `prefers-reduced-motion`.
+Las pestañas navegan con History API dentro de la misma aplicación y conservan
+el splash ya retirado. Atrás/adelante también funcionan sin recargar la página.
+Las respuestas de una pestaña abandonada se cancelan o descartan para no
+presentar sus datos en otra. Volver a entrar desde el landing inicia otro splash.
+
 ## Contratos
 
 - La aplicacion React se publica en `/lechu/`.
