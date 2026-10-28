@@ -11,7 +11,7 @@ export interface ClearanceTableProps {
 
 export function ClearanceTable({ items, presenter }: ClearanceTableProps) {
   return (
-    <Card>
+    <Card padding="none">
       <div className={styles.heading}><h2>Duración de estados</h2><p>Actividad e inactividad históricas por alarma.</p></div>
       <div className={styles.tableWrap}>
         <table>

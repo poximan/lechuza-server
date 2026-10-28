@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import uuid4
 
 from src.dao.dao_mantenimiento import MantenimientoDao
 from src.negocio.mantenimiento import CatalogoMantenimiento
-from src.web.clients.wol_control_client import WolControlClient
 
 
 class MantenimientoService:
@@ -14,7 +12,6 @@ class MantenimientoService:
         dao: MantenimientoDao,
         public_base_url: str,
         topology_url: str,
-        wol_client: WolControlClient,
     ):
         if not public_base_url:
             raise ValueError("public_base_url es obligatorio")
@@ -23,7 +20,6 @@ class MantenimientoService:
         self.dao = dao
         self.public_base_url = public_base_url.rstrip("/")
         self.topology_url = topology_url
-        self.wol_client = wol_client
 
     def get_contract(self) -> dict[str, Any]:
         catalog = CatalogoMantenimiento.from_source(self.dao.load_source())
@@ -60,9 +56,3 @@ class MantenimientoService:
                 for item in catalog.port_mappings
             ],
         }
-
-    def start_wol(self) -> dict[str, Any]:
-        return self.wol_client.start(str(uuid4()))
-
-    def get_wol(self, request_id: str) -> dict[str, Any]:
-        return self.wol_client.status(request_id)

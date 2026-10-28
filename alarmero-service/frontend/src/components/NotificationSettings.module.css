@@ -1,9 +1,10 @@
 .heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--sc-space-4);
-  padding: var(--sc-space-4) var(--sc-space-5);
+  padding: var(--sc-card-padding);
   border-bottom: 1px solid var(--sc-color-border);
 }
 
@@ -24,7 +25,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sc-space-4);
-  padding: var(--sc-space-4) var(--sc-space-5);
+  padding: var(--sc-card-padding);
 }
 
 .list {

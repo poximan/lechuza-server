@@ -68,10 +68,14 @@ def update_history(snapshot: Dict[str, Any], poll_seconds: int, hours: int) -> T
             # Una VM sin metricas no produce una muestra numerica inventada.
             try:
                 entry = {"ts": ts, "cpu": _metric(vm, "cpu_pct"),
-                         "mem": _metric(vm, "mem_pct"), "disk": _metric(vm, "disk_pct")}
+                         "mem": _metric(vm, "mem_pct")}
             except (KeyError, ValueError) as error:
                 logger.log(f"Muestra historica rechazada VM {vmid}: {error}", "PVE/HISTORY")
                 continue
+            try:
+                entry['disk'] = _metric(vm, 'disk_pct')
+            except (KeyError, ValueError):
+                entry['disk'] = None
             vm_rec = vms_section.setdefault(vmid, {"name": vm.get("name") or vmid, "history": []})
             vm_rec["name"] = vm.get("name") or vm_rec.get("name") or vmid
             lst = vm_rec.get("history") or []
@@ -97,6 +101,7 @@ def load_history_for_dashboard() -> Tuple[Dict[int, Dict[str, Any]], Dict[str, A
                 timebox.parse(ts)
                 prepared["cpu_pct"].append({"ts": ts, "value": item["cpu"]})
                 prepared["mem_pct"].append({"ts": ts, "value": item["mem"]})
-                prepared["disk_pct"].append({"ts": ts, "value": item["disk"]})
+                if item.get('disk') is not None:
+                    prepared["disk_pct"].append({"ts": ts, "value": item["disk"]})
             result[vmid] = {"name": data.get("name"), "history": prepared}
         return result, dict(history.get("meta", {}))

@@ -1,9 +1,7 @@
 .main {
+  --sc-page-max-width: 75rem;
   display: grid;
-  gap: var(--sc-space-4);
-  width: min(100%, 75rem);
-  margin: 0 auto;
-  padding: var(--sc-space-4);
+  gap: var(--sc-section-gap);
 }
 .header {
   display: flex;
@@ -73,9 +71,4 @@
 }
 .loading {
   color: var(--sc-color-text-muted);
-}
-@media (max-width: 42rem) {
-  .main {
-    padding: var(--sc-space-2);
-  }
 }

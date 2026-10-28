@@ -131,7 +131,7 @@ export function App() {
       ready={(navigation !== null || navigationError !== null) && (data !== null || pageError !== null)}
     >
       <AppShell productName="lechuza-server" sectionName="Comunicaciones">
-        <main className={styles.main}>
+        <main className={`sc-page ${styles.main}`}>
           <header className={styles.header}>
             <img className={styles.productLogo} src={`${import.meta.env.BASE_URL}icono.png`} alt="Logo de lechuza-server" width="96" height="96" />
             <h1

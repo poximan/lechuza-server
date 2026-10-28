@@ -1,5 +1,5 @@
 .heading {
-  padding: var(--sc-space-4) var(--sc-space-5);
+  padding: var(--sc-card-padding);
   border-bottom: 1px solid var(--sc-color-border);
 }
 

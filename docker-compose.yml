@@ -55,8 +55,6 @@ services:
         condition: service_started
       janitza-collector-service:
         condition: service_started
-      wol-service:
-        condition: service_healthy
       i20api-service:
         condition: service_started
     environment:
@@ -119,10 +117,8 @@ services:
       PANELITO_APK_URL: ${PANELITO_APK_URL}
       PANELITO_ARTIFACT_APP_NAME: ${PANELITO_ARTIFACT_APP_NAME}
       ARTIFACT_REPOSITORY_TIMEOUT_SECONDS: ${ARTIFACT_REPOSITORY_TIMEOUT_SECONDS}
-      WOL_CONTROL_SOCKET: /run/wol/wol-control.sock
     volumes:
       - ./volumes/lechu:/app/data
-      - ./volumes/wol-control:/run/wol
     restart: unless-stopped
     tmpfs:
       - /tmp
@@ -131,40 +127,6 @@ services:
     networks:
       - backend
       - edge
-
-  wol-service:
-    pids_limit: 64
-    logging: *default-logging
-    build:
-      context: .
-      dockerfile: wol-service/Dockerfile
-    image: lechu-wol-service:1.0.0
-    container_name: lechu-wol-service
-    environment:
-      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
-      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT}
-      MQTT_BROKER_USERNAME: ${MQTT_BROKER_USERNAME}
-      MQTT_BROKER_PASSWORD: ${MQTT_BROKER_PASSWORD}
-      MQTT_BROKER_KEEPALIVE: ${MQTT_BROKER_KEEPALIVE}
-      MQTT_RECONNECT_DELAY_MIN: ${MQTT_RECONNECT_DELAY_MIN}
-      MQTT_RECONNECT_DELAY_MAX: ${MQTT_RECONNECT_DELAY_MAX}
-      MQTT_BROKER_USE_TLS: ${MQTT_BROKER_USE_TLS}
-      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE}
-      MQTT_WOL_REQUEST_TOPIC: ${MQTT_WOL_REQUEST_TOPIC}
-      MQTT_RPC_RES_ROOT: ${MQTT_RPC_RES_ROOT}
-      MQTT_PUBLISH_QOS_STATE: ${MQTT_PUBLISH_QOS_STATE}
-      WOL_TARGET_IP: ${WOL_TARGET_IP}
-      WOL_TARGET_MAC: ${WOL_TARGET_MAC}
-      WOL_BROADCAST_IP: ${WOL_BROADCAST_IP}
-      WOL_SSH_TIMEOUT_SECONDS: ${WOL_SSH_TIMEOUT_SECONDS}
-      WOL_CONTROL_SOCKET: /run/wol/wol-control.sock
-    volumes:
-      - ./volumes/wol-control:/run/wol
-    network_mode: host
-    restart: unless-stopped
-    read_only: true
-    tmpfs:
-      - /tmp
 
   alarmero-service:
     pids_limit: 256

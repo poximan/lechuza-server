@@ -15,7 +15,7 @@ function frequencyValue(value: number | null, window: string) {
 
 export function FrequencyPanel({ items }: FrequencyPanelProps) {
   return (
-    <Card>
+    <Card padding="none">
       <div className={styles.heading}><h2>Frecuencia</h2><p>Alarmas confirmadas por ventana móvil.</p></div>
       <div className={styles.ranking}>
         {items.length > 0 && <div className={styles.labels}><span>Alarma</span><span>24 h</span><span>7 d</span><span>30 d</span><span>365 d</span></div>}

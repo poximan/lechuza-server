@@ -59,26 +59,96 @@ function latestHistoryTimestamp(historyMap: JsonRecord | null): string | null {
   return latest?.iso ?? null;
 }
 
-function DiskMetrics({ vm }: { vm: JsonRecord }) {
+function StorageUsage({ label, detail, value }: { label: string; detail?: string; value: JsonRecord }) {
+  const percent = typeof value.used_pct === "number" && Number.isFinite(value.used_pct)
+    ? value.used_pct : null;
   return (
+    <div className={styles.storageUsage}>
+      <div className={styles.progressLabel}>
+        <strong>{label}</strong>
+        <strong>{formatter.percentage(percent)}</strong>
+      </div>
+      {detail && <span className={styles.storageDetail}>{detail}</span>}
+      <span>
+        {formatter.bytes(value.used_bytes)} usados / {formatter.bytes(value.total_bytes)} totales
+        {typeof value.available_bytes === "number" && <> · {formatter.bytes(value.available_bytes)} disponibles</>}
+      </span>
+      {percent !== null && (
+        <div className={styles.progressTrack} role="meter" aria-label={`Uso de ${label}`}
+          aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, percent))}
+          aria-valuetext={formatter.percentage(percent)}>
+          <div className={usageClass(percent)} style={{ height: "100%", width: `${Math.max(0, Math.min(100, percent))}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiskMetrics({ vm }: { vm: JsonRecord }) {
+  const disks = reader.records(vm.virtual_disks ?? [], "proxmox.vm.virtual_disks");
+  const filesystems = reader.records(vm.filesystems ?? [], "proxmox.vm.filesystems");
+  return (
+    <section className={styles.vmDisks} aria-label="Discos virtuales del vhost">
+      <h3>Discos virtuales</h3>
+      {disks.length > 0 ? (
+        <ul className={styles.virtualDiskList}>
+          {disks.map(disk => (
+            <li key={String(disk.id)}>
+              <strong>{formatter.scalar(disk.id)}</strong>
+              <span title={String(disk.volume ?? "")}>{formatter.scalar(disk.volume)}</span>
+              <span>{formatter.bytes(disk.total_bytes)} asignados</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.muted}>
+          {typeof vm.disk_total_gb === "number" ? `${vm.disk_total_gb.toFixed(1)} GB asignados · ` : ""}
+          Sin detalle de configuración de los discos.
+        </p>
+      )}
+      <h4>Ocupación actual por volumen del vhost</h4>
+      {filesystems.map(fs => (
+        <StorageUsage key={`${fs.name}:${fs.mountpoint}`} label={String(fs.mountpoint)}
+          detail={`${formatter.scalar(fs.name)} · ${formatter.scalar(fs.type)}`} value={fs} />
+      ))}
+      {(vm.disk_usage_error || filesystems.length === 0) && (
+        <p className={styles.muted}>
+          {typeof vm.disk_usage_error === "string" ? vm.disk_usage_error : "Sin medición de ocupación del sistema invitado."}
+        </p>
+      )}
     <div className={styles.metricGrid}>
       <div className={styles.metric}>
-        <span>Disco asignado</span>
-        <strong>
-          {typeof vm.disk_total_gb === "number"
-            ? `${vm.disk_total_gb.toFixed(1)} GB`
-            : "N/D"}
-        </strong>
-      </div>
-      <div className={styles.metric}>
-        <span>Lectura</span>
+        <span>Lectura acumulada</span>
         <strong>{formatter.bytes(vm.disk_read_bytes)}</strong>
       </div>
       <div className={styles.metric}>
-        <span>Escritura</span>
+        <span>Escritura acumulada</span>
         <strong>{formatter.bytes(vm.disk_write_bytes)}</strong>
       </div>
     </div>
+    </section>
+  );
+}
+
+function HostStorage({ state }: { state: JsonRecord | null }) {
+  const storage = reader.optionalRecord(state?.host_storage, "proxmox.state.host_storage");
+  if (storage === null) return null;
+  const root = reader.optionalRecord(storage.rootfs, "proxmox.state.host_storage.rootfs");
+  const stores = reader.records(storage.storages ?? [], "proxmox.state.host_storage.storages");
+  const errors = Array.isArray(storage.errors) ? storage.errors.map(String) : [];
+  return (
+    <Card className={styles.hostStorage}>
+      <h2>Almacenamiento de Proxmox · {formatter.scalar(state?.node)}</h2>
+      <div className={styles.hostStorageGrid}>
+        {root && <StorageUsage label="Sistema del hipervisor (/)" value={root} />}
+        {stores.map(store => (
+          <StorageUsage key={String(store.id)} label={String(store.id)} value={store}
+            detail={`${formatter.scalar(store.type)}${store.shared ? " · compartido" : ""}${store.active === false ? " · inactivo" : ""}`} />
+        ))}
+      </div>
+      <p className={styles.muted}>Uso general del hipervisor y sus almacenamientos. Pueden compartir disco físico; sus capacidades no se suman.</p>
+      {errors.map(error => <p key={error} className={styles.error}>{error}</p>)}
+    </Card>
   );
 }
 
@@ -315,6 +385,7 @@ export function ProxmoxPage({
         )}
         {error && <p className={styles.error}>{error}</p>}
       </div>
+      <HostStorage state={state} />
       {vms.length === 0 ? (
         <Card>
           <p>Sin datos disponibles. Esperando la primera actualización.</p>

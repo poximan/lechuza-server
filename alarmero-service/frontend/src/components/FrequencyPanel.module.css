@@ -1,5 +1,5 @@
 .heading {
-  padding: var(--sc-space-4) var(--sc-space-5);
+  padding: var(--sc-card-padding);
   border-bottom: 1px solid var(--sc-color-border);
 }
 
@@ -15,7 +15,8 @@
 }
 
 .ranking {
-  padding: var(--sc-space-3) var(--sc-space-5) var(--sc-space-5);
+  overflow-x: auto;
+  padding: var(--sc-card-padding);
 }
 
 .item,

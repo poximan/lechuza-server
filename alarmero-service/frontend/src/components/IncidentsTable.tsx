@@ -14,7 +14,7 @@ export interface IncidentsTableProps {
 
 export function IncidentsTable({ incidents, presenter, referenceNow, toolbar }: IncidentsTableProps) {
   return (
-    <Card>
+    <Card padding="none">
       <div className={styles.heading}>
         <div><h2>Incidencias</h2><p>Alarmero confirma, persiste y administra cada ciclo de vida.</p></div>
         {toolbar}

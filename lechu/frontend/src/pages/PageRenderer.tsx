@@ -54,13 +54,7 @@ export function PageRenderer({
     case "analizadores":
       return <NetworkAnalyzersPage data={data} />;
     case "mantenimiento":
-      return (
-        <MaintenancePage
-          client={client}
-          data={data}
-          protectedMode={protectedMode}
-        />
-      );
+      return <MaintenancePage data={data} />;
     case "mensagelo":
       return <MensageloPage data={data} />;
     case "broker":

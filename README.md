@@ -20,11 +20,9 @@ pertenece a `platform`; este Compose consume `servicoop-edge-net` y crea
 | `modem-link-monitor` | Estado del enlace del módem | `127.0.0.1:8086` |
 | `alarmero-service` | Ciclo de vida y despacho de alarmas | `127.0.0.1:8094` |
 | `mensagelo` | Cola durable y entrega SMTP | interno |
-| `wol-service` | Emisión Wake-on-LAN y confirmación por SSH | socket Unix interno |
 
 Las imágenes y contenedores usan `lechu-*`, excepto `lechu`. Cada servicio corre
-sin privilegios. Los volúmenes de datos son exclusivos; `lechu` y `wol-service`
-comparten únicamente el directorio del socket de control.
+sin privilegios. Los volúmenes de datos son exclusivos de cada servicio.
 
 ## Interfaces
 
@@ -45,7 +43,6 @@ El MQTT usa únicamente `lechu/v1/...`:
 
 ```text
 lechu/v1/{modem,exemys,email,proxmox,services,charito}/...
-lechu/v1/wol/request
 lechu/v1/rpc/request/{action}
 lechu/v1/rpc/response/{client_id}/{corr}
 ```
@@ -53,20 +50,11 @@ lechu/v1/rpc/response/{client_id}/{corr}
 Los estados operativos se publican retenidos. Los clientes no acceden a bases ni
 archivos de otros servicios.
 
-## Wake-on-LAN
-
-`wol-service` es el único componente que emite el paquete mágico y comprueba la
-apertura de SSH. Acepta órdenes por MQTT para Panelito y por una API HTTP sobre el
-socket Unix compartido `/run/wol/wol-control.sock` para la acción **wololo** de
-la solapa Mantenimiento de Lechu. Ambas entradas usan el mismo gestor
-de operaciones, por lo que la ruta directa permite aislar MQTT sin alterar el
-destino, el broadcast ni el criterio de éxito.
-
-Las operaciones se identifican con `request_id`, son idempotentes y conservan los
-estados `accepted`, `packet_sent`, `ssh_open` y `failed`. Solo puede existir una
-operación activa. El estado informa destino, broadcast, bytes UDP enviados,
-marcas UTC y el error final. El socket solo se monta en `lechu` y `wol-service` y
-la API de Lechu exige acceso protegido.
+La pantalla Proxmox distingue los discos virtuales configurados y la ocupación
+por volumen dentro de cada vhost del almacenamiento general del hipervisor.
+El contrato, los requisitos del agente y los permisos están detallados en
+[`pve-service/README.md`](pve-service/README.md). No se presentan como 0 % las
+mediciones que no pudo devolver QEMU Guest Agent.
 
 ## Destino del monitor del router
 

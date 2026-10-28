@@ -19,7 +19,7 @@ export function App() {
 
   return (
     <AppShell productName="lechuza-server" sectionName="Alarmero">
-      <main className={styles.main}>
+      <main className={`sc-page ${styles.main}`}>
         <header className={styles.introduction}>
           <div><p>lechuza-server</p><h1>Seguimiento de alarmas</h1><span>Incidencias, despachos y tiempos de despeje</span></div>
           <StatusBadge tone={snapshot?.health.sync.state === "ok" ? "success" : "warning"}>

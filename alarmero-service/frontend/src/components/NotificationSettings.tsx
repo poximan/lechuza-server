@@ -66,7 +66,7 @@ export function NotificationSettings() {
   const columns = [items.slice(0, split), items.slice(split)];
 
   return (
-    <Card>
+    <Card padding="none">
       <div className={styles.heading}>
         <div><h2>Notificaciones</h2><p>Envío selectivo para los flancos confirmados.</p></div>
         <StatusBadge tone={error ? "danger" : "neutral"}>{error ?? `${items.length} alarmas`}</StatusBadge>

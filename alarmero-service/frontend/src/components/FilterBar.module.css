@@ -1,5 +1,6 @@
 .filters {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sc-space-2);
 }
 
