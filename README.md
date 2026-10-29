@@ -16,7 +16,7 @@ pertenece a `platform`; este Compose consume `servicoop-edge-net` y crea
 | `janitza-collector-service` | Magnitudes de analizadores Janitza UMG96S | `127.0.0.1:8095` |
 | `pve-service` | Estado e histórico Proxmox | `127.0.0.1:8083` |
 | `charito-service` | Estado consolidado de `charo-daemon` | interno |
-| `i20api-service` | Histórico de caudalímetros i2O y sincronización Sentryx | interno |
+| `i20api-service` | Histórico de caudalímetros i2O y sincronización GWF | interno |
 | `modem-link-monitor` | Estado del enlace del módem | `127.0.0.1:8086` |
 | `alarmero-service` | Ciclo de vida y despacho de alarmas | `127.0.0.1:8094` |
 | `mensagelo` | Cola durable y entrega SMTP | interno |
@@ -49,6 +49,19 @@ lechu/v1/rpc/response/{client_id}/{corr}
 
 Los estados operativos se publican retenidos. Los clientes no acceden a bases ni
 archivos de otros servicios.
+
+La navegación interna de Lechu ocupa una barra vertical a la izquierda, con
+iconos y etiquetas del contrato `/lechu/api/navigation`. El backend conserva la
+autoridad sobre los nombres, destinos y secciones habilitadas por modo de acceso.
+`lechu/frontend/src/components/SectionNavigation.tsx` representa esos enlaces,
+marca la sección activa y permite recorrerlos con flechas, Inicio y Fin. En
+pantallas estrechas queda una barra de iconos con nombres accesibles y tooltips;
+la barra tiene desplazamiento propio cuando supera la altura disponible.
+
+El contenido comienza junto a esa barra. La cabecera global concentra la identidad
+del producto y los accesos al menú y al cierre de sesión. Generadores muestra sus
+alertas dentro de cada tarjeta. El logo se utiliza en el splash de entrada, el
+favicon y el acceso desde el landing; el splash no reaparece al cambiar de sección.
 
 La pantalla Proxmox distingue los discos virtuales configurados y la ocupación
 por volumen dentro de cada vhost del almacenamiento general del hipervisor.
@@ -225,6 +238,22 @@ desde los registros 600..603, se validan, se persisten por equipo y luego se usa
 sin política de actualización. El último valor válido se conserva en un archivo
 JSON atómico y todas las estampas se guardan en UTC.
 
+La sección Analizadores ofrece el mismo control global «Observar» que MiCOM:
+se puede consultar en modo seguro y modificar únicamente en modo protegido.
+El primer inicio mantiene la lectura automática activada; cada cambio se persiste
+atómicamente en `JANITZA_DATA_DIR/janitza-observer.json`, separado de las mediciones
+y relaciones TC/TP de `janitza-state.json`. Un estado persistido inválido impide
+iniciar el colector. Al pausar no se envían nuevas consultas; una petición ya en
+curso puede finalizar. Se conservan las últimas mediciones, sus fechas y errores.
+Al reactivar se retoma en el siguiente ciclo del intervalo configurado.
+
+`src/services/observer_state_store.py` del colector es dueño de ese estado;
+`services/collector.py` aplica la pausa entre equipos y lecturas. Lechu delega el
+cambio mediante `PUT /lechu/api/analizadores/observer`, con `enabled` booleano y
+autorización del lado servidor. La ruta directa `/api/analizadores/observer`
+también exige autorización en las reglas del gateway. El cambio requiere
+actualizar conjuntamente los fuentes de Janitza, Lechu y las reglas del gateway.
+
 
 APIs principales:
 
@@ -239,6 +268,8 @@ GET  /api/reles/{id_modbus}/disturbances/{registro}
 GET  /internal/v1/modbus/channels
 GET  /api/ge/{edificio}/status
 GET  /api/analizadores
+GET  /api/analizadores/observer
+POST /api/analizadores/observer
 GET  /api/v1/alarms/catalog
 GET  /api/v1/alarms/events
 POST /api/v1/alarms/events/ack

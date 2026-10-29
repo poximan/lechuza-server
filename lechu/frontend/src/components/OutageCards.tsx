@@ -23,7 +23,7 @@ export function OutageCards({ value }: { value: JsonValue | undefined }) {
       );
     return (
       <div className={styles.grid}>
-        {value.items.slice(0, 10).map((item, index) => {
+        {value.items.slice(0, 9).map((item, index) => {
           if (typeof item !== "object" || item === null || Array.isArray(item))
             throw new Error(`outages.items[${index}] debe ser un objeto`);
           if (

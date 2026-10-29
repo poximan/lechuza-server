@@ -19,7 +19,7 @@ export class LechuApiClient {
   }
 
   public async synchronizeFlowMeters(): Promise<JsonRecord> {
-    return this.parser.record(await this.send("caudalimetros/sync", "POST", {}), "sincronización Sentryx");
+    return this.parser.record(await this.send("caudalimetros/sync", "POST", {}), "sincronización GWF");
   }
 
   public async page(name: string, signal?: AbortSignal): Promise<JsonRecord> {
@@ -44,6 +44,13 @@ export class LechuApiClient {
     return this.parser.record(
       await this.send("reles/observer", "PUT", { enabled }),
       "reles observer",
+    );
+  }
+
+  public async setAnalyzersObserver(enabled: boolean): Promise<JsonRecord> {
+    return this.parser.record(
+      await this.send("analizadores/observer", "PUT", { enabled }),
+      "analizadores observer",
     );
   }
 

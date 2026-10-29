@@ -41,5 +41,5 @@ def credentials(path: str) -> tuple[str, str]:
             key, value = line.split("=", 1)
             values[key.strip()] = value.strip()
     if not values.get("client_id") or not values.get("client_secret"):
-        raise ValueError("Faltan credenciales Sentryx")
+        raise ValueError("Faltan credenciales GWF")
     return values["client_id"], values["client_secret"]

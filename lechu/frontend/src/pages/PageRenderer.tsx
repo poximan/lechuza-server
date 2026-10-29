@@ -16,7 +16,6 @@ export interface PageRendererProps {
   client: LechuApiClient;
   data: JsonRecord;
   onChanged: () => Promise<void>;
-  onAttentionChange: (active: boolean) => void;
   page: string;
   protectedMode: boolean;
 }
@@ -25,7 +24,6 @@ export function PageRenderer({
   client,
   data,
   onChanged,
-  onAttentionChange,
   page,
   protectedMode,
 }: PageRendererProps) {
@@ -37,9 +35,7 @@ export function PageRenderer({
     case "charito":
       return <CharitoPage data={data} />;
     case "generadores":
-      return (
-        <GeneratorsPage data={data} onAttentionChange={onAttentionChange} />
-      );
+      return <GeneratorsPage data={data} />;
     case "proxmox":
       return <ProxmoxPage client={client} data={data} onChanged={onChanged} />;
     case "reles":
@@ -52,7 +48,14 @@ export function PageRenderer({
         />
       );
     case "analizadores":
-      return <NetworkAnalyzersPage data={data} />;
+      return (
+        <NetworkAnalyzersPage
+          client={client}
+          data={data}
+          onChanged={onChanged}
+          protectedMode={protectedMode}
+        />
+      );
     case "mantenimiento":
       return <MaintenancePage data={data} />;
     case "mensagelo":

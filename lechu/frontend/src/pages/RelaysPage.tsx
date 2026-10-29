@@ -101,7 +101,24 @@ export function RelaysPage({
   }
   return (
     <div className={styles.stack}>
-      <div className={styles.relayControls}>
+      <div className={styles.observerControls}>
+        <ToggleSwitch
+          checked={enabled}
+          disabled={pending || !protectedMode}
+          onChange={() => void toggle()}
+          rightLabel="Observar relés MiCOM"
+        />
+        {!protectedMode && (
+          <span className={styles.muted}>
+            Cambiar el observador requiere modo protegido.
+          </span>
+        )}
+        <RelayPollCountdown
+          className={styles.muted}
+          enabled={runtimeEnabled}
+          nextPollTimestamp={nextPollTimestamp}
+          pollInProgress={pollInProgress}
+        />
         <Button
           aria-label="Ayuda sobre la lectura de perturbaciones MiCOM"
           className={styles.helpButton}
@@ -111,25 +128,10 @@ export function RelaysPage({
         >
           ?
         </Button>
-        <ToggleSwitch
-          checked={enabled}
-          disabled={pending || !protectedMode}
-          onChange={() => void toggle()}
-          rightLabel="Observar Reles MiCOM"
-        />
-        {!protectedMode && (
-          <span className={styles.muted}>
-            El estado puede consultarse en modo seguro; cambiar el observador
-            requiere modo protegido.
-          </span>
-        )}
-        <RelayPollCountdown
-          enabled={runtimeEnabled}
-          nextPollTimestamp={nextPollTimestamp}
-          pollInProgress={pollInProgress}
-        />
-        {error && <p className={styles.error}>{error}</p>}
       </div>
+      {error && (
+        <div className={styles.error} role="alert">{error}</div>
+      )}
       {items.length === 0 ? (
         <Card>
           <p>

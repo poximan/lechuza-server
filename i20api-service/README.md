@@ -1,6 +1,6 @@
 # i20api-service
 
-Importa mediciones de Sentryx Intelligent Network mediante OAuth2 Client Credentials
+Importa mediciones de GWF (i2O) mediante OAuth2 Client Credentials
 y consultas GraphQL `measuredAt`. No modifica dispositivos ni datos del proveedor.
 
 ## Configuración
@@ -11,7 +11,7 @@ reintento. Cambiar configuración requiere recrear el servicio. Los streams cons
 son caudal, volumen de caudal y voltajes de batería/externo; se conservan las unidades
 devueltas por la API. No se deriva caudal neto ni se inventan valores para canales ausentes.
 
-Copiar `config/sentryx.env.example` a `config/sentryx.env`, completar credenciales y
+Copiar `config/gwf.env.example` a `config/gwf.env`, completar credenciales y
 dar permiso `0600`. Este archivo está excluido de Git y del contexto de build y se monta
 en solo lectura. El proceso y el directorio de datos usan UID/GID 1000.
 
@@ -28,7 +28,8 @@ proveedor; el dominio anterior se descontinúa el 1 de noviembre de 2026:
 
 Según el aviso, las credenciales, las estructuras de solicitud/respuesta y el uso
 de cursores se mantienen. Después de actualizar el código, se debe reconstruir
-la imagen y recrear `i20api-service` para aplicar estas URL.
+la imagen y recrear `i20api-service` para aplicar los cambios. La presentación de
+GWF requiere actualizar también Lechu. Esto describe el despliegue; no lo ejecuta.
 
 ## Sincronización
 
@@ -43,7 +44,7 @@ repetidamente para compensar un período en que el servicio estuvo apagado.
 
 La sincronización manual corre en segundo plano y no cambia el calendario automático.
 Solo una descarga puede estar activa. El frontend consulta estado y series locales;
-esas lecturas y los cambios de ventana no consultan Sentryx. No se consulta Sentryx
+esas lecturas y los cambios de ventana no consultan GWF. No se consulta GWF
 al arrancar antes del horario diario, salvo que se pulse el botón manual.
 
 Cada descarga pagina todo el rango retenido de dos meses, incluyendo mediciones
@@ -53,7 +54,7 @@ un valor cero o igual al anterior sigue siendo válido. HTTP 200 con errores Gra
 se informa como error, separado de una consulta correcta sin novedades.
 
 SQLite pertenece exclusivamente a este servicio. Se borran las mediciones anteriores
-a dos meses calendario, con ajuste del día para meses cortos, incluso si Sentryx falla.
+a dos meses calendario, con ajuste del día para meses cortos, incluso si GWF falla.
 La tarea local y las lecturas aplican el límite; no hay archivo de histórico adicional.
 
 ## Interfaces internas
@@ -67,17 +68,55 @@ Compose no publica este servicio. Lechu compone las rutas `/lechu/api/caudalimet
 `/lechu/api/caudalimetros/measurements` y `/lechu/api/caudalimetros/sync`.
 La pestaña `/lechu/caudalimetros/` aparece en los modos `secure` y `protected` existentes.
 
-## Documentación y limitación observada
+## Revisión del contrato
 
-Implementado a partir de los documentos locales de Sentryx en `documentacino`:
-referencia GraphQL de 2024 y guías de recepción/extracción. `receivedAt` requiere
-recuperación si su cursor envejece siete días; la consulta por fechas del rango retenido
-evita depender de ese cursor para recuperar demoras del logger.
+Las tres URL se declaran una sola vez en `i20api/gwf.py`. El flujo coincide con el
+PowerShell de referencia:
 
-Las pruebas del 7 de octubre de 2026 sobre el dominio anterior autenticaron y
-encontraron LogAluar, pero `measuredAt` en RAW y PT15M y `receivedAt` devolvieron
-`ServerError`. La validación del 9 de octubre de 2026 sobre `gwf.i2owater.com`
-confirmó la autenticación con el nuevo scope; tanto `measuredAt` (últimas 24 horas,
-PT15M) como `receivedAt(first: 1)` volvieron a devolver `ServerError`.
-El frontend muestra este error y no presenta mediciones simuladas. El proveedor
-debe resolver el acceso a las series para validar datos reales de extremo a extremo.
+- Token mediante `POST`, cuerpo `application/x-www-form-urlencoded`,
+  `grant_type=client_credentials`, `client_id`, `client_secret` y el scope de lectura
+  exacto de la tabla. `expires_in` está expresado en segundos. Se exige un token
+  Bearer válido y se renueva con 60 segundos de margen.
+- GraphQL mediante `POST`, cuerpo JSON con `query` y `variables`, y cabecera
+  `Authorization: Bearer ...`. Un HTTP 401 renueva el token y repite esa página
+  una sola vez; HTTP 200 con `errors` también es un fallo.
+- `locationTimeSeries.measuredAt` usa `MeasuredAtFilterInput`, con `when.start` y
+  `when.end` en UTC ISO 8601 con milisegundos, `resolution`, `locations.id` y
+  `dataStreams.id`. La selección de campos incluye el cursor, identificación,
+  ubicación, canal, unidad, fecha, resolución, valor y estadísticas.
+- La respuesta real utiliza `pt15m` y `raw` en minúsculas. El adaptador normaliza
+  esa etiqueta a `PT15M` y `RAW` antes de validar y persistir; una resolución
+  diferente de la solicitada sigue siendo un error. Así, la clave SQLite y las
+  consultas del histórico usan la misma forma canónica que la configuración.
+- `first` no supera 5000. Se sigue `pageInfo.endCursor` cuando `hasNextPage` es
+  verdadero y se rechazan cursores vacíos o repetidos. El cursor pertenece a esa
+  descarga: no se reutiliza entre rangos ni sincronizaciones.
+
+El servicio consulta todos los canales configurados en código para el rango retenido;
+el PowerShell permite elegir uno y propone 24 horas. Ambos usan el mismo contrato.
+La referencia admite listas de canales y muestra un rango de dos meses; esa diferencia
+de alcance no demuestra por sí sola la causa de un error del proveedor.
+
+La comprobación HTTP independiente del 29 de octubre de 2026 autenticó correctamente
+y recuperó mediciones de LogAluar. La consulta PT15M de 24 horas de `flow-rate`
+devolvió cinco registros; el rango de dos meses y cuatro canales devolvió 12.972
+registros en tres páginas: 5.765 de caudal, 5.765 de volumen y 1.442 de batería.
+No se recibieron registros de voltaje externo. La consulta RAW de 24 horas también
+devolvió cinco registros. La comparación estricta de mayúsculas/minúsculas era un
+rechazo local de respuestas válidas, independiente del `ServerError` de las pruebas
+históricas. Estas comprobaciones consultaron el proveedor sin ejecutar el servicio
+ni escribir su base de datos.
+
+Los errores de sincronización conservan el tipo, mensaje y ruta GraphQL enviados por
+GWF, con credenciales y token ocultos. Los fallos HTTP, JSON y conectividad se
+informan por separado; una respuesta errónea no se interpreta como serie vacía.
+Los resultados de pruebas históricas no describen la disponibilidad actual de GWF.
+La comprobación de disponibilidad y de mediciones reales requiere una consulta en
+vivo, independiente de la revisión estática del contrato.
+
+Documentación de referencia del proveedor en `documentacion/`, en la raíz del
+workspace: referencia GraphQL de enero de 2024 (autenticación y tipos, especialmente
+páginas 1–2, 6–8 y 11–18), guía de consulta por recepción y guía de extracción de
+mayo de 2023. La notificación de migración sustituye únicamente las tres URL.
+El servicio utiliza `measuredAt`; el vencimiento de siete días del cursor de
+`receivedAt` no aplica a una descarga por rango de fechas.

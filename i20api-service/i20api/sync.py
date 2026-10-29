@@ -2,7 +2,7 @@ import threading
 from datetime import timedelta
 
 from .clock import LOCAL, clock, iso, months_before
-from .sentryx import SentryxError
+from .gwf import GwfError
 
 
 class SyncManager:
@@ -75,7 +75,7 @@ class SyncManager:
             attempt.update(outcome="new_data" if count else "no_new_data", new_records=count)
             self.storage.put("last_success_at", iso(self.now()))
         except Exception as exc:
-            attempt.update(outcome="error", error=str(exc) if isinstance(exc, SentryxError)
+            attempt.update(outcome="error", error=str(exc) if isinstance(exc, GwfError)
                            else f"No se pudo completar la sincronización ({type(exc).__name__})")
         finally:
             with self.lock:

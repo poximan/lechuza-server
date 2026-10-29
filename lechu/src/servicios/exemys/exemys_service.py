@@ -51,5 +51,5 @@ class ExemysService:
             "window": window,
             "page": page,
             "history": self.modbus_client.get_history(grd_id, window, page),
-            "outages": self.modbus_client.get_outages(grd_id, limit=10),
+            "outages": self.modbus_client.get_outages(grd_id, limit=9),
         }

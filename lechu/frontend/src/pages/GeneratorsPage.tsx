@@ -1,5 +1,4 @@
 import { Card, UtcMinusThreePresenter } from "@servicoop/frontend-foundation";
-import { useEffect } from "react";
 
 import { JsonContractReader } from "../contracts/JsonContractReader";
 import type { JsonRecord } from "../models";
@@ -234,23 +233,11 @@ function GeneratorCard({
   );
 }
 
-export function GeneratorsPage({
-  data,
-  onAttentionChange,
-}: {
-  data: JsonRecord;
-  onAttentionChange: (active: boolean) => void;
-}) {
+export function GeneratorsPage({ data }: { data: JsonRecord }) {
   const estivariz = reader.record(data.estivariz, "generadores.estivariz");
   const fontana = reader.record(data.fontana, "generadores.fontana");
   const estivarizState = generatorState(estivariz, "edificio estivariz");
   const fontanaState = generatorState(fontana, "edificio fontana");
-  const hasUnsafeGeneratorState = estivarizState.unsafe || fontanaState.unsafe;
-
-  useEffect(() => {
-    onAttentionChange(hasUnsafeGeneratorState);
-    return () => onAttentionChange(false);
-  }, [hasUnsafeGeneratorState, onAttentionChange]);
 
   return (
     <div className={styles.generatorsGrid}>

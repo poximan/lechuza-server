@@ -24,6 +24,7 @@ MODBUS_TRANSPORT_TIMEOUT_SECONDS = positive_integer(
 POLL_INTERVAL_SECONDS = positive_integer("JANITZA_POLL_INTERVAL_SECONDS")
 DATA_DIR = os.path.abspath(required("JANITZA_DATA_DIR"))
 STATE_FILE = os.path.join(DATA_DIR, "janitza-state.json")
+OBSERVER_STATE_FILE = os.path.join(DATA_DIR, "janitza-observer.json")
 ANALYZERS = json.loads(required("JANITZA_ANALYZERS_JSON"))
 
 if not isinstance(ANALYZERS, list) or not ANALYZERS:

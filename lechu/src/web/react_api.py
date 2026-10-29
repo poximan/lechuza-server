@@ -97,7 +97,9 @@ class ReactApi:
             response=self._response,
         )
         self.analizadores_api = AnalizadoresApi(
-            service=AnalizadoresService(janitza_client), response=self._response
+            service=AnalizadoresService(janitza_client),
+            require_protected=self._require_protected,
+            response=self._response,
         )
         self.broker_api = BrokerApi(
             service=BrokerService(mqtt_client_manager),
@@ -152,6 +154,12 @@ class ReactApi:
         )
         self.blueprint.add_url_rule(
             "/analizadores", "analizadores", self.analizadores_api.get, methods=["GET"]
+        )
+        self.blueprint.add_url_rule(
+            "/analizadores/observer",
+            "analizadores_observer",
+            self.analizadores_api.set_observer,
+            methods=["PUT"],
         )
         self.blueprint.add_url_rule(
             "/reles/observer",

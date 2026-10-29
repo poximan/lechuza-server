@@ -6,6 +6,8 @@ import threading
 import unittest
 from unittest.mock import Mock
 
+from requests import Timeout
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "i20api-service"))
 sys.path.insert(0, str(ROOT / "shared/timeauthority-pkg/src"))
@@ -14,7 +16,7 @@ from i20api.clock import LOCAL, iso, months_before
 from i20api.settings import Settings
 from i20api.storage import Storage
 from i20api.sync import SyncManager
-from i20api.sentryx import SentryxClient, SentryxError
+from i20api.gwf import GwfClient, GwfError
 
 LOCATION = "urn:mwp:location:test"
 STREAM = "urn:mwp:datastream:flow-rate"
@@ -94,7 +96,7 @@ class I20SyncTest(unittest.TestCase):
 
     def test_provider_error_consumes_attempt_but_not_success(self):
         self.advance(0)
-        self.client.measurements.side_effect = SentryxError("Sentryx: ServerError")
+        self.client.measurements.side_effect = GwfError("GWF: ServerError")
         self.manager.tick()
         state = self.manager.status()
         self.assertEqual("error", state["last_attempt"]["outcome"])
@@ -138,13 +140,81 @@ class I20SyncTest(unittest.TestCase):
         self.assertEqual(1, restarted.status()["cycle"]["attempts"])
 
 
-class SentryxClientTest(unittest.TestCase):
+class GwfClientTest(unittest.TestCase):
     def setUp(self):
         self.settings = Settings(locations=({"id": LOCATION, "name": "LogAluar"},))
         self.now = datetime(2026, 10, 7, tzinfo=timezone.utc)
         self.session = Mock()
-        self.token = response({"access_token": "test-token", "expires_in": 3600})
-        self.client = SentryxClient(self.settings, "test-client", "test-secret", session=self.session)
+        self.token = response({"access_token": "test-token", "token_type": "Bearer", "expires_in": 3600})
+        self.client = GwfClient(self.settings, "test-client", "test-secret", session=self.session)
+
+    def test_oauth_and_graphql_match_gwf_contract(self):
+        self.session.post.side_effect = [self.token, response(page([]))]
+        start = self.now - timedelta(days=1)
+        self.assertEqual([], self.client.measurements(start, self.now))
+        token_call, query_call = self.session.post.call_args_list
+        self.assertEqual("https://auth.api.gwf.i2owater.com/oauth2/token", token_call.args[0])
+        self.assertEqual({
+            "grant_type": "client_credentials",
+            "scope": "https://inet.api.gwf.i2owater.com/read",
+            "client_id": "test-client", "client_secret": "test-secret",
+        }, token_call.kwargs["data"])
+        self.assertEqual("application/x-www-form-urlencoded", token_call.kwargs["headers"]["Content-Type"])
+        self.assertEqual("https://inet.api.gwf.i2owater.com/graphql", query_call.args[0])
+        self.assertEqual("Bearer test-token", query_call.kwargs["headers"]["Authorization"])
+        variables = query_call.kwargs["json"]["variables"]
+        self.assertEqual(5000, variables["first"])
+        self.assertIsNone(variables["after"])
+        self.assertEqual({"start": iso(start), "end": iso(self.now)}, variables["where"]["when"])
+        self.assertEqual({"id": [LOCATION]}, variables["where"]["locations"])
+        self.assertEqual("PT15M", variables["where"]["resolution"])
+
+    def test_graphql_error_detail_redacts_credentials_and_token(self):
+        self.session.post.side_effect = [self.token, response({"errors": [{
+            "errorType": "AccessDenied", "path": ["locationTimeSeries", "measuredAt"],
+            "message": "Sin acceso a test-client con test-secret y test-token",
+        }]})]
+        with self.assertRaises(GwfError) as caught:
+            self.client.measurements(self.now - timedelta(days=1), self.now)
+        detail = str(caught.exception)
+        self.assertIn("AccessDenied", detail)
+        self.assertIn("Sin acceso", detail)
+        self.assertIn("locationTimeSeries.measuredAt", detail)
+        for secret in ("test-client", "test-secret", "test-token"):
+            self.assertNotIn(secret, detail)
+
+    def test_missing_token_expiry_does_not_invent_a_lifetime(self):
+        self.session.post.return_value = response({"access_token": "test-token", "token_type": "Bearer"})
+        with self.assertRaisesRegex(GwfError, "expires_in"):
+            self.client.measurements(self.now - timedelta(days=1), self.now)
+        self.assertEqual(1, self.session.post.call_count)
+
+    def test_query_timeout_has_provider_context(self):
+        self.session.post.side_effect = [self.token, Timeout()]
+        with self.assertRaisesRegex(GwfError, "Consulta GWF: tiempo de espera agotado"):
+            self.client.measurements(self.now - timedelta(days=1), self.now)
+
+    def test_lowercase_provider_resolution_is_visible_in_local_history(self):
+        for configured, received in (("PT15M", "pt15m"), ("RAW", "raw")):
+            with self.subTest(resolution=received), tempfile.TemporaryDirectory() as directory:
+                settings = Settings(locations=({"id": LOCATION, "name": "LogAluar"},), resolution=configured)
+                client = GwfClient(settings, "test-client", "test-secret", session=self.session)
+                node = {**record(self.now), "resolution": received}
+                self.session.post.side_effect = [self.token, response(page([node]))]
+                start = self.now - timedelta(days=1)
+                rows = client.measurements(start, self.now)
+                self.assertEqual(configured, rows[0]["resolution"])
+                storage = Storage(str(Path(directory) / "db"))
+                self.assertEqual(1, storage.save(rows, start))
+                history = storage.series(LOCATION, start, self.now, configured)
+                self.assertEqual(configured, history[0]["resolution"])
+                self.assertEqual(0, history[0]["value"])
+
+    def test_different_resolution_is_not_relabelled(self):
+        node = {**record(self.now), "resolution": "raw"}
+        self.session.post.side_effect = [self.token, response(page([node]))]
+        with self.assertRaisesRegex(GwfError, "Respuesta o paginación GWF inválida"):
+            self.client.measurements(self.now - timedelta(days=1), self.now)
 
     def test_pagination_and_millisecond_dates(self):
         self.session.post.side_effect = [self.token, response(page([record(self.now)], True, "next")), response(page([]))]
@@ -158,7 +228,7 @@ class SentryxClientTest(unittest.TestCase):
 
     def test_graphql_http_200_is_an_error_not_empty_data(self):
         self.session.post.side_effect = [self.token, response({"errors": [{"errorType": "ServerError"}]})]
-        with self.assertRaisesRegex(SentryxError, "ServerError"):
+        with self.assertRaisesRegex(GwfError, "ServerError"):
             self.client.measurements(self.now - timedelta(days=1), self.now)
 
     def test_401_renews_token_once(self):
@@ -168,7 +238,7 @@ class SentryxClientTest(unittest.TestCase):
 
     def test_repeated_cursor_does_not_loop_forever(self):
         self.session.post.side_effect = [self.token, response(page([], True, "same")), response(page([], True, "same"))]
-        with self.assertRaisesRegex(SentryxError, "paginación"):
+        with self.assertRaisesRegex(GwfError, "paginación"):
             self.client.measurements(self.now - timedelta(days=1), self.now)
 
     def test_bad_later_page_does_not_commit_partial_download(self):
@@ -182,7 +252,7 @@ class SentryxClientTest(unittest.TestCase):
 
 
 class I20ApiTest(unittest.TestCase):
-    def test_local_reads_never_query_sentryx_and_range_is_validated(self):
+    def test_local_reads_never_query_gwf_and_range_is_validated(self):
         from fastapi.testclient import TestClient
         from i20api.app import create_app
         with tempfile.TemporaryDirectory() as directory:

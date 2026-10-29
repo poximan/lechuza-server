@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from .clock import clock, iso, months_before
 from .settings import Settings, credentials
-from .sentryx import SentryxClient
+from .gwf import GwfClient
 from .storage import Storage
 from .sync import SyncManager
 
@@ -59,5 +59,5 @@ def create_app(settings, storage, manager):
 def app_factory():
     settings = Settings.load(os.environ["I20_CONFIG_FILE"])
     storage = Storage(os.environ["I20_DATABASE_PATH"])
-    client = SentryxClient(settings, *credentials(os.environ["I20_CREDENTIALS_FILE"]))
+    client = GwfClient(settings, *credentials(os.environ["I20_CREDENTIALS_FILE"]))
     return create_app(settings, storage, SyncManager(settings, storage, client))

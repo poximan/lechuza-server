@@ -5,6 +5,7 @@ from modbus_transport_client import ModbusTcpReadOnlyDriver
 
 from src import config
 from src.services.collector import JanitzaCollector
+from src.services.observer_state_store import JanitzaObserverStateStore
 from src.services.state_store import JanitzaStateStore
 
 
@@ -27,5 +28,6 @@ def create_context() -> ApplicationContext:
         config.ANALYZERS,
         config.POLL_INTERVAL_SECONDS,
         JanitzaStateStore(config.STATE_FILE),
+        JanitzaObserverStateStore(config.OBSERVER_STATE_FILE),
     )
     return ApplicationContext(collector=collector)

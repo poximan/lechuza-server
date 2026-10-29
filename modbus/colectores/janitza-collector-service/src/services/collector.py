@@ -6,6 +6,7 @@ from typing import Any
 from modbus_transport_client import ModbusTcpReadOnlyDriver
 from timeauthority import get_time_authority
 
+from src.services.observer_state_store import JanitzaObserverStateStore
 from src.services.state_store import JanitzaStateStore
 
 
@@ -32,11 +33,13 @@ class JanitzaCollector:
         analyzers: list[dict[str, Any]],
         interval: int,
         store: JanitzaStateStore,
+        observer: JanitzaObserverStateStore,
     ) -> None:
         self.driver = driver
         self.analyzers = analyzers
         self.interval = max(1, interval)
         self.store = store
+        self.observer = observer
         self.stop_event = threading.Event()
         self.thread = threading.Thread(
             target=self.run,
@@ -55,7 +58,7 @@ class JanitzaCollector:
     def run(self) -> None:
         while not self.stop_event.is_set():
             for analyzer in self.analyzers:
-                if self.stop_event.is_set():
+                if not self._can_collect():
                     break
                 try:
                     self.collect(analyzer)
@@ -66,6 +69,15 @@ class JanitzaCollector:
                         flush=True,
                     )
             self.stop_event.wait(self.interval)
+
+    def get_observer(self) -> bool:
+        return self.observer.is_enabled()
+
+    def set_observer(self, enabled: bool) -> bool:
+        return self.observer.set_enabled(enabled)
+
+    def _can_collect(self) -> bool:
+        return not self.stop_event.is_set() and self.get_observer()
 
     @staticmethod
     def _valid_ratios(value: Any) -> bool:
@@ -119,12 +131,16 @@ class JanitzaCollector:
         return ratios
 
     def collect(self, analyzer: dict[str, Any]) -> None:
+        if not self._can_collect():
+            return
         unit_id = int(analyzer["id"])
         key = str(unit_id)
         name = str(analyzer["name"])
         attempted = _TIME.utc_iso()
         current = self.store.snapshot().get(key, {})
         ratios = self._load_ratios(unit_id, key, current, name)
+        if not self._can_collect():
+            return
         if ratios is None:
             self._store_failure(
                 key,
@@ -141,6 +157,8 @@ class JanitzaCollector:
             self.ELECTRICAL_COUNT,
             unit_id,
         )
+        if not self._can_collect():
+            return
         powers = (
             self.driver.read_holding_registers(
                 self.TOTAL_POWER_ADDRESS,
@@ -241,6 +259,7 @@ class JanitzaCollector:
     def snapshot(self) -> dict[str, Any]:
         values = self.store.snapshot()
         return {
+            "observer_enabled": self.get_observer(),
             "items": [
                 values.get(
                     str(item["id"]),

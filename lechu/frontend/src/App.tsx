@@ -4,22 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./App.module.css";
 import { LechuApiClient } from "./LechuApiClient";
 import { PageErrorBoundary } from "./components/PageErrorBoundary";
+import { SectionNavigation } from "./components/SectionNavigation";
 import { PageRenderer } from "./pages/PageRenderer";
 import type { JsonRecord, NavigationContract } from "./models";
-
-const PAGE_TITLES: Record<string, string> = {
-  exemys: "exemys",
-  charito: "charo-daemon",
-  generadores: "generadores",
-  proxmox: "proxmox",
-  reles: "estado reles MiCOM",
-  analizadores: "analiz. red",
-  caudalimetros: "Caudalímetros",
-  mantenimiento: "mantenimiento",
-  mensagelo: "mensagelo",
-  broker: "broker mqtt",
-  email: "estado de correo",
-};
 
 function currentPage(path: string): string {
   const segment = path
@@ -38,12 +25,11 @@ export function App() {
   const [dataRevision, setDataRevision] = useState(0);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [pageAttention, setPageAttention] = useState(false);
+  const activeLabel = navigation?.items.find(item => item.href === path.replace(/\/$/, ""))?.label;
 
   const updatePath = useCallback(() => {
     setPath(window.location.pathname);
     setPageError(null);
-    setPageAttention(false);
   }, []);
 
   const navigate = useCallback((href: string, replace = false) => {
@@ -51,6 +37,7 @@ export function App() {
     if (replace) window.history.replaceState(null, "", href);
     else window.history.pushState(null, "", href);
     updatePath();
+    window.scrollTo({ top: 0, behavior: "auto" });
   }, [updatePath]);
 
   useEffect(() => {
@@ -132,68 +119,39 @@ export function App() {
     >
       <AppShell productName="lechuza-server" sectionName="Comunicaciones">
         <main className={`sc-page ${styles.main}`}>
-          <header className={styles.header}>
-            <img className={styles.productLogo} src={`${import.meta.env.BASE_URL}icono.png`} alt="Logo de lechuza-server" width="96" height="96" />
-            <h1
-              className={pageAttention ? styles.pageTitleAttention : undefined}
-            >
-              {PAGE_TITLES[page] ?? "lechuza-server"}
-            </h1>
-          </header>
-
-          <nav className={styles.navigation} aria-label="Secciones de lechuza-server">
-            {navigation?.items.map((item) => (
-              <a
-                className={
-                  path.replace(/\/$/, "") === item.href
-                    ? styles.active
-                    : undefined
-                }
-                href={`${item.href}/`}
-                aria-current={path.replace(/\/$/, "") === item.href ? "page" : undefined}
-                onClick={(event) => {
-                  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  navigate(`${item.href}/`);
-                }}
-                key={item.href}
+          <SectionNavigation items={navigation?.items ?? []} path={path} onNavigate={navigate} />
+          <section className={styles.content} aria-label={activeLabel ?? "Contenido de lechuza-server"}>
+            {navigationError && (
+              <div className={styles.error} role="alert">
+                <strong>No se pudo actualizar la navegación.</strong>
+                <span>{navigationError}</span>
+              </div>
+            )}
+            {pageError && (
+              <div className={styles.error} role="alert">
+                <strong>No se pudo actualizar la vista.</strong>
+                <span>{pageError}</span>
+              </div>
+            )}
+            {!data && !pageError && (
+              <p className={styles.loading}>Cargando estado operativo…</p>
+            )}
+            {data && (
+              <PageErrorBoundary
+                key={page}
+                className={styles.error}
+                resetToken={`${page}-${dataRevision}`}
               >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          {navigationError && (
-            <div className={styles.error} role="alert">
-              <strong>No se pudo actualizar la navegación.</strong>
-              <span>{navigationError}</span>
-            </div>
-          )}
-          {pageError && (
-            <div className={styles.error} role="alert">
-              <strong>No se pudo actualizar la vista.</strong>
-              <span>{pageError}</span>
-            </div>
-          )}
-          {!data && !pageError && (
-            <p className={styles.loading}>Cargando estado operativo…</p>
-          )}
-          {data && (
-            <PageErrorBoundary
-              key={page}
-              className={styles.error}
-              resetToken={`${page}-${dataRevision}`}
-            >
-              <PageRenderer
-                client={client}
-                data={data}
-                onChanged={() => loadPage()}
-                page={page}
-                protectedMode={navigation?.mode === "protected"}
-                onAttentionChange={setPageAttention}
-              />
-            </PageErrorBoundary>
-          )}
+                <PageRenderer
+                  client={client}
+                  data={data}
+                  onChanged={() => loadPage()}
+                  page={page}
+                  protectedMode={navigation?.mode === "protected"}
+                />
+              </PageErrorBoundary>
+            )}
+          </section>
         </main>
       </AppShell>
     </StartupSplash>

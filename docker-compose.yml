@@ -184,11 +184,11 @@ services:
     container_name: lechu-i20api-service
     environment:
       I20_CONFIG_FILE: /app/config/settings.json
-      I20_CREDENTIALS_FILE: /app/config/sentryx.env
+      I20_CREDENTIALS_FILE: /app/config/gwf.env
       I20_DATABASE_PATH: /app/data/measurements.sqlite3
     volumes:
       - ./i20api-service/config/settings.json:/app/config/settings.json:ro
-      - ./i20api-service/config/sentryx.env:/app/config/sentryx.env:ro
+      - ./i20api-service/config/gwf.env:/app/config/gwf.env:ro
       - ./volumes/i20api-service:/app/data
     restart: unless-stopped
     read_only: true

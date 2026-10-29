@@ -9,7 +9,7 @@ import type { Measurement } from "./FlowContract";
 import styles from "./FlowMetersPage.module.css";
 
 const reader = new JsonContractReader();
-const outcomes: Record<string, string> = { new_data: "Se importaron mediciones nuevas", no_new_data: "Consulta completa sin registros nuevos", error: "Error al consultar Sentryx", running: "Sincronizando con Sentryx…" };
+const outcomes: Record<string, string> = { new_data: "Se importaron mediciones nuevas", no_new_data: "Consulta completa sin registros nuevos", error: "Error al consultar GWF", running: "Sincronizando con GWF…" };
 const states: Record<string, string> = { waiting: "Esperando el intento diario", retrying: "Esperando el próximo reintento", complete: "Ciclo diario completado", suspended: "Intentos suspendidos hasta mañana" };
 const windows = [["1d", "1 día"], ["2d", "2 días"], ["7d", "7 días"], ["1m", "1 mes"], ["2m", "2 meses"], ["all", "Todo"]] as const;
 
@@ -85,8 +85,8 @@ export function FlowMetersPage({ client, data, onChanged }: { client: LechuApiCl
   const lastOutcome = String(attempt?.outcome ?? "");
   return <div className={styles.stack}>
     <Card>
-      <div className={styles.header}><div><h2>Sincronización Sentryx</h2><p>Datos registrados cada 15 minutos. Reporte del logger a las 00:00, hora argentina.</p></div>
-        <Button disabled={requesting || sync.running === true} onClick={() => void synchronize()}>{requesting || sync.running === true ? "Sincronizando…" : "Sincronizar Sentryx"}</Button>
+      <div className={styles.header}><div><h2>Sincronización GWF</h2><p>Datos registrados cada 15 minutos. Reporte del logger a las 00:00, hora argentina.</p></div>
+        <Button disabled={requesting || sync.running === true} onClick={() => void synchronize()}>{requesting || sync.running === true ? "Sincronizando…" : "Sincronizar GWF"}</Button>
       </div>
       <div role="status" className={styles.status}>
         <strong>{sync.running === true ? "Sincronización en curso" : states[String(cycle.state)]}</strong>
@@ -125,7 +125,7 @@ export function FlowMetersPage({ client, data, onChanged }: { client: LechuApiCl
             <label>Ampliar fin<input type="range" aria-label="Fin de la ventana" min="0" max="1000" value={Math.round((end - fullStart) / totalSpan * 1000)} onChange={event => { const next = fullStart + totalSpan * Number(event.target.value) / 1000; if (next > start) setView({ start, end: next }); }} /></label></div>
         </div>
       </Card>
-      <Card><h2>Datos</h2><p className={styles.muted}>Valores recibidos de Sentryx, sin cálculos propios. Los campos ausentes se muestran como —.</p>
+      <Card><h2>Datos</h2><p className={styles.muted}>Valores recibidos de GWF, sin cálculos propios. Los campos ausentes se muestran como —.</p>
         <div className={styles.tableWrap}><table><thead><tr><th>Registrado el (UTC−3)</th>{available.map(stream => <th key={stream}>{streams[stream]} ({items.find(item => item.stream === stream)?.unit})</th>)}</tr></thead>
           <tbody>{rows.slice(tablePage * 100, (tablePage + 1) * 100).map(([timestamp, values]) => <tr key={timestamp}><td>{localTime(timestamp)}</td>{available.map(stream => { const point = values.get(stream); return <td key={stream} title={point ? `Mín: ${point.min ?? "—"} · Máx: ${point.max ?? "—"} · Desvío: ${point.sd ?? "—"}` : undefined}>{point ? point.value.toLocaleString("es-AR", { maximumFractionDigits: 3 }) : "—"}</td>; })}</tr>)}</tbody></table></div>
         {rows.length === 0 && <p>Sin mediciones en esta ventana.</p>}

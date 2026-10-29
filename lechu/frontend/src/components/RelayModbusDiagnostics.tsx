@@ -17,10 +17,12 @@ const statusLabels: Record<string, string> = {
 };
 
 export function RelayPollCountdown({
+  className,
   enabled,
   nextPollTimestamp,
   pollInProgress,
 }: {
+  className?: string;
   enabled: boolean;
   nextPollTimestamp: string | null;
   pollInProgress: boolean;
@@ -44,7 +46,7 @@ export function RelayPollCountdown({
     return () => window.clearInterval(timer);
   }, [deadline, enabled, pollInProgress]);
 
-  let label = "Observador pausado";
+  let label = "Lectura automática pausada. Se conservan las últimas mediciones.";
   if (enabled && pollInProgress) label = "Encuesta Modbus en curso";
   else if (enabled && deadline === null) label = "Programando próxima encuesta…";
   else if (enabled && deadline !== null) {
@@ -55,10 +57,7 @@ export function RelayPollCountdown({
   }
 
   return (
-    <div className={styles.countdown} aria-live="polite">
-      <span className={styles.pulse} />
-      <strong>{label}</strong>
-    </div>
+    <span className={className} aria-live="polite">{label}</span>
   );
 }
 
