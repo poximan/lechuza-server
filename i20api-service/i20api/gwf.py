@@ -30,6 +30,15 @@ query Measurements($where: MeasuredAtFilterInput!, $first: Int!, $after: String)
 }
 """
 
+LOCATIONS_QUERY = """
+query Locations($first: Int!, $after: String) {
+  locations(first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    edges { node { id name } }
+  }
+}
+"""
+
 
 class GwfError(RuntimeError):
     pass
@@ -85,7 +94,7 @@ class GwfClient:
         self.token = token
         self.expires = time.monotonic() + max(1, expires_in - 60)
 
-    def _graphql_error(self, errors):
+    def _graphql_error(self, errors, resource):
         if not isinstance(errors, list) or any(not isinstance(item, dict) for item in errors):
             return "GWF devolvió una lista de errores GraphQL inválida"
         details = []
@@ -101,29 +110,63 @@ class GwfClient:
                 if secret:
                     detail = detail.replace(secret, "[omitido]")
             details.append(detail[:500])
-        return "GWF rechazó la consulta de mediciones: " + " | ".join(details)
+        return f"GWF rechazó la consulta de {resource}: " + " | ".join(details)
 
-    def measurements(self, start, end):
+    def _query(self, query, variables, resource):
+        for attempt in range(2):
+            self._token()
+            response = self._post(GRAPHQL_URL, "Consulta GWF",
+                json={"query": query, "variables": variables},
+                headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"})
+            if response.status_code != 401 or attempt:
+                break
+            self.token = None
+        if not response.ok:
+            raise GwfError(f"Consulta GWF de {resource}: HTTP {response.status_code}")
+        payload = self._json(response, "Consulta GWF")
+        if payload.get("errors"):
+            raise GwfError(self._graphql_error(payload["errors"], resource))
+        return payload
+
+    def locations(self):
+        records, seen_ids, seen_cursors, after = [], set(), set(), None
+        while True:
+            payload = self._query(LOCATIONS_QUERY, {"first": self.settings.page_size, "after": after}, "ubicaciones")
+            try:
+                connection = payload["data"]["locations"]
+                edges, page = connection["edges"], connection["pageInfo"]
+                if not isinstance(edges, list) or type(page["hasNextPage"]) is not bool:
+                    raise ValueError()
+                for edge in edges:
+                    node = edge["node"]
+                    if (not isinstance(node["id"], str) or not node["id"].strip()
+                        or not isinstance(node["name"], str) or not node["name"].strip()
+                        or node["id"] in seen_ids):
+                        raise ValueError()
+                    seen_ids.add(node["id"])
+                    records.append({"id": node["id"], "name": node["name"]})
+                if not page["hasNextPage"]:
+                    return records
+                cursor = page["endCursor"]
+                if not isinstance(cursor, str) or not cursor or cursor in seen_cursors:
+                    raise ValueError()
+                seen_cursors.add(cursor)
+                after = cursor
+            except (KeyError, TypeError, ValueError):
+                raise GwfError("Catálogo o paginación de ubicaciones GWF inválidos") from None
+
+    def measurements(self, start, end, location_ids):
+        if (not isinstance(location_ids, (list, tuple)) or not location_ids
+            or any(not isinstance(item, str) or not item.strip() for item in location_ids)
+            or len(set(location_ids)) != len(location_ids)):
+            raise ValueError("La consulta requiere IDs de ubicaciones únicos y no vacíos")
         where = {"when": {"start": iso(start), "end": iso(end)},
                  "resolution": self.settings.resolution,
-                 "locations": {"id": [x["id"] for x in self.settings.locations]},
+                 "locations": {"id": list(location_ids)},
                  "dataStreams": {"id": list(STREAMS)}}
         records, seen_cursors, after = [], set(), None
         while True:
-            for attempt in range(2):
-                self._token()
-                response = self._post(GRAPHQL_URL, "Consulta GWF",
-                    json={"query": QUERY, "variables": {"where": where,
-                          "first": self.settings.page_size, "after": after}},
-                    headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"})
-                if response.status_code != 401 or attempt:
-                    break
-                self.token = None
-            if not response.ok:
-                raise GwfError(f"Consulta GWF: HTTP {response.status_code}")
-            payload = self._json(response, "Consulta GWF")
-            if payload.get("errors"):
-                raise GwfError(self._graphql_error(payload["errors"]))
+            payload = self._query(QUERY, {"where": where, "first": self.settings.page_size, "after": after}, "mediciones")
             try:
                 connection = payload["data"]["locationTimeSeries"]["measuredAt"]
                 edges, page = connection["edges"], connection["pageInfo"]

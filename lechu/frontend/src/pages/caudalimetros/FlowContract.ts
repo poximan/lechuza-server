@@ -2,8 +2,9 @@ import { JsonContractReader } from "../../contracts/JsonContractReader";
 import type { JsonRecord } from "../../models";
 
 const reader = new JsonContractReader();
+export const FLOW_RATE_STREAM = "urn:mwp:datastream:flow-rate";
 export const streams: Record<string, string> = {
-  "urn:mwp:datastream:flow-rate": "Caudal",
+  [FLOW_RATE_STREAM]: "Caudal",
   "urn:mwp:datastream:flow-volume": "Volumen de caudal",
   "urn:mwp:datastream:battery-voltage": "Voltaje de batería",
   "urn:mwp:datastream:external-voltage": "Voltaje externo",

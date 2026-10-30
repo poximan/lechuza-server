@@ -3,11 +3,13 @@ from datetime import timedelta
 
 from .clock import LOCAL, clock, iso, months_before
 from .gwf import GwfError
+from .location_catalog import LocationCatalog, LocationCatalogError
 
 
 class SyncManager:
     def __init__(self, settings, storage, client, now=None):
         self.settings, self.storage, self.client = settings, storage, client
+        self.catalog = LocationCatalog(settings, storage)
         self.now = now or clock.utc_now
         self.lock = threading.RLock()
         self.busy = False
@@ -70,12 +72,13 @@ class SyncManager:
         try:
             cutoff = months_before(started, self.settings.retention_months)
             self.storage.prune(cutoff)
-            records = self.client.measurements(cutoff, started)
+            locations = self.catalog.replace(self.client.locations(), self.now())
+            records = self.client.measurements(cutoff, started, [item["id"] for item in locations]) if locations else []
             count = self.storage.save(records, months_before(self.now(), self.settings.retention_months))
             attempt.update(outcome="new_data" if count else "no_new_data", new_records=count)
             self.storage.put("last_success_at", iso(self.now()))
         except Exception as exc:
-            attempt.update(outcome="error", error=str(exc) if isinstance(exc, GwfError)
+            attempt.update(outcome="error", error=str(exc) if isinstance(exc, (GwfError, LocationCatalogError))
                            else f"No se pudo completar la sincronización ({type(exc).__name__})")
         finally:
             with self.lock:

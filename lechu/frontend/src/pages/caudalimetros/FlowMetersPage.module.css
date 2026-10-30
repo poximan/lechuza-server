@@ -3,7 +3,7 @@
 .header h2 { margin: 0; }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-space-3); margin: var(--sc-space-4) 0; }
 .controls label, .navigator label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-space-2); }
-.controls input[type="datetime-local"], .header select { padding: var(--sc-space-2); border: 1px solid var(--sc-color-border); border-radius: var(--sc-radius-md); color: var(--sc-color-text); background: var(--sc-color-surface); color-scheme: dark light; }
+.controls input[type="datetime-local"], .controls select, .header select { padding: var(--sc-space-2); border: 1px solid var(--sc-color-border); border-radius: var(--sc-radius-md); color: var(--sc-color-text); background: var(--sc-color-surface); color-scheme: dark light; }
 .status { padding: var(--sc-space-3); border-left: 3px solid var(--sc-color-primary); background: var(--sc-color-surface-raised); }
 .muted, .readout { color: var(--sc-color-text-muted); }
 .error { color: var(--sc-color-danger); }

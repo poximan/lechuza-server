@@ -27,14 +27,16 @@ def create_app(settings, storage, manager):
     def index():
         cutoff = months_before(clock.utc_now(), settings.retention_months)
         storage.prune(cutoff)
-        return {"locations": [{**item, **storage.bounds(item["id"], settings.resolution)} for item in settings.locations],
+        catalog = manager.catalog.snapshot()
+        return {"locations": [{**item, **storage.bounds(item["id"], settings.resolution)} for item in catalog["locations"]],
+                "catalog": catalog["catalog"],
                 "resolution": settings.resolution, "retention_months": settings.retention_months,
                 "retained_from": iso(cutoff), "sync": manager.status()}
 
     @app.get("/api/measurements")
     def measurements(location_id: str, start: str = Query(...), end: str = Query(...)):
-        if location_id not in {x["id"] for x in settings.locations}:
-            raise HTTPException(404, "Ubicación no configurada")
+        if location_id not in {item["id"] for item in manager.catalog.snapshot()["locations"]}:
+            raise HTTPException(404, "Ubicación no disponible en el catálogo de GWF")
         try:
             since, until = clock.parse(start), clock.parse(end)
             if until <= since:

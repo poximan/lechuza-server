@@ -5,9 +5,13 @@ y consultas GraphQL `measuredAt`. No modifica dispositivos ni datos del proveedo
 
 ## Configuración
 
-`config/settings.json` selecciona ubicaciones por ID estable, nombres de presentación,
-resolución (`PT15M` inicialmente), retención en meses calendario, horario y demoras de
-reintento. Cambiar configuración requiere recrear el servicio. Los streams consultados
+`config/settings.json` configura el alcance de ubicaciones, resolución (`PT15M`
+inicialmente), retención en meses calendario, horario y demoras de reintento.
+`location_mode: "all"` con `locations: []` descubre e importa todas las ubicaciones
+accesibles para las credenciales GWF. Es el modo instalado por defecto. Para limitar
+el alcance se usa `location_mode: "configured"` y una lista no vacía de objetos con
+`id` estable. Los nombres siempre provienen de GWF; no se sustituyen por alias de
+configuración. Cambiar configuración requiere recrear el servicio. Los streams consultados
 son caudal, volumen de caudal y voltajes de batería/externo; se conservan las unidades
 devueltas por la API. No se deriva caudal neto ni se inventan valores para canales ausentes.
 
@@ -47,6 +51,20 @@ Solo una descarga puede estar activa. El frontend consulta estado y series local
 esas lecturas y los cambios de ventana no consultan GWF. No se consulta GWF
 al arrancar antes del horario diario, salvo que se pulse el botón manual.
 
+Cada intento de sincronización consulta primero `locations` con paginación completa,
+usando el mismo token OAuth2. El catálogo validado y su fecha UTC se guardan en el
+estado de SQLite antes de pedir mediciones, por lo que los equipos sin histórico
+también aparecen en el selector. Si falla el descubrimiento se conserva el catálogo
+anterior y se informa el error de sincronización. Si falla la descarga de mediciones
+después de descubrir ubicaciones, el catálogo actualizado sigue disponible.
+
+Antes de la primera sincronización, el catálogo está `pending` y la lista de logs está
+vacía; no se inventa una lista con LogAluar. Una respuesta válida sin ubicaciones es
+`available` con lista vacía. En ese caso no se consulta `measuredAt` con un filtro
+de IDs vacío. Los nombres se actualizan durante las sincronizaciones y el catálogo
+sobrevive a reinicios. Abrir la pantalla o consultar sus endpoints no dispara un
+descubrimiento externo adicional.
+
 Cada descarga pagina todo el rango retenido de dos meses, incluyendo mediciones
 antiguas reportadas con retraso. Se persiste solamente después de obtener todas las
 páginas válidas. La identidad `(datapoint id, resolution)` deduplica registros;
@@ -60,7 +78,9 @@ La tarea local y las lecturas aplican el límite; no hay archivo de histórico a
 ## Interfaces internas
 
 - `GET /health`: disponibilidad del servicio y estado de sincronización.
-- `GET /api/caudalimetros`: equipos, límites retenidos y estado persistido.
+- `GET /api/caudalimetros`: equipos del catálogo local, límites retenidos y estado
+  persistido. `locations` conserva objetos `{id,name,first,last,count}` y `catalog`
+  informa `{mode,state,updated_at}`, con fecha UTC o `null` mientras está pendiente.
 - `GET /api/measurements?location_id=...&start=...&end=...`: series locales, fechas ISO UTC.
 - `POST /api/sync`: solicita sincronización, devuelve 202 o 409 si hay otra en curso.
 
@@ -80,6 +100,8 @@ PowerShell de referencia:
 - GraphQL mediante `POST`, cuerpo JSON con `query` y `variables`, y cabecera
   `Authorization: Bearer ...`. Un HTTP 401 renueva el token y repite esa página
   una sola vez; HTTP 200 con `errors` también es un fallo.
+- `locations(first,after)` recupera todos los IDs y nombres accesibles; se validan
+  nombres, IDs únicos y avance del cursor antes de publicar el catálogo completo.
 - `locationTimeSeries.measuredAt` usa `MeasuredAtFilterInput`, con `when.start` y
   `when.end` en UTC ISO 8601 con milisegundos, `resolution`, `locations.id` y
   `dataStreams.id`. La selección de campos incluye el cursor, identificación,
@@ -120,3 +142,15 @@ páginas 1–2, 6–8 y 11–18), guía de consulta por recepción y guía de ex
 mayo de 2023. La notificación de migración sustituye únicamente las tres URL.
 El servicio utiliza `measuredAt`; el vencimiento de siete días del cursor de
 `receivedAt` no aplica a una descarga por rango de fechas.
+
+El catálogo pertenece a `i20api/location_catalog.py`; el adaptador GraphQL está en
+`i20api/gwf.py`, `i20api/sync.py` mantiene el calendario y `i20api/app.py` compone las
+respuestas locales. No hace falta un endpoint adicional para consultar el catálogo.
+
+## Unidades de presentación
+
+Lechu permite elegir de forma independiente litros o m³ y segundos, horas o días
+para el caudal. La conversión es `q_destino = q_l/s × segundos_período / litros_unidad`:
+por ejemplo, `1 l/s = 3,6 m³/h = 86,4 m³/día`. Afecta tablas, gráficas, estadísticas
+y navegador del histórico en la presentación; los valores crudos de SQLite conservan
+su unidad original y los canales de volumen o voltaje no se convierten como caudal.

@@ -1,7 +1,6 @@
 {
-  "locations": [
-    {"id": "urn:mwp:location:ZBXsa-8MqEOCtFIaSShmZA", "name": "LogAluar"}
-  ],
+  "location_mode": "all",
+  "locations": [],
   "resolution": "PT15M",
   "retention_months": 2,
   "daily_time": "00:10",

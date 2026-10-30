@@ -6,6 +6,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Settings:
     locations: tuple[dict, ...]
+    location_mode: str = "configured"
     resolution: str = "PT15M"
     retention_months: int = 2
     daily_time: str = "00:10"
@@ -16,12 +17,22 @@ class Settings:
     @classmethod
     def load(cls, path: str) -> "Settings":
         data = json.loads(Path(path).read_text())
-        settings = cls(**{**data, "locations": tuple(data["locations"]),
+        if not isinstance(data["locations"], list):
+            raise ValueError("locations debe ser una lista")
+        settings = cls(**{**data, "location_mode": data["location_mode"],
+                          "locations": tuple(data["locations"]),
                           "retry_hours": tuple(data.get("retry_hours", [1, 2]))})
-        if not settings.locations or len({x["id"] for x in settings.locations}) != len(settings.locations):
+        if settings.location_mode not in {"all", "configured"}:
+            raise ValueError("location_mode debe ser all o configured")
+        if settings.location_mode == "all" and settings.locations:
+            raise ValueError("En modo all, locations debe estar vacía")
+        if settings.location_mode == "configured" and not settings.locations:
+            raise ValueError("En modo configured debe seleccionar ubicaciones")
+        if any(not isinstance(x, dict) or not isinstance(x.get("id"), str) or not x["id"].strip()
+               for x in settings.locations):
+            raise ValueError("Cada ubicación requiere un id válido")
+        if len({x["id"] for x in settings.locations}) != len(settings.locations):
             raise ValueError("Debe configurar ubicaciones únicas")
-        if any(not x.get("id") or not x.get("name") for x in settings.locations):
-            raise ValueError("Cada ubicación requiere id y name")
         if settings.resolution not in {"RAW", "PT15M"}:
             raise ValueError("Resolución no soportada")
         hour, minute = map(int, settings.daily_time.split(":"))
