@@ -42,6 +42,7 @@ def _req_csv(name: str) -> list[str]:
 LECHU_HOST = _req("LECHU_HOST")
 LECHU_PORT = _req_int("LECHU_PORT")
 LECHU_DATA_DIR = _req("LECHU_DATA_DIR")
+LECHU_TOPOLOGY_FILE = _req("LECHU_TOPOLOGY_FILE")
 
 # ---------------------------------------------------------
 # --- Clientes HTTP de dominios Modbus --------------------

@@ -53,7 +53,9 @@ mqtt_event_bus.set_manager(mqtt_client_manager)
 
 # router rpc mqtt (suscribe y procesa requests en la cola)
 rpc_router = MqttRequestRouter(logger_app, mqtt_client_manager, api_key)
-server.register_blueprint(ReactApi(mqtt_client_manager).blueprint)
+react_api = ReactApi(mqtt_client_manager)
+server.register_blueprint(react_api.blueprint)
+server.add_url_rule("/lechu/topologia.png", view_func=react_api.topology_api.get)
 
 
 @server.get("/lechu")

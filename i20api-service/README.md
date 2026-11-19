@@ -88,6 +88,29 @@ Compose no publica este servicio. Lechu compone las rutas `/lechu/api/caudalimet
 `/lechu/api/caudalimetros/measurements` y `/lechu/api/caudalimetros/sync`.
 La pestaña `/lechu/caudalimetros/` aparece en los modos `secure` y `protected` existentes.
 
+## Preferencias del navegador
+
+La vista recuerda el ID del log, el período predefinido, la unidad de caudal
+(numerador y denominador) y, si se modificó, la ventana personalizada.
+`FlowPreferences.ts` valida y guarda un único documento de versión 1 en
+`localStorage`, con clave `lechu:caudalimetros:preferences`; `useFlowPreferences.ts`
+administra su ciclo de vida. La selección sobrevive a recargas, cierre de sesión y
+cierre del navegador, hasta que se borren los datos del sitio. Corresponde al mismo
+origen y perfil de navegador.
+
+Se restaura por ID, independientemente del orden o nombre del catálogo. Si el log
+ya no está disponible se elige el primero disponible y se descarta su ventana
+anterior. Un catálogo pendiente o vacío conserva la preferencia guardada.
+Las ventanas personalizadas se recortan al histórico retenido; si ya no se
+superponen con él, se vuelve al período predefinido. Los períodos predefinidos
+mantienen su duración relativa al último dato, en lugar de fijar fechas antiguas.
+
+Las escrituras se agrupan durante 200 ms al arrastrar y se completan al salir de la
+vista o al recibir `pagehide`. Si la lectura es inválida o el navegador impide
+persistir, la pantalla informa el problema y permite seguir operando con estado
+local. No se guardan credenciales ni cambia la autorización del catálogo.
+La tarjeta de sincronización GWF aparece al final de la vista, incluso sin datos.
+
 ## Revisión del contrato
 
 Las tres URL se declaran una sola vez en `i20api/gwf.py`. El flujo coincide con el
@@ -154,3 +177,47 @@ para el caudal. La conversión es `q_destino = q_l/s × segundos_período / litr
 por ejemplo, `1 l/s = 3,6 m³/h = 86,4 m³/día`. Afecta tablas, gráficas, estadísticas
 y navegador del histórico en la presentación; los valores crudos de SQLite conservan
 su unidad original y los canales de volumen o voltaje no se convierten como caudal.
+
+## Gráficas de caudal y volumen en Lechu
+
+El caudal se representa como muestras puntuales unidas por segmentos rectos entre
+muestras consecutivas, sin unir huecos ni promediarlas al cambiar de unidad.
+La miniatura del histórico adapta su sistema de coordenadas al tamaño real para
+mantener las fuentes proporcionadas y la selección alineada con el área graficada.
+La gráfica de volumen calcula una estimación
+por integración trapezoidal de esas muestras en su unidad original `l/s`:
+`ΔV = (q_inicio + q_fin) / 2 × Δt_segundos`. Luego convierte litros a m³ cuando
+corresponde. El cambio de denominador del caudal no vuelve a multiplicar el volumen.
+Por ejemplo, caudal constante de `10 l/s` durante una hora representa `36 m³`,
+tanto si el caudal se presenta en l/s como en m³/h.
+
+Cada integral se divide en los límites del segundo, hora o día elegidos, con
+cortes civiles en UTC−3. Los extremos entre muestras se interpolan linealmente,
+incluidos los que cortan una muestra al principio o al final de la ventana.
+El volumen no se extrapola antes de la primera muestra ni después de la última.
+El contrato del logger fija una muestra cada 15 minutos; una separación mayor
+que 22 minutos y 30 segundos se considera discontinuidad y no se integra.
+Los ceros sí son muestras válidas. Cada barra y el total informan cobertura;
+una cobertura parcial se distingue visualmente de una medición completa.
+
+En volumen, el puntero conserva la indicación puntual para la base de segundos.
+Con base de horas o días, selecciona y sombrea todo el intervalo civil UTC−3;
+el detalle informa sus extremos, volumen y cobertura. Moverse dentro del mismo
+intervalo mantiene la selección estable, incluso cuando no hay datos. En una
+ventana recortada, la franja se limita al área visible y la cobertura sigue
+referida al intervalo completo.
+
+Las marcas temporales se alinean con la base elegida y se espacian de acuerdo
+con la duración visible y el ancho de la gráfica. Para una ventana extensa con
+base de segundos, la integral se suma en grupos de períodos contiguos, con un
+máximo de 2048 barras: no se generan millones de puntos ni se pierden volúmenes
+al agrupar. La agrupación se indica en pantalla y desaparece al acercar la ventana.
+Las series originales y el volumen reportado por GWF permanecen en la tabla y
+no se sobrescriben con la integral de presentación.
+
+El cálculo pertenece a `FlowSeries.ts`, las conversiones y los límites de período
+a `FlowUnits.ts`, y las marcas y etiquetas del eje a `FlowTimeAxis.ts`, dentro de
+`lechu/frontend/src/pages/caudalimetros/`. `FlowChart.tsx` representa esos contratos.
+No se agregan persistencia ni endpoints: se usan las muestras locales ya cargadas.
+`FlowWindowNavigator.tsx` desplaza la selección arrastrando su franja con ratón
+o táctil, conserva el ancho y permite usar flechas, Inicio/Fin y AvPág/RePág.

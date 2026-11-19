@@ -3,9 +3,14 @@ import type { JsonRecord } from "../../models";
 
 const reader = new JsonContractReader();
 export const FLOW_RATE_STREAM = "urn:mwp:datastream:flow-rate";
+export const FLOW_VOLUME_STREAM = "urn:mwp:datastream:flow-volume";
+export const LOCAL_TIME_ZONE = "Etc/GMT+3";
+export const LOCAL_OFFSET_MS = -3 * 3_600_000;
+export const FLOW_WINDOWS = [["1d", "1 día"], ["2d", "2 días"], ["7d", "7 días"], ["1m", "1 mes"], ["2m", "2 meses"], ["all", "Todo"]] as const;
+export type FlowWindow = typeof FLOW_WINDOWS[number][0];
 export const streams: Record<string, string> = {
   [FLOW_RATE_STREAM]: "Caudal",
-  "urn:mwp:datastream:flow-volume": "Volumen de caudal",
+  [FLOW_VOLUME_STREAM]: "Volumen de caudal",
   "urn:mwp:datastream:battery-voltage": "Voltaje de batería",
   "urn:mwp:datastream:external-voltage": "Voltaje externo",
 };
@@ -27,7 +32,7 @@ export function measurements(payload: JsonRecord): Measurement[] {
 }
 export function localTime(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "Sin datos";
-  return new Date(value).toLocaleString("es-AR", { timeZone: "Etc/GMT+3", hour12: false });
+  return new Date(value).toLocaleString("es-AR", { timeZone: LOCAL_TIME_ZONE, hour12: false });
 }
 export function inputTime(time: number): string {
   return new Date(time - 3 * 3_600_000).toISOString().slice(0, 16);

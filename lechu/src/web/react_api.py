@@ -34,6 +34,7 @@ from src.web.clients.proxmox_client import ProxmoxClient
 from src.web.email_api import EmailApi
 from src.web.generadores_api import GeneradoresApi
 from src.web.mantenimiento_api import MantenimientoApi
+from src.web.topology_api import TopologyApi
 from src.web.mensagelo_api import MensageloApi
 from src.web.navigation import lechu_navigation
 from src.web.exemys_api import ExemysApi
@@ -47,6 +48,7 @@ class ReactApi:
     """Registra rutas generales y conecta cada vista con su controlador propio."""
 
     def __init__(self, mqtt_client_manager: Any):
+        self.topology_api = TopologyApi(config.LECHU_TOPOLOGY_FILE, self._require_protected)
         self.caudalimetros_api = CaudalimetrosApi(I20Client(config.I20_API_BASE), self._response)
         charito_client = CharitoClient(config.CHARITO_API_BASE)
         proxmox_client = ProxmoxClient(config.PVE_API_BASE)

@@ -59,6 +59,7 @@ services:
         condition: service_started
     environment:
       LECHU_DATA_DIR: ${LECHU_DATA_DIR}
+      LECHU_TOPOLOGY_FILE: ${LECHU_TOPOLOGY_FILE}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
       LECHU_REFRESH_MS: ${LECHU_REFRESH_MS}
       GLOBAL_THRESHOLD_ROJO: ${GLOBAL_THRESHOLD_ROJO}

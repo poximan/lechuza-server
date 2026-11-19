@@ -1,11 +1,27 @@
-import { FLOW_RATE_STREAM } from "./FlowContract";
+import { FLOW_RATE_STREAM, LOCAL_OFFSET_MS } from "./FlowContract";
 import type { Measurement } from "./FlowContract";
 
 export type FlowVolumeUnit = "l" | "m3";
 export type FlowTimeUnit = "s" | "h" | "d";
 
-const litresPerVolume: Record<FlowVolumeUnit, number> = { l: 1, m3: 1000 };
-const secondsPerPeriod: Record<FlowTimeUnit, number> = { s: 1, h: 3600, d: 86400 };
+export const litresPerVolume: Record<FlowVolumeUnit, number> = { l: 1, m3: 1000 };
+export const secondsPerPeriod: Record<FlowTimeUnit, number> = { s: 1, h: 3600, d: 86400 };
+export const periodLabels: Record<FlowTimeUnit, string> = { s: "segundo", h: "hora", d: "día" };
+
+export function periodStart(time: number, duration: number): number {
+  return Math.floor((time + LOCAL_OFFSET_MS) / duration) * duration - LOCAL_OFFSET_MS;
+}
+
+export function volumeUnitLabel(volume: FlowVolumeUnit): string {
+  return volume === "m3" ? "m³" : "l";
+}
+
+export function flowInLitresPerSecond(item: Measurement): number {
+  if (item.unit !== "l/s" && item.unit !== "L/s") {
+    throw new Error(`La conversión de caudal requiere datos en l/s; GWF informó ${item.unit}`);
+  }
+  return item.value;
+}
 
 export function flowVolumeUnit(value: string): FlowVolumeUnit {
   if (value !== "l" && value !== "m3") throw new Error("Unidad de volumen inválida");
@@ -18,7 +34,7 @@ export function flowTimeUnit(value: string): FlowTimeUnit {
 }
 
 export function flowUnitLabel(volume: FlowVolumeUnit, period: FlowTimeUnit): string {
-  return `${volume === "m3" ? "m³" : "l"}/${period}`;
+  return `${volumeUnitLabel(volume)}/${period}`;
 }
 
 export function presentFlowMeasurements(
@@ -36,13 +52,10 @@ export function presentFlowMeasurements(
   const statistic = (value: number | null): number | null => value === null ? null : scale(value);
   return items.map(item => {
     if (item.stream !== FLOW_RATE_STREAM) return item;
-    if (item.unit !== "l/s" && item.unit !== "L/s") {
-      throw new Error(`La conversión de caudal requiere datos en l/s; GWF informó ${item.unit}`);
-    }
     return {
       ...item,
       unit,
-      value: scale(item.value),
+      value: scale(flowInLitresPerSecond(item)),
       min: statistic(item.min),
       max: statistic(item.max),
       sd: statistic(item.sd),

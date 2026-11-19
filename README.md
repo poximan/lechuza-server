@@ -292,3 +292,11 @@ cuerpo ni destinatarios por MQTT.
 estar presentes y no vacías. Los secretos, bases y logs runtime quedan fuera de
 git. El despliegue requiere que `platform` haya creado previamente
 `servicoop-edge-net`.
+
+### Mapa privado de mantenimiento
+
+El mapa se provee como dato de instalación en `volumes/lechu/topologia.png`,
+fuera de Git y de la imagen. `LECHU_TOPOLOGY_FILE` declara su ruta en el
+contenedor y se configura en `.env` (ver plantilla). La URL existente
+`/lechu/topologia.png` exige autorización en cada consulta y no permite caché.
+No incorporar mapas reales al directorio de assets del frontend.

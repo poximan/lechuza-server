@@ -5,22 +5,29 @@
 .controls label, .navigator label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-space-2); }
 .controls input[type="datetime-local"], .controls select, .header select { padding: var(--sc-space-2); border: 1px solid var(--sc-color-border); border-radius: var(--sc-radius-md); color: var(--sc-color-text); background: var(--sc-color-surface); color-scheme: dark light; }
 .status { padding: var(--sc-space-3); border-left: 3px solid var(--sc-color-primary); background: var(--sc-color-surface-raised); }
-.muted, .readout { color: var(--sc-color-text-muted); }
+.muted, .readout, .chartNote { color: var(--sc-color-text-muted); }
+.chartNote { font-size: 0.9rem; margin: var(--sc-space-2) 0; }
 .error { color: var(--sc-color-danger); }
 .chartWrap { min-width: 0; overflow-x: auto; }
 .chart, .overview { display: block; width: 100%; touch-action: pan-y; }
 .chart { min-height: 12rem; }
-.overview { height: 7rem; cursor: ew-resize; touch-action: none; }
+.overview { height: 7rem; }
 .chart text, .overview text { fill: var(--sc-color-text-muted); font-size: 12px; }
 .gridLine { stroke: var(--sc-color-border); }
 .line { stroke: var(--sc-color-primary); stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; }
 .point { fill: var(--sc-color-primary); }
+.volumeBar, .partialBar { fill: var(--sc-color-primary); }
+.partialBar { fill-opacity: 0.45; }
 .cursor { stroke: var(--sc-color-text-muted); stroke-dasharray: 4 4; }
+.intervalFocus { fill: var(--sc-color-primary); fill-opacity: 0.14; stroke: var(--sc-color-primary); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 .readout { min-height: 1.5rem; font-variant-numeric: tabular-nums; }
 .navigator { padding-top: var(--sc-space-4); border-top: 1px solid var(--sc-color-border); }
 .navigator input[type="range"] { flex: 1; min-width: 10rem; accent-color: var(--sc-color-primary); }
-.selectionTrack { height: 0.8rem; position: relative; margin: 0 5% 1rem 6%; background: var(--sc-color-surface-raised); }
-.selectionTrack div { position: absolute; height: 100%; border: 1px solid var(--sc-color-primary); background: color-mix(in srgb, var(--sc-color-primary) 25%, transparent); }
+.selectionTrack { height: 1.25rem; position: relative; margin: 0 24px var(--sc-space-2) 60px; overflow: hidden; background: var(--sc-color-surface-raised); touch-action: none; user-select: none; cursor: grab; }
+.selectionTrack[data-dragging="true"] { cursor: grabbing; }
+.selectionTrack[aria-disabled="true"] { cursor: default; }
+.selectionTrack:focus-visible { outline: 2px solid var(--sc-color-primary); outline-offset: 3px; }
+.selectionWindow { position: absolute; height: 100%; min-width: 2px; box-sizing: border-box; border: 1px solid var(--sc-color-primary); background: color-mix(in srgb, var(--sc-color-primary) 25%, transparent); }
 .tableWrap { overflow: auto; max-height: 32rem; }
 .tableWrap th { position: sticky; top: 0; background: var(--sc-color-surface); z-index: 1; }
 .tableWrap table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
